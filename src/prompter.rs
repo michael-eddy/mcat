@@ -1,15 +1,10 @@
 use ignore::WalkBuilder;
-use inquire::{Confirm, MultiSelect};
+use inquire::MultiSelect;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 pub fn prompt_for_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
-    let recursive = Confirm::new("Search recursively?")
-        .with_default(true)
-        .prompt()
-        .map_err(|e| e.to_string())?;
-
-    let mut all_paths = collect_gitignored_paths(dir, recursive)?;
+    let mut all_paths = collect_gitignored_paths(dir)?;
     all_paths.sort(); // Ensures folders come before contents
 
     let tree_view = format_file_list(&all_paths, dir);
@@ -56,14 +51,14 @@ pub fn prompt_for_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(final_files.into_iter().collect())
 }
 
-fn collect_gitignored_paths(dir: &Path, recursive: bool) -> Result<Vec<PathBuf>, String> {
+fn collect_gitignored_paths(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let walker = WalkBuilder::new(dir)
         .follow_links(true)
         .hidden(true)
         .git_ignore(true)
         .git_global(true)
         .git_exclude(true)
-        .max_depth(if recursive { None } else { Some(1) })
+        .max_depth(None)
         .build();
 
     let mut paths = vec![];

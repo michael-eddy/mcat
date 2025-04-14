@@ -11,12 +11,13 @@ impl Catter {
     pub fn new(input: String) -> Self {
         Catter { input }
     }
-    pub fn cat(&self, to: Option<&String>) -> Result<String, String> {
+    pub fn cat(&self, to: Option<&String>) -> Result<String, Box<dyn std::error::Error>> {
         let mut from = String::from("");
         let mut result = String::from("");
 
-        // local file
         let path = Path::new(&self.input);
+
+        // local file or dir
         if path.exists() {
             (result, from) = reader::read_file(&path)?;
         }

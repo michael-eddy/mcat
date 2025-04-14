@@ -1,9 +1,12 @@
 use std::{fs, path::Path};
 
-use crate::prompter;
+use crate::{converter, prompter};
 
-pub fn read_file<P: AsRef<Path>>(input: &P) -> Result<(String, String), String> {
+pub fn read_file<P: AsRef<Path>>(
+    input: &P,
+) -> Result<(String, String), Box<dyn std::error::Error>> {
     let path = input.as_ref();
+
     if path.is_file() {
         let res = read_file_markdown(path, "")?;
         return Ok((res, "md".into()));
@@ -18,16 +21,29 @@ pub fn read_file<P: AsRef<Path>>(input: &P) -> Result<(String, String), String> 
 }
 
 /// Format a file into markdown with its relative path from the root
-fn read_file_markdown<P: AsRef<Path>>(path: &Path, base: P) -> Result<String, String> {
-    let rel_path = path.strip_prefix(base).unwrap_or(path);
-    let name = rel_path.display();
-    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
+fn read_file_markdown<P: AsRef<Path>>(
+    path: &Path,
+    base: P,
+) -> Result<String, Box<dyn std::error::Error>> {
     let ext = path
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("text");
+    let rel_path = path.strip_prefix(base).unwrap_or(path);
+    let name = rel_path.display();
 
-    Ok(format!("## `{}`\n\n```{}\n{}\n```", name, ext, content))
+    let content: String = if converter::is_markitdown_supported(path) {
+        if let Ok(content) = converter::markitdown_convert(&path.to_string_lossy().into_owned()) {
+            content
+        } else {
+            "failed to read the file".to_string()
+        }
+    } else {
+        let cont = fs::read_to_string(path)?;
+        format!("```{}\n{}\n```", ext, cont)
+    };
+
+    Ok(format!("# `{}`\n\n{}", name, content))
 }
 
 /// Handle directory prompting and file selection
