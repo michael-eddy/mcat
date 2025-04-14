@@ -2,18 +2,16 @@ use std::{fs, path::Path};
 
 use crate::prompter;
 
-pub fn read_file(input: &str) -> Result<String, String> {
-    let path = Path::new(input);
-    if !path.exists() {
-        return Err(format!("Path does not exist: {}", input));
-    }
-
+pub fn read_file<P: AsRef<Path>>(input: &P) -> Result<(String, String), String> {
+    let path = input.as_ref();
     if path.is_file() {
-        return read_file_markdown(path, "");
+        let res = read_file_markdown(path, "")?;
+        return Ok((res, "md".into()));
     }
 
     if path.is_dir() {
-        return read_dir_markdown(path);
+        let res = read_dir_markdown(path)?;
+        return Ok((res, "md".into()));
     }
 
     Err("Unknown path type".into())
