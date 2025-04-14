@@ -1,0 +1,9 @@
+[package]
+name = "mcat"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = "4.5.36"
+ignore = "0.4.23"
+inquire = "0.7.5"
