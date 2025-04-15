@@ -1,7 +1,9 @@
 mod catter;
 mod converter;
+mod imager;
 mod prompter;
 mod reader;
+mod term_misc;
 
 use std::io::Write;
 
