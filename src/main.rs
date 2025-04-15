@@ -30,20 +30,27 @@ fn main() {
                 .value_parser(["html", "md", "image"]),
         )
         .arg(
-            Arg::new("style")
-                .short('s')
+            Arg::new("theme")
+                .short('t')
                 .help("alternative css file for images, valid options: [default, makurai, <local file>]",)
                 .default_value("default")
+        )
+        .arg(
+            Arg::new("style-html")
+                .short('s')
+                .help("add style to raw html too")
+                .action(clap::ArgAction::SetTrue)
         )
         .get_matches();
 
     let input = opts.get_one::<String>("input").unwrap();
     let output = opts.get_one::<String>("output");
-    let style = opts.get_one::<String>("style").unwrap();
+    let style = opts.get_one::<String>("theme").unwrap();
+    let style_html = *opts.get_one::<bool>("style-html").unwrap();
 
     let mut out = std::io::stdout();
     let catter = Catter::new(input.clone());
-    match catter.cat(output, Some(style)) {
+    match catter.cat(output, Some(style), style_html) {
         Ok((val, _)) => out.write_all(&val).expect("failed writing to stdout"),
         Err(e) => eprint!("Error: {}", e),
     }

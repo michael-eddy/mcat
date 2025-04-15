@@ -24,6 +24,7 @@ impl Catter {
         &self,
         to: Option<&String>,
         style: Option<&str>,
+        style_html: bool,
     ) -> Result<(Vec<u8>, CatType), Box<dyn std::error::Error>> {
         let mut from = String::new();
         let mut result = String::new();
@@ -41,7 +42,7 @@ impl Catter {
         if let Some(to) = to {
             match (from.as_ref(), to.as_ref()) {
                 ("md", "html") => {
-                    let html = converter::md_to_html(&result, style);
+                    let html = converter::md_to_html(&result, if style_html {style} else {None});
                     return Ok((html.as_bytes().to_vec(), CatType::Html));
                 },
                 ("md", "image") => {

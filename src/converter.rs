@@ -132,13 +132,13 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     };
 
     let html = markdown_to_html(markdown, &options);
-    let css_tag = css_path
-        .and_then(|path| to_file_url(path))
-        .map(|url| format!(r#"<link rel="stylesheet" href="{}">"#, url))
-        .unwrap_or_default();
-
-    format!(
-        r#"
+    match css_path {
+        Some(path) => {
+            let css_tag = to_file_url(path)
+                .map(|url| format!(r#"<link rel="stylesheet" href="{}">"#, url))
+                .unwrap_or_default();
+            format!(
+                r#"
 <!DOCTYPE html>
 <html>
 <head>
@@ -150,6 +150,9 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
 </body>
 </html>
 "#,
-        css_tag, html
-    )
+                css_tag, html
+            )
+        }
+        None => html,
+    }
 }
