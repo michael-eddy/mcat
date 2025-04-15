@@ -1,7 +1,41 @@
-use std::{collections::HashSet, env, path::Path};
+use std::{
+    collections::HashSet,
+    env,
+    path::Path,
+    process::{Command, Stdio},
+};
+use tempfile::Builder;
 
+use comrak::{ComrakOptions, markdown_to_html};
 pub use pyo3::types::PyModule;
 use pyo3::{prelude::*, prepare_freethreaded_python};
+use std::io::Write;
+
+pub fn wkhtmltox_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Write HTML to a temp file
+    let mut temp = Builder::new().suffix(".html").tempfile()?;
+    write!(temp, "{}", html)?;
+
+    // Run wkhtmltoimage, read from file, output to stdout
+    let output = Command::new("wkhtmltoimage")
+        .arg("--quiet")
+        .arg("--enable-local-file-access")
+        .arg(temp.path())
+        .arg("-") // write to stdout
+        .stdout(Stdio::piped())
+        .spawn()?
+        .wait_with_output()?;
+
+    if output.status.success() {
+        Ok(output.stdout)
+    } else {
+        Err(format!(
+            "wkhtmltoimage failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into())
+    }
+}
 
 pub fn markitdown_convert(input: &str) -> PyResult<String> {
     unsafe {
@@ -31,7 +65,7 @@ pub fn markitdown_convert(input: &str) -> PyResult<String> {
         // silent
         let io = PyModule::import(py, "io")?;
         let sys = PyModule::import(py, "sys")?;
-        let devnull = io.getattr("StringIO")?.call0()?; // or '/dev/null' for suppression
+        let devnull = io.getattr("StringIO")?.call0()?;
         sys.setattr("stdout", &devnull)?;
         sys.setattr("stderr", &devnull)?;
 
@@ -63,4 +97,59 @@ pub fn is_markitdown_supported(path: &Path) -> bool {
     .collect();
 
     supported_formats.contains(extension.as_str())
+}
+
+fn to_file_url(path: &str) -> Option<String> {
+    let abs_path = dunce::canonicalize(Path::new(path)).ok()?;
+    let path_str = abs_path.to_string_lossy().replace('\\', "/");
+    Some(format!("file:///{}", path_str))
+}
+
+pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
+    let mut options = ComrakOptions::default();
+    // ➕ Enable extensions
+    options.extension.strikethrough = true;
+    options.extension.tagfilter = true;
+    options.extension.table = true;
+    options.extension.autolink = true;
+    options.extension.tasklist = true;
+    options.extension.footnotes = true;
+    options.extension.description_lists = true;
+
+    // 🎯 Parsing options
+    options.parse.smart = true; // fancy quotes, dashes, ellipses
+
+    // 💄 Render options
+    options.render.hardbreaks = false;
+    options.render.github_pre_lang = true; // <pre lang="rust">
+    options.render.full_info_string = true;
+
+    let css_path: Option<&str> = match css_path {
+        Some("makurai") => Some("./styles/makurai.css"),
+        Some("default") => Some("./styles/default.css"),
+        Some(p) => Some(p),
+        None => None,
+    };
+
+    let html = markdown_to_html(markdown, &options);
+    let css_tag = css_path
+        .and_then(|path| to_file_url(path))
+        .map(|url| format!(r#"<link rel="stylesheet" href="{}">"#, url))
+        .unwrap_or_default();
+
+    format!(
+        r#"
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  {}
+</head>
+<body>
+  {}
+</body>
+</html>
+"#,
+        css_tag, html
+    )
 }

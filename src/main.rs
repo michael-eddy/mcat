@@ -3,6 +3,8 @@ mod converter;
 mod prompter;
 mod reader;
 
+use std::io::Write;
+
 use catter::Catter;
 use clap::{
     Arg, ColorChoice, Command,
@@ -25,16 +27,24 @@ fn main() {
             Arg::new("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md"]),
+                .value_parser(["html", "md", "image"]),
+        )
+        .arg(
+            Arg::new("style")
+                .short('s')
+                .help("alternative css file for images, valid options: [default, makurai, <local file>]",)
+                .default_value("default")
         )
         .get_matches();
 
     let input = opts.get_one::<String>("input").unwrap();
     let output = opts.get_one::<String>("output");
+    let style = opts.get_one::<String>("style").unwrap();
 
+    let mut out = std::io::stdout();
     let catter = Catter::new(input.clone());
-    match catter.cat(output) {
-        Ok(md) => println!("{}", md),
+    match catter.cat(output, Some(style)) {
+        Ok((val, _)) => out.write_all(&val).expect("failed writing to stdout"),
         Err(e) => eprint!("Error: {}", e),
     }
 }

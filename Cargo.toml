@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 clap = "4.5.36"
+comrak = "0.38.0"
+dunce = "1.0.5"
 ignore = "0.4.23"
 inquire = "0.7.5"
-pulldown-cmark = "0.13.0"
 pyo3 = "0.24.1"
+tempfile = "3.19.1"

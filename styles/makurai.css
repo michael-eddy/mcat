@@ -1,0 +1,128 @@
+body {
+  background-color: #15161B;
+  color: #FFFFFF;
+  font-family: 'Fira Code', 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: #82AAFF;
+  margin-top: 1.5em;
+}
+
+h1 {
+  font-size: 2.2em;
+  border-bottom: 2px solid #2D3640;
+  padding-bottom: 0.3em;
+}
+
+h2 {
+  font-size: 1.8em;
+  border-bottom: 1px solid #2D3640;
+  padding-bottom: 0.2em;
+}
+
+h3 {
+  font-size: 1.4em;
+}
+
+h4,
+h5,
+h6 {
+  color: #D2A6FF;
+}
+
+a {
+  color: #FF7733;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  background-color: #1B1C21;
+  color: #FFEE99;
+  font-family: 'Fira Code', monospace;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+}
+
+pre {
+  background-color: #1B1C21;
+  color: #95FB79;
+  padding: 1em;
+  overflow-x: auto;
+  border: 1px solid #2D3640;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  /* Wrap long lines */
+  word-wrap: break-word;
+  overflow-y: hidden;
+  /* Disable vertical scrolling */
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  display: block;
+}
+
+pre::-webkit-scrollbar {
+  display: none;
+  /* Hide scrollbar */
+}
+
+blockquote {
+  border-left: 4px solid #82AAFF;
+  background-color: #1B1C21;
+  padding: 0.8em 1em;
+  color: #5C6773;
+  margin: 1em 0;
+}
+
+ul,
+ol {
+  padding-left: 2em;
+}
+
+li::marker {
+  color: #D2A6FF;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+th,
+td {
+  border: 1px solid #A6ACCD;
+  padding: 0.6em 1em;
+}
+
+th {
+  background-color: #1B1C21;
+  color: #FFEE99;
+}
+
+tr:nth-child(even) {
+  background-color: #1E1F24;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #2D3640;
+  margin: 2em 0;
+}
