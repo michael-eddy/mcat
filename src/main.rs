@@ -54,6 +54,9 @@ fn main() {
     let catter = Catter::new(input.clone());
     match catter.cat(output, Some(style), style_html) {
         Ok((val, _)) => out.write_all(&val).expect("failed writing to stdout"),
-        Err(e) => eprint!("Error: {}", e),
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
     }
 }

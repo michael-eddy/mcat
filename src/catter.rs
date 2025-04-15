@@ -37,6 +37,8 @@ impl Catter {
             if to.is_none() {
                 return Ok((result.as_bytes().to_vec(), CatType::Markdown));
             }
+        } else {
+            return Err(format!("invalid path: {}", path.display()).into());
         }
 
         if let Some(to) = to {
