@@ -1,7 +1,9 @@
 use base64::{Engine, engine::general_purpose};
+use ffmpeg_sidecar::command::FfmpegCommand;
 use std::{
     collections::HashSet,
-    env, error,
+    env, error, fs,
+    io::Read,
     path::Path,
     process::{Command, Stdio},
 };
@@ -213,4 +215,50 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
         }
         None => html,
     }
+}
+
+pub fn inline_a_video(
+    input: impl AsRef<str>,
+    inline_encoder: &InlineEncoder,
+) -> Result<Vec<u8>, Box<dyn error::Error>> {
+    match inline_encoder {
+        InlineEncoder::Kitty => todo!(),
+        InlineEncoder::Iterm => {
+            let gif = video_to_gif(input)?;
+            let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
+            let offset = term_misc::center_image(dyn_img.width() as u16);
+            let inline = iterm_encoder::encode_image(&gif, Some(offset))?;
+            Ok(inline)
+        }
+        InlineEncoder::Sixel => return Err("Cannot view videos in sixel".into()),
+    }
+}
+
+fn video_to_gif(input: impl AsRef<str>) -> Result<Vec<u8>, Box<dyn error::Error>> {
+    let input = input.as_ref();
+    if input.ends_with(".gif") {
+        let path = Path::new(input);
+        let bytes = fs::read(path)?;
+        return Ok(bytes);
+    }
+    ffmpeg_sidecar::download::auto_download()?;
+
+    let mut command = FfmpegCommand::new();
+    command
+        .hwaccel("auto")
+        .input(input)
+        .format("gif")
+        .output("-");
+
+    let mut child = command.spawn()?;
+    let mut stdout = child
+        .take_stdout()
+        .ok_or("failed to get stdout for ffmpeg")?;
+
+    let mut output_bytes = Vec::new();
+    stdout.read_to_end(&mut output_bytes)?;
+
+    child.wait()?; // ensure process finishes cleanly
+
+    Ok(output_bytes)
 }

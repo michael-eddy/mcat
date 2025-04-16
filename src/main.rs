@@ -13,7 +13,7 @@ use std::io::Write;
 #[macro_use]
 extern crate lazy_static;
 
-use catter::{Catter, EncoderForce};
+use catter::EncoderForce;
 use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
@@ -84,8 +84,13 @@ fn main() {
     };
 
     let mut out = std::io::stdout();
-    let catter = Catter::new(input.clone());
-    match catter.cat(output, Some(style), style_html, Some(encoder)) {
+    match catter::cat(
+        input.clone(),
+        output,
+        Some(style),
+        style_html,
+        Some(encoder),
+    ) {
         Ok((val, _)) => out.write_all(&val).expect("failed writing to stdout"),
         Err(e) => {
             eprintln!("Error: {}", e);

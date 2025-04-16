@@ -2,9 +2,7 @@ use std::{fs, path::Path};
 
 use crate::{converter, prompter};
 
-pub fn read_file<P: AsRef<Path>>(
-    input: &P,
-) -> Result<(String, String), Box<dyn std::error::Error>> {
+pub fn read_file(input: &impl AsRef<Path>) -> Result<(String, String), Box<dyn std::error::Error>> {
     let path = input.as_ref();
 
     if path.is_file() {
@@ -21,9 +19,9 @@ pub fn read_file<P: AsRef<Path>>(
 }
 
 /// Format a file into markdown with its relative path from the root
-fn read_file_markdown<P: AsRef<Path>>(
+fn read_file_markdown(
     path: &Path,
-    base: P,
+    base: impl AsRef<Path>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let ext = path
         .extension()

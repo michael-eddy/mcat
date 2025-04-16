@@ -1,11 +1,7 @@
-# Stage 1
-make intermediate struct that allows opening ( Dir / documents / normal files ) and allows you to convert into markdown / HTML
+TODO:
 
-# Stage 2
-allow converting HTML to image using wkhtmltox (should be go side imo)
+# Stage 5
+add videos using ffmpeg-sidecar
 
-# Stage 3
-add normal images into the mix, also also resizing and filtering
-
-# Stage 4
-allow converting into inline images and make that default behavior
+# Stage 6
+add --options flag for changing things like spx, sc, width, height, not centering
