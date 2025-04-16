@@ -6,7 +6,7 @@ pub fn read_file(input: &impl AsRef<Path>) -> Result<(String, String), Box<dyn s
     let path = input.as_ref();
 
     if path.is_file() {
-        let res = read_file_markdown(path, "")?;
+        let res = read_file_markdown(path, "", true)?;
         return Ok((res, "md".into()));
     }
 
@@ -22,6 +22,7 @@ pub fn read_file(input: &impl AsRef<Path>) -> Result<(String, String), Box<dyn s
 fn read_file_markdown(
     path: &Path,
     base: impl AsRef<Path>,
+    single: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let ext = path
         .extension()
@@ -41,7 +42,11 @@ fn read_file_markdown(
         format!("```{}\n{}\n```", ext, cont)
     };
 
-    Ok(format!("# `{}`\n\n{}", name, content))
+    if single {
+        Ok(content)
+    } else {
+        Ok(format!("# `{}`\n\n{}", name, content))
+    }
 }
 
 /// Handle directory prompting and file selection
@@ -51,7 +56,7 @@ fn read_dir_markdown(path: &Path) -> Result<String, String> {
 
     let mut markdown = String::new();
     for file in selected_files {
-        if let Ok(md) = read_file_markdown(&file, path) {
+        if let Ok(md) = read_file_markdown(&file, path, false) {
             markdown.push_str(&md);
             markdown.push_str("\n\n");
         }

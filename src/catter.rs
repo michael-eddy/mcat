@@ -5,7 +5,7 @@ use image::ImageFormat;
 use crate::{
     converter::{self},
     image_extended::InlineImage,
-    reader,
+    markdown,
 };
 
 pub enum CatType {
@@ -58,12 +58,22 @@ pub fn cat(
     }
     // local file or dir
     let (result, from) = {
-        let (r, f) = reader::read_file(&path)?;
-        if to.is_none() || to.unwrap() == "md" {
-            return Ok((r.as_bytes().to_vec(), CatType::Markdown));
+        let ext = path
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        match ext.as_ref() {
+            "md" | "html" => {
+                let r = fs::read_to_string(path)?;
+                (r, ext)
+            }
+            _ => markdown::read_file(&path)?,
         }
-        (r, f)
     };
+    if to.is_none() || to.unwrap() == "md" {
+        return Ok((result.as_bytes().to_vec(), CatType::Markdown));
+    }
 
     // converting
     if let Some(to) = to {
