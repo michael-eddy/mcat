@@ -1,6 +1,7 @@
+use image::DynamicImage;
 use std::{
     collections::HashSet,
-    env,
+    env, error,
     path::Path,
     process::{Command, Stdio},
 };
@@ -10,6 +11,51 @@ use comrak::{ComrakOptions, markdown_to_html};
 pub use pyo3::types::PyModule;
 use pyo3::{prelude::*, prepare_freethreaded_python};
 use std::io::Write;
+
+use crate::{iterm_encoder, kitty_encoder, sixel_encoder, term_misc};
+
+pub enum InlineEncoder {
+    Kitty,
+    Iterm,
+    Sixel,
+}
+impl InlineEncoder {
+    pub fn auto_detect(force_kitty: bool, force_iterm: bool, force_sixel: bool) -> Self {
+        if force_kitty {
+            return Self::Kitty;
+        }
+        if force_iterm {
+            return Self::Iterm;
+        }
+        if force_sixel {
+            return Self::Sixel;
+        }
+
+        let env = term_misc::EnvIdentifiers::new();
+        if kitty_encoder::is_kitty_capable(&env) {
+            return Self::Kitty;
+        }
+        if iterm_encoder::is_iterm_capable(&env) {
+            return Self::Iterm;
+        }
+        if sixel_encoder::is_sixel_capable(&env) {
+            return Self::Sixel;
+        }
+
+        return Self::Iterm;
+    }
+}
+
+pub fn inline_an_image(
+    img: &DynamicImage,
+    inline_encoder: &InlineEncoder,
+) -> Result<Vec<u8>, Box<dyn error::Error>> {
+    match inline_encoder {
+        InlineEncoder::Kitty => kitty_encoder::encode_image(img),
+        InlineEncoder::Iterm => iterm_encoder::encode_image(img),
+        InlineEncoder::Sixel => sixel_encoder::encode_image(img),
+    }
+}
 
 pub fn wkhtmltox_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     // Write HTML to a temp file

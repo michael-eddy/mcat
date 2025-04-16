@@ -1,11 +1,17 @@
 mod catter;
 mod converter;
-mod imager;
+mod image_extended;
+mod iterm_encoder;
+mod kitty_encoder;
 mod prompter;
 mod reader;
+mod sixel_encoder;
 mod term_misc;
 
 use std::io::Write;
+
+#[macro_use]
+extern crate lazy_static;
 
 use catter::Catter;
 use clap::{
@@ -29,7 +35,7 @@ fn main() {
             Arg::new("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md", "image"]),
+                .value_parser(["html", "md", "image", "inline"]),
         )
         .arg(
             Arg::new("theme")
