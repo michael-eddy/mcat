@@ -82,7 +82,6 @@ fn main() {
         )
         .arg(
             Arg::new("makurai-theme")
-                .long("makurai-theme")
                 .short('m')
                 .help("shortcut for putting --theme makurai")
                 .action(clap::ArgAction::SetTrue)
