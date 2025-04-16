@@ -159,13 +159,7 @@ pub fn is_markitdown_supported(path: &Path) -> bool {
     supported_formats.contains(extension.as_str())
 }
 
-fn to_file_url(path: &str) -> Option<String> {
-    let abs_path = dunce::canonicalize(Path::new(path)).ok()?;
-    let path_str = abs_path.to_string_lossy().replace('\\', "/");
-    Some(format!("file:///{}", path_str))
-}
-
-pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
+pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> String {
     let mut options = ComrakOptions::default();
     // ➕ Enable extensions
     options.extension.strikethrough = true;
@@ -180,6 +174,7 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     options.parse.smart = true; // fancy quotes, dashes, ellipses
 
     // 💄 Render options
+    options.render.unsafe_ = raw_html;
     options.render.hardbreaks = false;
     options.render.github_pre_lang = true; // <pre lang="rust">
     options.render.full_info_string = true;

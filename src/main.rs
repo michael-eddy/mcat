@@ -46,7 +46,7 @@ fn main() {
         .arg(
             Arg::new("style-html")
                 .short('s')
-                .help("add style to raw html too")
+                .help("add style to html too (when html is the output)")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -67,13 +67,50 @@ fn main() {
                 .help("makes the inline image encoded to sixel")
                 .action(clap::ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("raw")
+                .long("raw")
+                .short('r')
+                .help("allows raw html to run (put only on your content)")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("inline")
+                .short('i')
+                .help("shortcut for putting --output inline")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("makurai-theme")
+                .long("makurai-theme")
+                .short('m')
+                .help("shortcut for putting --theme makurai")
+                .action(clap::ArgAction::SetTrue)
+        )
         .get_matches();
 
+    // main
     let input = opts.get_one::<String>("input").unwrap();
     let output = opts.get_one::<String>("output");
     let style = opts.get_one::<String>("theme").unwrap();
     let style_html = *opts.get_one::<bool>("style-html").unwrap();
+    let raw_html = *opts.get_one::<bool>("raw").unwrap();
 
+    // shortcuts
+    let makurai = *opts.get_one::<bool>("makurai-theme").unwrap();
+    let style: &str = if makurai { "makurai" } else { style };
+
+    let inline = *opts.get_one::<bool>("inline").unwrap();
+    let output: Option<&str> = if inline {
+        Some("inline".as_ref())
+    } else {
+        match output {
+            Some(o) => Some(o.as_ref()),
+            None => None,
+        }
+    };
+
+    // encoders
     let kitty = *opts.get_one::<bool>("kitty").unwrap();
     let iterm = *opts.get_one::<bool>("iterm").unwrap();
     let sixel = *opts.get_one::<bool>("sixel").unwrap();
@@ -90,6 +127,7 @@ fn main() {
         Some(style),
         style_html,
         Some(encoder),
+        raw_html,
     ) {
         Ok((val, _)) => out.write_all(&val).expect("failed writing to stdout"),
         Err(e) => {

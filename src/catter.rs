@@ -24,10 +24,11 @@ pub struct EncoderForce {
 
 pub fn cat(
     input: String,
-    to: Option<&String>,
+    to: Option<&str>,
     style: Option<&str>,
     style_html: bool,
     encoder: Option<EncoderForce>,
+    raw_html: bool,
 ) -> Result<(Vec<u8>, CatType), Box<dyn std::error::Error>> {
     let path = Path::new(&input);
     if !path.exists() {
@@ -79,16 +80,16 @@ pub fn cat(
     if let Some(to) = to {
         match (from.as_ref(), to.as_ref()) {
             ("md", "html") => {
-                let html = converter::md_to_html(&result, if style_html {style} else {None});
+                let html = converter::md_to_html(&result, if style_html {style} else {None}, raw_html);
                 return Ok((html.as_bytes().to_vec(), CatType::Html));
             },
             ("md", "image") => {
-                let html = converter::md_to_html(&result, style);
+                let html = converter::md_to_html(&result, style, raw_html);
                 let image = converter::wkhtmltox_convert(&html)?;
                 return Ok((image, CatType::Image));
             },
             ("md", "inline") => {
-                let html = converter::md_to_html(&result, style);
+                let html = converter::md_to_html(&result, style, raw_html);
                 let image = converter::wkhtmltox_convert(&html)?;
                 let dyn_img = image::load_from_memory(&image)?;
                 let (img, center) = dyn_img.resize_plus(None, None)?;
