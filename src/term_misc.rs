@@ -59,7 +59,7 @@ impl Winsize {
     }
 }
 
-pub fn init_winsize(spx: &Size, sc: &Size, scale: Option<f32>) -> Result<(), &'static str> {
+pub fn _init_winsize(spx: &Size, sc: &Size, scale: Option<f32>) -> Result<(), &'static str> {
     WINSIZE
         .set(Winsize::new(spx, sc, scale))
         .map_err(|_| "Winsize already initialized")?;

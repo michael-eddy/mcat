@@ -30,11 +30,11 @@ impl InlineImage for DynamicImage {
     ) -> Result<Self, Box<dyn error::Error>> {
         let width = match width {
             Some(w) => dim_to_px(w, term_misc::SizeDirection::Width)?,
-            None => 0,
+            None => dim_to_px("80%", term_misc::SizeDirection::Width)?,
         };
         let height = match height {
             Some(h) => dim_to_px(h, term_misc::SizeDirection::Height)?,
-            None => 0,
+            None => dim_to_px("80%", term_misc::SizeDirection::Width)?,
         };
 
         let img = self.resize(width, height, image::imageops::FilterType::Lanczos3);

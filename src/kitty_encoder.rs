@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::HashMap, error::Error, io::Write};
+use std::{cmp::min, collections::HashMap, io::Write};
 
 use image::DynamicImage;
 

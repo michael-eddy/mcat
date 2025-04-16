@@ -33,10 +33,10 @@ impl Catter {
 
         //image
         if let Some(ext) = path.extension() {
-            if let Some(format) = ImageFormat::from_extension(ext) {
+            if let Some(_) = ImageFormat::from_extension(ext) {
                 let buf = fs::read(path)?;
-                let dyn_img = image::load_from_memory_with_format(&buf, format)?;
-                let dyn_img = dyn_img.resize_plus(Some("80%"), Some("60%"))?;
+                let dyn_img = image::load_from_memory(&buf)?;
+                let dyn_img = dyn_img.resize_plus(None, None)?;
                 let inline_encoder = &converter::InlineEncoder::auto_detect(false, false, false);
                 let inline_img = converter::inline_an_image(&dyn_img, inline_encoder)?;
                 return Ok((inline_img, CatType::InlineImage));
@@ -67,8 +67,8 @@ impl Catter {
                 ("md", "inline") => {
                     let html = converter::md_to_html(&result, style);
                     let image = converter::wkhtmltox_convert(&html)?;
-                    let dyn_img = image::load_from_memory_with_format(&image, image::ImageFormat::Png)?;
-                    let dyn_img = dyn_img.resize_plus(Some("80%"), Some("60%"))?;
+                    let dyn_img = image::load_from_memory(&image)?;
+                    let dyn_img = dyn_img.resize_plus(None, None)?;
                     let inline_encoder = &converter::InlineEncoder::auto_detect(false, false, false);
                     let inline_img = converter::inline_an_image(&dyn_img, inline_encoder)?;
                     return Ok((inline_img, CatType::InlineImage))
@@ -79,8 +79,8 @@ impl Catter {
                 },
                 ("html", "inline") => {
                     let image = converter::wkhtmltox_convert(&result)?;
-                    let dyn_img = image::load_from_memory_with_format(&image, image::ImageFormat::Png)?;
-                    let dyn_img = dyn_img.resize_plus(Some("80%"), Some("60%"))?;
+                    let dyn_img = image::load_from_memory(&image)?;
+                    let dyn_img = dyn_img.resize_plus(None, None)?;
                     let inline_encoder = &converter::InlineEncoder::auto_detect(false, false, false);
                     let inline_img = converter::inline_an_image(&dyn_img, inline_encoder)?;
                     return Ok((inline_img, CatType::InlineImage))
