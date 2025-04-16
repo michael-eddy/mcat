@@ -184,35 +184,30 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     options.render.github_pre_lang = true; // <pre lang="rust">
     options.render.full_info_string = true;
 
-    let css_path: Option<&str> = match css_path {
-        Some("makurai") => Some("./styles/makurai.css"),
-        Some("default") => Some("./styles/default.css"),
-        Some(p) => Some(p),
+    let css_content = match css_path {
+        Some("makurai") => Some(include_str!("../styles/makurai.css").to_string()),
+        Some("default") => Some(include_str!("../styles/default.css").to_string()),
+        Some(path) => std::fs::read_to_string(path).ok(),
         None => None,
     };
 
     let html = markdown_to_html(markdown, &options);
-    match css_path {
-        Some(path) => {
-            let css_tag = to_file_url(path)
-                .map(|url| format!(r#"<link rel="stylesheet" href="{}">"#, url))
-                .unwrap_or_default();
-            format!(
-                r#"
+    match css_content {
+        Some(css) => format!(
+            r#"
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  {}
+  <style>{}</style>
 </head>
 <body>
   {}
 </body>
 </html>
 "#,
-                css_tag, html
-            )
-        }
+            css, html
+        ),
         None => html,
     }
 }
