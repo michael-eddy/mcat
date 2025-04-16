@@ -1,4 +1,4 @@
-use image::DynamicImage;
+use base64::{Engine, engine::general_purpose};
 use std::{
     collections::HashSet,
     env, error,
@@ -46,14 +46,26 @@ impl InlineEncoder {
     }
 }
 
+pub fn image_to_base64(img: &Vec<u8>) -> String {
+    general_purpose::STANDARD.encode(&img)
+}
+
 pub fn inline_an_image(
-    img: &DynamicImage,
+    img: &Vec<u8>,
+    offset: Option<u16>,
     inline_encoder: &InlineEncoder,
 ) -> Result<Vec<u8>, Box<dyn error::Error>> {
     match inline_encoder {
-        InlineEncoder::Kitty => kitty_encoder::encode_image(img),
-        InlineEncoder::Iterm => iterm_encoder::encode_image(img),
-        InlineEncoder::Sixel => sixel_encoder::encode_image(img),
+        InlineEncoder::Kitty => kitty_encoder::encode_image(img, offset),
+        InlineEncoder::Iterm => iterm_encoder::encode_image(img, offset),
+        InlineEncoder::Sixel => sixel_encoder::encode_image(img, offset),
+    }
+}
+
+pub fn offset_to_terminal(offset: Option<u16>) -> String {
+    match offset {
+        Some(offset) => format!("\x1b[{}C", offset),
+        None => "".to_string(),
     }
 }
 

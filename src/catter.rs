@@ -19,6 +19,12 @@ pub enum CatType {
     InlineImage,
 }
 
+pub struct EncoderForce {
+    pub kitty: bool,
+    pub iterm: bool,
+    pub sixel: bool,
+}
+
 impl Catter {
     pub fn new(input: String) -> Self {
         Catter { input }
@@ -28,17 +34,30 @@ impl Catter {
         to: Option<&String>,
         style: Option<&str>,
         style_html: bool,
+        encoder: Option<EncoderForce>,
     ) -> Result<(Vec<u8>, CatType), Box<dyn std::error::Error>> {
         let path = Path::new(&self.input);
+        let encoder = match encoder {
+            Some(en) => en,
+            None => EncoderForce {
+                kitty: false,
+                iterm: false,
+                sixel: false,
+            },
+        };
 
         //image
         if let Some(ext) = path.extension() {
             if let Some(_) = ImageFormat::from_extension(ext) {
                 let buf = fs::read(path)?;
                 let dyn_img = image::load_from_memory(&buf)?;
-                let dyn_img = dyn_img.resize_plus(None, None)?;
-                let inline_encoder = &converter::InlineEncoder::auto_detect(false, false, false);
-                let inline_img = converter::inline_an_image(&dyn_img, inline_encoder)?;
+                let (img, center) = dyn_img.resize_plus(None, None)?;
+                let inline_encoder = &converter::InlineEncoder::auto_detect(
+                    encoder.kitty,
+                    encoder.iterm,
+                    encoder.sixel,
+                );
+                let inline_img = converter::inline_an_image(&img, Some(center), inline_encoder)?;
                 return Ok((inline_img, CatType::InlineImage));
             }
         }
@@ -53,6 +72,7 @@ impl Catter {
             return Err(format!("invalid path: {}", path.display()).into());
         };
 
+        // converting
         if let Some(to) = to {
             match (from.as_ref(), to.as_ref()) {
                 ("md", "html") => {
@@ -68,9 +88,13 @@ impl Catter {
                     let html = converter::md_to_html(&result, style);
                     let image = converter::wkhtmltox_convert(&html)?;
                     let dyn_img = image::load_from_memory(&image)?;
-                    let dyn_img = dyn_img.resize_plus(None, None)?;
-                    let inline_encoder = &converter::InlineEncoder::auto_detect(false, false, false);
-                    let inline_img = converter::inline_an_image(&dyn_img, inline_encoder)?;
+                    let (img, center) = dyn_img.resize_plus(None, None)?;
+                    let inline_encoder = &converter::InlineEncoder::auto_detect(
+                        encoder.kitty,
+                        encoder.iterm,
+                        encoder.sixel,
+                    );
+                    let inline_img = converter::inline_an_image(&img, Some(center), inline_encoder)?;
                     return Ok((inline_img, CatType::InlineImage))
                 },
                 ("html", "image") => {
@@ -80,9 +104,13 @@ impl Catter {
                 ("html", "inline") => {
                     let image = converter::wkhtmltox_convert(&result)?;
                     let dyn_img = image::load_from_memory(&image)?;
-                    let dyn_img = dyn_img.resize_plus(None, None)?;
-                    let inline_encoder = &converter::InlineEncoder::auto_detect(false, false, false);
-                    let inline_img = converter::inline_an_image(&dyn_img, inline_encoder)?;
+                    let (img, center) = dyn_img.resize_plus(None, None)?;
+                    let inline_encoder = &converter::InlineEncoder::auto_detect(
+                        encoder.kitty,
+                        encoder.iterm,
+                        encoder.sixel,
+                    );
+                    let inline_img = converter::inline_an_image(&img, Some(center), inline_encoder)?;
                     return Ok((inline_img, CatType::InlineImage))
                 },
                 _ => return Err(format!(

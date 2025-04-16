@@ -90,13 +90,13 @@ pub fn get_winsize() -> &'static Winsize {
 }
 
 /// returns a the offset needed to center the image
-pub fn center_image(image_width: u16) -> String {
+pub fn center_image(image_width: u16) -> u16 {
     let winsize = get_winsize();
     let offset_x = (winsize.spx_width as f32 - image_width as f32) / 2.0;
     let offset_x = offset_x / (winsize.spx_width as f32 / winsize.sc_width as f32);
 
-    let offset = offset_x.round();
-    format!("\x1b[{}C", offset)
+    let offset = offset_x.round() as u16;
+    offset
 }
 
 /// convert any format of width / height into pixels.

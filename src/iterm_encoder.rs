@@ -1,18 +1,16 @@
-use image::DynamicImage;
-
-use crate::{
-    image_extended::InlineImage,
-    term_misc::{self, EnvIdentifiers},
-};
+use crate::{converter, term_misc::EnvIdentifiers};
 use std::io::Write;
 
-pub fn encode_image(img: &DynamicImage) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let base64_encoded = img.encode_base64()?;
+pub fn encode_image(
+    img: &Vec<u8>,
+    offset: Option<u16>,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let base64_encoded = converter::image_to_base64(img);
 
     let mut buffer: Vec<u8> = Vec::with_capacity(base64_encoded.len() + 50);
 
-    let center = term_misc::center_image(img.width() as u16);
-    write!(buffer, "{}", center)?;
+    let center = converter::offset_to_terminal(offset);
+    buffer.extend_from_slice(center.as_ref());
 
     buffer.extend_from_slice(b"\x1b]1337;File=inline=1;size=");
     write!(buffer, "{}", base64_encoded.len())?;

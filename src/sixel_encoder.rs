@@ -1,6 +1,6 @@
-use crate::term_misc::{self, EnvIdentifiers};
+use crate::{converter, term_misc::EnvIdentifiers};
 use color_quant::NeuQuant;
-use image::{DynamicImage, ImageBuffer, Rgb};
+use image::{ImageBuffer, Rgb};
 use std::{
     error::Error,
     io::{self, Write},
@@ -8,12 +8,16 @@ use std::{
 
 const SIXEL_MIN: u8 = 0x3f; // '?'
 
-pub fn encode_image(dyn_img: &DynamicImage) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub fn encode_image(
+    img: &Vec<u8>,
+    offset: Option<u16>,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let dyn_img = image::load_from_memory_with_format(&img, image::ImageFormat::Png)?;
     let rgb_img = dyn_img.to_rgb8();
 
     let mut buffer = Vec::with_capacity(rgb_img.len() * 3);
 
-    let center = term_misc::center_image(dyn_img.width() as u16);
+    let center = converter::offset_to_terminal(offset);
     buffer.extend_from_slice(center.as_bytes());
 
     let encoded_sixel = encode_sixel(&rgb_img)?;

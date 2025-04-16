@@ -1,11 +1,6 @@
 use std::{cmp::min, collections::HashMap, io::Write};
 
-use image::DynamicImage;
-
-use crate::{
-    image_extended::InlineImage,
-    term_misc::{self, EnvIdentifiers},
-};
+use crate::{converter, term_misc::EnvIdentifiers};
 
 fn chunk_base64(
     base64: &str,
@@ -63,9 +58,12 @@ fn chunk_base64(
     Ok(())
 }
 
-pub fn encode_image(img: &DynamicImage) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let center_string = term_misc::center_image(img.width() as u16);
-    let base64 = img.encode_base64()?;
+pub fn encode_image(
+    img: &Vec<u8>,
+    offset: Option<u16>,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let center_string = converter::offset_to_terminal(offset);
+    let base64 = converter::image_to_base64(img);
     let mut buffer = Vec::with_capacity(base64.len() + 10);
     buffer.extend_from_slice(center_string.as_bytes());
     chunk_base64(
