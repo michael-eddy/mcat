@@ -36,6 +36,11 @@ impl MarkitdownProcess {
 
         let mut output = Vec::new();
         self.stdout.read_until(b'\0', &mut output)?;
+
+        if !output.is_empty() && output[output.len() - 1] == b'\0' {
+            output.pop();
+        }
+
         let res = String::from_utf8(output)?;
         Ok(res)
     }

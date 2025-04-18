@@ -1,5 +1,12 @@
+from markitdown import MarkItDown
 import sys
 import subprocess
+import io
+import os
+
+# silent
+sys.stderr = io.StringIO()
+os.environ["PYTHONWARNINGS"] = "ignore"
 
 try:
     import markitdown
@@ -8,7 +15,6 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip",
                           "install", "markitdown[all]", "--quiet"])
 
-from markitdown import MarkItDown
 converter = MarkItDown()
 for line in sys.stdin:
     file_path = line.strip()
@@ -18,4 +24,5 @@ for line in sys.stdin:
         sys.stdout.write("\0")
         sys.stdout.flush()
     except Exception as e:
-        print(f"Error processing {file_path}: {e}", file=sys.stderr, flush=True)
+        print(f"Error processing {file_path}: {
+              e}", file=sys.stderr, flush=True)
