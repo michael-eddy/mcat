@@ -4,6 +4,7 @@ mod image_extended;
 mod iterm_encoder;
 mod kitty_encoder;
 mod markdown;
+mod markitdown;
 mod prompter;
 mod sixel_encoder;
 mod term_misc;

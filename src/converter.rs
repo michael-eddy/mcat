@@ -2,7 +2,7 @@ use base64::{Engine, engine::general_purpose};
 use ffmpeg_sidecar::{command::FfmpegCommand, event::OutputVideoFrame};
 use std::{
     collections::HashSet,
-    env, error, fs,
+    error, fs,
     io::Read,
     path::Path,
     process::{Command, Stdio},
@@ -10,11 +10,9 @@ use std::{
 use tempfile::Builder;
 
 use comrak::{ComrakOptions, markdown_to_html};
-pub use pyo3::types::PyModule;
-use pyo3::{prelude::*, prepare_freethreaded_python};
 use std::io::Write;
 
-use crate::{iterm_encoder, kitty_encoder, sixel_encoder, term_misc};
+use crate::{iterm_encoder, kitty_encoder, markitdown, sixel_encoder, term_misc};
 
 pub enum InlineEncoder {
     Kitty,
@@ -98,45 +96,11 @@ pub fn wkhtmltox_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Erro
     }
 }
 
-pub fn markitdown_convert(input: &str) -> PyResult<String> {
-    unsafe {
-        env::set_var("PYTHONWARNINGS", "ignore");
-    }
-    prepare_freethreaded_python();
-    Python::with_gil(|py| {
-        // Attempt to import 'markitdown'
-        let result = PyModule::import(py, "markitdown");
+pub fn markitdown_convert(input: &str) -> Result<String, Box<dyn error::Error>> {
+    let mut converter = markitdown::MARKITDOWN.lock()?;
+    let result = converter.convert(input)?;
 
-        if result.is_err() {
-            // If import fails, install 'markitdown' using pip
-            let subprocess = PyModule::import(py, "subprocess")?;
-            subprocess.call_method1(
-                "check_call",
-                (vec![
-                    "python".to_string(),
-                    "-m".to_string(),
-                    "pip".to_string(),
-                    "install".to_string(),
-                    "markitdown[all]".to_string(),
-                    "--quiet".to_string(),
-                ],),
-            )?;
-        }
-
-        // silent
-        let io = PyModule::import(py, "io")?;
-        let sys = PyModule::import(py, "sys")?;
-        let devnull = io.getattr("StringIO")?.call0()?;
-        sys.setattr("stdout", &devnull)?;
-        sys.setattr("stderr", &devnull)?;
-
-        let markitdown = PyModule::import(py, "markitdown")?;
-        let converter = markitdown.getattr("MarkItDown")?.call0()?;
-        let result = converter.call_method1("convert", (input,))?;
-        let text_content: String = result.getattr("text_content")?.extract()?;
-
-        Ok(text_content)
-    })
+    Ok(result)
 }
 
 pub fn is_markitdown_supported(path: &Path) -> bool {
