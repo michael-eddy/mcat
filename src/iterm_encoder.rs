@@ -3,22 +3,21 @@ use std::io::Write;
 
 pub fn encode_image(
     img: &Vec<u8>,
+    mut out: impl Write,
     offset: Option<u16>,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let base64_encoded = converter::image_to_base64(img);
 
-    let mut buffer: Vec<u8> = Vec::with_capacity(base64_encoded.len() + 50);
-
     let center = converter::offset_to_terminal(offset);
-    buffer.extend_from_slice(center.as_ref());
+    out.write_all(center.as_ref())?;
 
-    buffer.extend_from_slice(b"\x1b]1337;File=inline=1;size=");
-    write!(buffer, "{}", base64_encoded.len())?;
-    buffer.push(b':');
-    buffer.extend_from_slice(base64_encoded.as_bytes());
-    buffer.push(b'\x07');
+    out.write_all(b"\x1b]1337;File=inline=1;size=")?;
+    write!(out, "{}", base64_encoded.len())?;
+    out.write_all(&[b':'])?;
+    out.write_all(base64_encoded.as_bytes())?;
+    out.write_all(&[b'\x07'])?;
 
-    Ok(buffer)
+    Ok(())
 }
 
 pub fn is_iterm_capable(env: &EnvIdentifiers) -> bool {

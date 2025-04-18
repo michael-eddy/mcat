@@ -4,7 +4,7 @@ use crate::{converter, term_misc::EnvIdentifiers};
 
 fn chunk_base64(
     base64: &str,
-    buffer: &mut Vec<u8>,
+    mut out: impl Write,
     size: usize,
     first_opts: HashMap<String, String>,
     sub_opts: HashMap<String, String>,
@@ -47,10 +47,10 @@ fn chunk_base64(
             &sub_opts_string
         };
 
-        buffer.extend_from_slice(b"\x1b_G");
-        buffer.extend_from_slice(opts);
-        write!(buffer, "m={};{}", more_chunks, chunk_data)?;
-        buffer.extend_from_slice(b"\x1b\\");
+        out.write_all(b"\x1b_G")?;
+        out.write_all(opts)?;
+        write!(out, "m={};{}", more_chunks, chunk_data)?;
+        out.write(b"\x1b\\")?;
 
         start = end;
     }
@@ -60,15 +60,16 @@ fn chunk_base64(
 
 pub fn encode_image(
     img: &Vec<u8>,
+    mut out: impl Write,
     offset: Option<u16>,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let center_string = converter::offset_to_terminal(offset);
     let base64 = converter::image_to_base64(img);
-    let mut buffer = Vec::with_capacity(base64.len() + 10);
-    buffer.extend_from_slice(center_string.as_bytes());
+
+    out.write_all(center_string.as_bytes())?;
     chunk_base64(
         &base64,
-        &mut buffer,
+        out,
         4096,
         HashMap::from([
             ("f".to_string(), "100".to_string()),
@@ -77,7 +78,7 @@ pub fn encode_image(
         HashMap::new(),
     )?;
 
-    Ok(buffer)
+    Ok(())
 }
 
 pub fn is_kitty_capable(env: &EnvIdentifiers) -> bool {

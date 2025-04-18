@@ -54,13 +54,14 @@ pub fn image_to_base64(img: &Vec<u8>) -> String {
 
 pub fn inline_an_image(
     img: &Vec<u8>,
+    out: impl Write,
     offset: Option<u16>,
     inline_encoder: &InlineEncoder,
-) -> Result<Vec<u8>, Box<dyn error::Error>> {
+) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
-        InlineEncoder::Kitty => kitty_encoder::encode_image(img, offset),
-        InlineEncoder::Iterm => iterm_encoder::encode_image(img, offset),
-        InlineEncoder::Sixel => sixel_encoder::encode_image(img, offset),
+        InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset),
+        InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset),
+        InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset),
     }
 }
 
@@ -209,16 +210,17 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> Str
 
 pub fn inline_a_video(
     input: impl AsRef<str>,
+    out: impl Write,
     inline_encoder: &InlineEncoder,
-) -> Result<Vec<u8>, Box<dyn error::Error>> {
+) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
         InlineEncoder::Kitty => todo!(),
         InlineEncoder::Iterm => {
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
             let offset = term_misc::center_image(dyn_img.width() as u16);
-            let inline = iterm_encoder::encode_image(&gif, Some(offset))?;
-            Ok(inline)
+            iterm_encoder::encode_image(&gif, out, Some(offset))?;
+            Ok(())
         }
         InlineEncoder::Sixel => return Err("Cannot view videos in sixel".into()),
     }

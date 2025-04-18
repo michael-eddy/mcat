@@ -10,20 +10,18 @@ const SIXEL_MIN: u8 = 0x3f; // '?'
 
 pub fn encode_image(
     img: &Vec<u8>,
+    mut out: impl Write,
     offset: Option<u16>,
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let dyn_img = image::load_from_memory_with_format(&img, image::ImageFormat::Png)?;
     let rgb_img = dyn_img.to_rgb8();
 
-    let mut buffer = Vec::with_capacity(rgb_img.len() * 3);
-
     let center = converter::offset_to_terminal(offset);
-    buffer.extend_from_slice(center.as_bytes());
+    out.write_all(center.as_bytes())?;
 
-    let encoded_sixel = encode_sixel(&rgb_img)?;
-    buffer.extend_from_slice(&encoded_sixel);
+    encode_sixel(&rgb_img, out)?;
 
-    Ok(buffer)
+    Ok(())
 }
 
 pub fn is_sixel_capable(env: &EnvIdentifiers) -> bool {
@@ -33,7 +31,10 @@ pub fn is_sixel_capable(env: &EnvIdentifiers) -> bool {
         || env.term_contains("sixel-tmux")
 }
 
-pub fn encode_sixel(img: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<Vec<u8>, Box<dyn Error>> {
+pub fn encode_sixel(
+    img: &ImageBuffer<Rgb<u8>, Vec<u8>>,
+    mut out: impl Write,
+) -> Result<(), Box<dyn Error>> {
     let width = img.width() as usize;
     let height = img.height() as usize;
 
@@ -41,13 +42,8 @@ pub fn encode_sixel(img: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> Result<Vec<u8>, Box<
         return Err("image is empty".into());
     }
 
-    let mut output = Vec::new();
-    if write_sixel(&mut output, img).is_ok() {
-        Ok(output)
-    } else {
-        eprintln!("failed to write sixel");
-        std::process::exit(1)
-    }
+    write_sixel(&mut out, img)?;
+    Ok(())
 }
 
 fn write_sixel<W: Write>(out: &mut W, img: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> io::Result<()> {

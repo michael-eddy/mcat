@@ -8,12 +8,12 @@ mod prompter;
 mod sixel_encoder;
 mod term_misc;
 
-use std::io::Write;
+use std::io::{BufWriter, Write};
 
 #[macro_use]
 extern crate lazy_static;
 
-use catter::EncoderForce;
+use catter::{CatOpts, EncoderForce};
 use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
@@ -119,16 +119,19 @@ fn main() {
         sixel,
     };
 
-    let mut out = std::io::stdout();
-    match catter::cat(
-        input.clone(),
-        output,
-        Some(style),
+    let stdout = std::io::stdout();
+    let mut out = BufWriter::new(stdout);
+    let opts = CatOpts {
+        to: output,
+        encoder: Some(encoder),
+        style: Some(style),
         style_html,
-        Some(encoder),
         raw_html,
-    ) {
-        Ok((val, _)) => out.write_all(&val).expect("failed writing to stdout"),
+    };
+    match catter::cat(input.clone(), &mut out, Some(opts)) {
+        Ok(_) => {
+            out.flush().unwrap();
+        }
         Err(e) => {
             eprintln!("Error: {}", e);
             std::process::exit(1);
