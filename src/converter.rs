@@ -9,7 +9,10 @@ use std::{
 };
 use tempfile::Builder;
 
-use comrak::{ComrakOptions, markdown_to_html};
+use comrak::{
+    ComrakOptions, ComrakPlugins, markdown_to_html, markdown_to_html_with_plugins,
+    plugins::syntect::SyntectAdapter,
+};
 use std::io::Write;
 
 use crate::{iterm_encoder, kitty_encoder, markitdown, sixel_encoder, term_misc};
@@ -126,6 +129,11 @@ pub fn is_markitdown_supported(path: &Path) -> bool {
 
 pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> String {
     let mut options = ComrakOptions::default();
+
+    let mut plugins = ComrakPlugins::default();
+    let adapter = SyntectAdapter::new(None);
+    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+
     // ➕ Enable extensions
     options.extension.strikethrough = true;
     options.extension.tagfilter = true;
@@ -151,7 +159,7 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> Str
         None => None,
     };
 
-    let html = markdown_to_html(markdown, &options);
+    let html = markdown_to_html_with_plugins(markdown, &options, &plugins);
     match css_content {
         Some(css) => format!(
             r#"

@@ -662,12 +662,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dunce"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
-
-[[package]]
 name = "dyn-clone"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1340,7 +1334,6 @@ dependencies = [
  "color_quant",
  "comrak",
  "crossterm 0.29.0",
- "dunce",
  "fast_image_resize",
  "ffmpeg-sidecar",
  "flate2",
@@ -1349,6 +1342,7 @@ dependencies = [
  "inquire",
  "lazy_static",
  "rand 0.9.1",
+ "syntect",
  "tempfile",
  "windows",
 ]

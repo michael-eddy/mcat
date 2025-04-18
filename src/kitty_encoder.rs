@@ -140,7 +140,6 @@ pub fn encode_frames(
     )?;
 
     // starting the animation
-    println!("timestamp: {}", first.timestamp);
     let z = first.timestamp;
     write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
 

@@ -59,7 +59,7 @@ code {
 
 pre {
   background-color: #F0F0F0;
-  color: #005522;
+  color: #000;
   padding: 1em;
   overflow-x: auto;
   border: 1px solid #D0D7DE;
@@ -122,4 +122,47 @@ hr {
   border: none;
   border-top: 1px solid #D0D7DE;
   margin: 2em 0;
+}
+
+.keyword,
+.storage.modifier,
+.storage.type {
+  color: #a728a5;
+}
+
+.entity.name.function,
+.support.function,
+.variable.function {
+  color: #4078f2;
+}
+
+.module,
+.struct,
+.enum,
+.generic,
+.path {
+  color: #e45649;
+}
+
+.string,
+.punctuation.string {
+  color: #50a14f;
+}
+
+.constant,
+.support.type {
+  color: #986800;
+}
+
+.comment,
+.punctuation.comment {
+  color: #a0a1a7;
+  font-style: italic;
+}
+
+.variable,
+.operator,
+.punctuation,
+.block {
+  color: #000000;
 }
