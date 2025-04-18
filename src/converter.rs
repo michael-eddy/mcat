@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose};
-use ffmpeg_sidecar::command::FfmpegCommand;
+use ffmpeg_sidecar::{command::FfmpegCommand, event::OutputVideoFrame};
 use std::{
     collections::HashSet,
     env, error, fs,
@@ -210,11 +210,16 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> Str
 
 pub fn inline_a_video(
     input: impl AsRef<str>,
-    out: impl Write,
+    out: &mut impl Write,
     inline_encoder: &InlineEncoder,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
-        InlineEncoder::Kitty => todo!(),
+        InlineEncoder::Kitty => {
+            let frames = video_to_frames(input)?;
+            let id = rand::random::<u32>();
+            kitty_encoder::encode_frames(frames, out, id)?;
+            Ok(())
+        }
         InlineEncoder::Iterm => {
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
@@ -253,4 +258,19 @@ fn video_to_gif(input: impl AsRef<str>) -> Result<Vec<u8>, Box<dyn error::Error>
     child.wait()?; // ensure process finishes cleanly
 
     Ok(output_bytes)
+}
+
+fn video_to_frames(
+    input: impl AsRef<str>,
+) -> Result<Box<dyn Iterator<Item = OutputVideoFrame>>, Box<dyn error::Error>> {
+    let input = input.as_ref();
+    ffmpeg_sidecar::download::auto_download()?;
+
+    let mut command = FfmpegCommand::new();
+    command.hwaccel("auto").input(input).rawvideo();
+
+    let mut child = command.spawn()?;
+    let frames = child.iter()?.filter_frames();
+
+    Ok(Box::new(frames))
 }

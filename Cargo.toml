@@ -19,3 +19,5 @@ color_quant = "1.1.0"
 base64 = "0.22.1"
 fast_image_resize = { version = "5.1.2", features = ["image"] }
 ffmpeg-sidecar = "2.0.5"
+flate2 = "1.1.0"
+rand = "0.9.0"

@@ -1,6 +1,13 @@
-use std::{cmp::min, collections::HashMap, io::Write};
+use std::{cmp::min, collections::HashMap, error::Error, io::Write};
 
-use crate::{converter, term_misc::EnvIdentifiers};
+use base64::{Engine, engine::general_purpose};
+use ffmpeg_sidecar::event::OutputVideoFrame;
+use flate2::{Compression, write::ZlibEncoder};
+
+use crate::{
+    converter,
+    term_misc::{self, EnvIdentifiers},
+};
 
 fn chunk_base64(
     base64: &str,
@@ -78,6 +85,89 @@ pub fn encode_image(
         HashMap::new(),
     )?;
 
+    Ok(())
+}
+
+fn process_frame(
+    data: &Vec<u8>,
+    out: &mut impl Write,
+    first_opts: HashMap<String, String>,
+    sub_opts: HashMap<String, String>,
+) -> Result<(), Box<dyn Error>> {
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
+    encoder.write_all(data)?;
+    let compressed = encoder.finish()?;
+
+    let base64 = general_purpose::STANDARD.encode(compressed);
+    chunk_base64(&base64, out, 4096, first_opts, sub_opts)?;
+
+    Ok(())
+}
+
+pub fn encode_frames(
+    frames: Box<dyn Iterator<Item = OutputVideoFrame>>,
+    out: &mut impl Write,
+    id: u32,
+) -> Result<(), Box<dyn Error>> {
+    let mut frames = frames.into_iter();
+
+    // getting the first frame
+    let first = frames.next().ok_or("video doesn't contain any frames")?;
+    let offset = term_misc::center_image(first.width as u16);
+    let center = converter::offset_to_terminal(Some(offset));
+    out.write_all(center.as_bytes())?;
+
+    // adding the root image
+    let i = id.to_string();
+    let s = first.height.to_string();
+    let v = first.width.to_string();
+    let f = "24".to_string();
+    let o = "z".to_string();
+    let q = "2".to_string();
+    process_frame(
+        &first.data,
+        out,
+        HashMap::from([
+            ("a".to_string(), "T".to_string()),
+            ("f".to_string(), f),
+            ("o".to_string(), o),
+            ("I".to_string(), i),
+            ("s".to_string(), s),
+            ("v".to_string(), v),
+            ("q".to_string(), q),
+        ]),
+        HashMap::new(),
+    )?;
+
+    // starting the animation
+    println!("timestamp: {}", first.timestamp);
+    let z = first.timestamp;
+    write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
+
+    for (c, frame) in frames.enumerate() {
+        let s = frame.width.to_string();
+        let v = frame.height.to_string();
+        let i = id.to_string();
+        let f = "24".to_string();
+        let o = "z".to_string();
+        let z = frame.timestamp;
+
+        let first_opts = HashMap::from([
+            ("a".to_string(), "f".to_string()),
+            ("f".to_string(), f),
+            ("o".to_string(), o),
+            ("I".to_string(), i),
+            ("c".to_string(), c.to_string()),
+            ("s".to_string(), s),
+            ("v".to_string(), v),
+            ("z".to_string(), z.to_string()),
+        ]);
+        let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
+
+        process_frame(&frame.data, out, first_opts, sub_opts)?;
+    }
+
+    write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;
     Ok(())
 }
 
