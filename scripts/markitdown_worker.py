@@ -4,7 +4,6 @@ import io
 import os
 
 # silent
-sys.stderr = io.StringIO()
 os.environ["PYTHONWARNINGS"] = "ignore"
 
 try:
@@ -15,6 +14,7 @@ except ImportError:
                           "install", "markitdown[all]", "--quiet", "--break-system-packages"])
     from markitdown import MarkItDown
 
+sys.stderr = io.StringIO()
 converter = MarkItDown()
 for line in sys.stdin:
     file_path = line.strip()

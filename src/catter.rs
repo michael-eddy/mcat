@@ -1,6 +1,10 @@
-use std::{fs, io::Write, path::Path};
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::Path,
+};
 
-use image::ImageFormat;
+use image::{DynamicImage, ImageFormat};
 
 use crate::{
     converter::{self},
@@ -62,84 +66,114 @@ pub fn cat(
     });
     let inline_encoder =
         &converter::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
+    let ext = path
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let mut image_result: Option<DynamicImage> = None;
+    let mut string_result: Option<String> = None;
+    let mut from: &str = "unknown";
 
     //video
     if is_video(path) {
         converter::inline_a_video(input, out, &inline_encoder)?;
         return Ok(CatType::InlineVideo);
     }
-    //image
-    if let Some(ext) = path.extension() {
-        if let Some(_) = ImageFormat::from_extension(ext) {
-            let buf = fs::read(path)?;
-            let dyn_img = image::load_from_memory(&buf)?;
-            let (img, center) = dyn_img.resize_plus(None, None)?;
-            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
-            return Ok(CatType::InlineImage);
-        }
-    }
-    // local file or dir
-    let (result, from) = {
-        let ext = path
-            .extension()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        match ext.as_ref() {
-            "md" | "html" => {
-                let r = fs::read_to_string(path)?;
-                (r, ext)
-            }
-            _ => markdown::read_file(&path)?,
-        }
+    //svg
+    (image_result, from) = if ext == "svg" {
+        let file = File::open(path)?;
+        let dyn_img = converter::svg_to_image(file)?;
+        (Some(dyn_img), "image")
+    } else {
+        (image_result, from)
     };
-    if opts.to.is_none() || opts.to.unwrap() == "md" {
-        out.write_all(&result.as_bytes().to_vec())?;
-        return Ok(CatType::Markdown);
-    }
-
-    // converting
-    if let Some(to) = opts.to {
-        match (from.as_ref(), to.as_ref()) {
-            ("md", "html") => {
-                let html = converter::md_to_html(&result, if opts.style_html {opts.style} else {None}, opts.raw_html);
-                out.write_all(&html.as_bytes().to_vec())?;
-                return Ok(CatType::Html);
-            },
-            ("md", "image") => {
-                let html = converter::md_to_html(&result, opts.style, opts.raw_html);
-                let image = converter::wkhtmltox_convert(&html)?;
-                out.write_all(&image)?;
-                return Ok(CatType::Image);
-            },
-            ("md", "inline") => {
-                let html = converter::md_to_html(&result, opts.style, opts.raw_html);
-                let image = converter::wkhtmltox_convert(&html)?;
-                let dyn_img = image::load_from_memory(&image)?;
-                let (img, center) = dyn_img.resize_plus(None, None)?;
-                converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
-                return Ok(CatType::InlineImage)
-            },
-            ("html", "image") => {
-                let image = converter::wkhtmltox_convert(&result)?;
-                out.write_all(&image)?;
-                return Ok(CatType::Image);
-            },
-            ("html", "inline") => {
-                let image = converter::wkhtmltox_convert(&result)?;
-                let dyn_img = image::load_from_memory(&image)?;
-                let (img, center) = dyn_img.resize_plus(None, None)?;
-                converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
-                return Ok(CatType::InlineImage)
-            },
-            _ => return Err(format!(
-                "converting: {} to: {}, is not supported.\nsupported pipeline is: md -> html -> image -> inline_image",
-                from, to
-            ).into()),
+    //image
+    (image_result, from) = if ImageFormat::from_extension(&ext).is_some() {
+        let buf = fs::read(path)?;
+        let dyn_img = image::load_from_memory(&buf)?;
+        // let (img, center) = dyn_img.resize_plus(None, None)?;
+        // converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+        (Some(dyn_img), "image")
+    } else {
+        (image_result, from)
+    };
+    // local file or dir
+    if from == "unknown" {
+        (string_result, from) = {
+            match ext.as_ref() {
+                "md" | "html" => {
+                    let r = fs::read_to_string(path)?;
+                    (Some(r), ext.as_ref())
+                }
+                _ => {
+                    let (f, r) = markdown::read_file(&path)?;
+                    (Some(f), r)
+                }
+            }
         };
     }
 
-    Err("Input type is not supported yet".into())
+    // converting
+    let to = opts.to.unwrap_or("unknown");
+    match (from.as_ref(), to.as_ref()) {
+        ("md", "html") => {
+            let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None}, opts.raw_html);
+            out.write_all(&html.as_bytes().to_vec())?;
+            return Ok(CatType::Html);
+        },
+        ("md", "image") => {
+            let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
+            let image = converter::wkhtmltox_convert(&html)?;
+            out.write_all(&image)?;
+            return Ok(CatType::Image);
+        },
+        ("md", "inline") => {
+            let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
+            let image = converter::wkhtmltox_convert(&html)?;
+            let dyn_img = image::load_from_memory(&image)?;
+            let (img, center) = dyn_img.resize_plus(None, None)?;
+            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            return Ok(CatType::InlineImage)
+        },
+        ("html", "image") => {
+            let image = converter::wkhtmltox_convert(&string_result.unwrap())?;
+            out.write_all(&image)?;
+            return Ok(CatType::Image);
+        },
+        ("html", "inline") => {
+            let image = converter::wkhtmltox_convert(&string_result.unwrap())?;
+            let dyn_img = image::load_from_memory(&image)?;
+            let (img, center) = dyn_img.resize_plus(None, None)?;
+            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            return Ok(CatType::InlineImage)
+        },
+        ("image", "image") => {
+            let buf = fs::read(path)?;
+            out.write_all(&buf)?;
+            return Ok(CatType::Image)
+        },
+        ("md", _) => {
+            //default for md
+            out.write_all(&string_result.unwrap().as_bytes())?;
+            return Ok(CatType::Markdown);
+        }
+        ("html", _) => {
+            // default for html
+            out.write_all(&string_result.unwrap().as_bytes())?;
+            return Ok(CatType::Html);
+        },
+        ("image", _) => {
+            // default for image
+            let (img, center) = image_result.unwrap().resize_plus(None, None)?;
+            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            return Ok(CatType::InlineImage)
+        },
+        _ => return Err(format!(
+            "converting: {} to: {}, is not supported.\nsupported pipeline is: md -> html -> image -> inline_image",
+            from, to
+        ).into()),
+    };
 }
 
 fn is_video(input: &Path) -> bool {

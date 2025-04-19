@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use crate::{converter, prompter};
 
-pub fn read_file(input: &impl AsRef<Path>) -> Result<(String, String), Box<dyn std::error::Error>> {
+pub fn read_file(input: &impl AsRef<Path>) -> Result<(String, &str), Box<dyn std::error::Error>> {
     let path = input.as_ref();
 
     if path.is_file() {
