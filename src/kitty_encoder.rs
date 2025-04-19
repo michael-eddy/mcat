@@ -116,11 +116,12 @@ pub fn encode_frames(
     let offset = term_misc::center_image(first.width as u16);
     let center = converter::offset_to_terminal(Some(offset));
     out.write_all(center.as_bytes())?;
+    let mut pre_timestamp = 0.0;
 
     // adding the root image
     let i = id.to_string();
-    let s = first.height.to_string();
-    let v = first.width.to_string();
+    let s = first.width.to_string();
+    let v = first.height.to_string();
     let f = "24".to_string();
     let o = "z".to_string();
     let q = "2".to_string();
@@ -140,7 +141,7 @@ pub fn encode_frames(
     )?;
 
     // starting the animation
-    let z = first.timestamp;
+    let z = 100;
     write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
 
     for (c, frame) in frames.enumerate() {
@@ -149,7 +150,8 @@ pub fn encode_frames(
         let i = id.to_string();
         let f = "24".to_string();
         let o = "z".to_string();
-        let z = frame.timestamp;
+        let z = ((frame.timestamp - pre_timestamp) * 1000.0) as u32;
+        pre_timestamp = frame.timestamp;
 
         let first_opts = HashMap::from([
             ("a".to_string(), "f".to_string()),

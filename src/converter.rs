@@ -10,8 +10,7 @@ use std::{
 use tempfile::Builder;
 
 use comrak::{
-    ComrakOptions, ComrakPlugins, markdown_to_html, markdown_to_html_with_plugins,
-    plugins::syntect::SyntectAdapter,
+    ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins, plugins::syntect::SyntectAdapter,
 };
 use std::io::Write;
 
