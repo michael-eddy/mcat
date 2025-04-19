@@ -1,7 +1,7 @@
 body {
   background-color: #15161B;
   color: #FFFFFF;
-  font-family: 'Fira Code', 'Segoe UI', sans-serif;
+  font-family: 'Segoe UI', "Segoe UI Emoji", sans-serif;
   line-height: 1.6;
   max-width: 800px;
   margin: 2rem auto;
@@ -52,7 +52,6 @@ a:hover {
 code {
   background-color: #1B1C21;
   color: #FFEE99;
-  font-family: 'Fira Code', monospace;
   padding: 0.2em 0.4em;
   border-radius: 4px;
 }

@@ -1,4 +1,3 @@
-from markitdown import MarkItDown
 import sys
 import subprocess
 import io
@@ -9,11 +8,12 @@ sys.stderr = io.StringIO()
 os.environ["PYTHONWARNINGS"] = "ignore"
 
 try:
-    import markitdown
+    from markitdown import MarkItDown
 except ImportError:
     print("markitdown module not found. Installing...", file=sys.stderr)
     subprocess.check_call([sys.executable, "-m", "pip",
-                          "install", "markitdown[all]", "--quiet"])
+                          "install", "markitdown[all]", "--quiet", "--break-system-packages"])
+    from markitdown import MarkItDown
 
 converter = MarkItDown()
 for line in sys.stdin:
