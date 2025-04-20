@@ -9,7 +9,7 @@ use image::{DynamicImage, ImageFormat};
 use crate::{
     converter::{self},
     image_extended::InlineImage,
-    markdown,
+    markitdown,
 };
 
 pub enum CatType {
@@ -108,8 +108,8 @@ pub fn cat(
                     (Some(r), ext.as_ref())
                 }
                 _ => {
-                    let (f, r) = markdown::read_file(&path)?;
-                    (Some(f), r)
+                    let f = markitdown::convert(&path, None)?;
+                    (Some(f), "md")
                 }
             }
         };

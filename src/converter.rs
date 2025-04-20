@@ -8,7 +8,6 @@ use resvg::{
     usvg::{self, Options, Tree},
 };
 use std::{
-    collections::HashSet,
     error, fs,
     io::Read,
     path::{Path, PathBuf},
@@ -19,7 +18,7 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::{image_extended, iterm_encoder, kitty_encoder, markitdown, sixel_encoder, term_misc};
+use crate::{image_extended, iterm_encoder, kitty_encoder, sixel_encoder, term_misc};
 
 pub enum InlineEncoder {
     Kitty,
@@ -183,34 +182,6 @@ pub fn headless_chrome_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error
 
         Ok(screenshot)
     })
-}
-
-pub fn markitdown_convert(input: &str) -> Result<String, Box<dyn error::Error>> {
-    let mut converter = markitdown::MARKITDOWN.lock()?;
-    let result = converter.convert(input)?;
-
-    Ok(result)
-}
-
-pub fn is_markitdown_supported(path: &Path) -> bool {
-    let extension = match path.extension() {
-        Some(ext) => ext.to_string_lossy().to_lowercase(),
-        None => return false,
-    };
-
-    // Create a HashSet of supported formats/extensions for markitdown
-    let supported_formats: HashSet<&str> = [
-        "docx", "doc", "dotx", "dot", // Word documents
-        "pdf", "zip", "epub", //others
-        "xlsx", "xls", "xlsm", // Excel spreadsheets
-        "pptx", "ppt", "pptm", // PowerPoint presentations
-        "odt", "ods", "odp", // OpenDocument formats
-    ]
-    .iter()
-    .cloned()
-    .collect();
-
-    supported_formats.contains(extension.as_str())
 }
 
 pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> String {
