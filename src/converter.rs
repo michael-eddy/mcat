@@ -1,5 +1,7 @@
 use base64::{Engine, engine::general_purpose};
+use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
 use ffmpeg_sidecar::{command::FfmpegCommand, event::OutputVideoFrame};
+use futures::stream::StreamExt;
 use image::{DynamicImage, ImageBuffer, Rgba};
 use resvg::{
     tiny_skia,
@@ -9,10 +11,8 @@ use std::{
     collections::HashSet,
     error, fs,
     io::Read,
-    path::Path,
-    process::{Command, Stdio},
+    path::{Path, PathBuf},
 };
-use tempfile::Builder;
 
 use comrak::{
     ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins, plugins::syntect::SyntectAdapter,
@@ -135,30 +135,54 @@ pub fn svg_to_image(
     Ok(DynamicImage::ImageRgba8(image_buffer))
 }
 
-pub fn wkhtmltox_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    // Write HTML to a temp file
-    let mut temp = Builder::new().suffix(".html").tempfile()?;
-    write!(temp, "{}", html)?;
+fn get_chromium_install_path() -> PathBuf {
+    let base_dir = dirs::cache_dir()
+        .or_else(dirs::data_dir)
+        .unwrap_or_else(|| std::env::temp_dir());
 
-    // Run wkhtmltoimage, read from file, output to stdout
-    let output = Command::new("wkhtmltoimage")
-        .arg("--quiet")
-        .arg("--enable-local-file-access")
-        .arg(temp.path())
-        .arg("-") // write to stdout
-        .stdout(Stdio::piped())
-        .spawn()?
-        .wait_with_output()?;
-
-    if output.status.success() {
-        Ok(output.stdout)
-    } else {
-        Err(format!(
-            "wkhtmltoimage failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into())
+    let p = base_dir.join("chromiumoxide").join("chromium");
+    if !p.exists() {
+        eprintln!("couldn't find chromium installed, trying to install.. it may take a little.");
+        let _ = fs::create_dir_all(p.clone());
     }
+    p
+}
+pub fn headless_chrome_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let encoded_html = urlencoding::encode(&html);
+    let data_uri = format!("data:text/html;charset=utf-8,{}", encoded_html);
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    rt.block_on(async {
+        let config = match BrowserConfig::builder().new_headless_mode().build() {
+            Ok(c) => c,
+            Err(_) => {
+                let download_path = get_chromium_install_path();
+                let fetcher = BrowserFetcher::new(
+                    BrowserFetcherOptions::builder()
+                        .with_path(&download_path)
+                        .build()?,
+                );
+                let info = fetcher.fetch().await?;
+                BrowserConfig::builder()
+                    .chrome_executable(info.executable_path)
+                    .new_headless_mode()
+                    .build()?
+            }
+        };
+        let (browser, mut handler) = Browser::launch(config).await.map_err(|e| format!("failed to launch chromium\nplease remove: {} and rerun. or install chrome\noriginal error: {}", get_chromium_install_path().display(), e))?;
+        tokio::spawn(async move { while let Some(_) = handler.next().await {} });
+
+        let page = browser.new_page(data_uri).await?;
+
+        let mut prms = chromiumoxide::page::ScreenshotParams::default();
+        prms.full_page = Some(true);
+        prms.omit_background = Some(true);
+        let screenshot = page.screenshot(prms).await?;
+
+        Ok(screenshot)
+    })
 }
 
 pub fn markitdown_convert(input: &str) -> Result<String, Box<dyn error::Error>> {
