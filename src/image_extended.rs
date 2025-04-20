@@ -22,11 +22,11 @@ impl InlineImage for DynamicImage {
         let (src_width, src_height) = self.dimensions();
         let width = match width {
             Some(w) => dim_to_px(w, term_misc::SizeDirection::Width)?,
-            None => dim_to_px("80%", term_misc::SizeDirection::Width)?,
+            None => src_width,
         };
         let height = match height {
             Some(h) => dim_to_px(h, term_misc::SizeDirection::Height)?,
-            None => dim_to_px("80%", term_misc::SizeDirection::Height)?,
+            None => src_height,
         };
 
         let (new_width, new_height) = calc_fit(src_width, src_height, width, height);
@@ -54,7 +54,7 @@ impl InlineImage for DynamicImage {
     }
 }
 
-fn calc_fit(src_width: u32, src_height: u32, dst_width: u32, dst_height: u32) -> (u32, u32) {
+pub fn calc_fit(src_width: u32, src_height: u32, dst_width: u32, dst_height: u32) -> (u32, u32) {
     let src_ar = src_width as f32 / src_height as f32;
     let dst_ar = dst_width as f32 / dst_height as f32;
 

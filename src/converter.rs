@@ -19,7 +19,7 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::{iterm_encoder, kitty_encoder, markitdown, sixel_encoder, term_misc};
+use crate::{image_extended, iterm_encoder, kitty_encoder, markitdown, sixel_encoder, term_misc};
 
 pub enum InlineEncoder {
     Kitty,
@@ -77,7 +77,11 @@ pub fn offset_to_terminal(offset: Option<u16>) -> String {
     }
 }
 
-pub fn svg_to_image(mut reader: impl Read) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+pub fn svg_to_image(
+    mut reader: impl Read,
+    width: Option<&str>,
+    height: Option<&str>,
+) -> Result<DynamicImage, Box<dyn std::error::Error>> {
     let mut svg_data = Vec::new();
     reader.read_to_end(&mut svg_data)?;
 
@@ -95,20 +99,37 @@ pub fn svg_to_image(mut reader: impl Read) -> Result<DynamicImage, Box<dyn std::
 
     // Get size of the SVG
     let pixmap_size = tree.size();
-    let width = pixmap_size.width();
-    let height = pixmap_size.height();
+    let src_width = pixmap_size.width();
+    let src_height = pixmap_size.height();
+    let width = match width {
+        Some(w) => term_misc::dim_to_px(w, term_misc::SizeDirection::Width)?,
+        None => src_width as u32,
+    };
+    let height = match height {
+        Some(h) => term_misc::dim_to_px(h, term_misc::SizeDirection::Height)?,
+        None => src_height as u32,
+    };
+    let (target_width, target_height) =
+        image_extended::calc_fit(src_width as u32, src_height as u32, width, height);
+    let scale_x = target_width as f32 / src_width;
+    let scale_y = target_height as f32 / src_height;
+    let scale = scale_x.min(scale_y);
 
     // Create a Pixmap to render to
-    let mut pixmap = tiny_skia::Pixmap::new(width as u32, height as u32)
+    let mut pixmap = tiny_skia::Pixmap::new(target_width, target_height)
         .ok_or("Failed to create pixmap for svg")?;
+    let transform = tiny_skia::Transform::from_scale(scale, scale);
 
     // Render SVG to Pixmap
-    resvg::render(&tree, tiny_skia::Transform::default(), &mut pixmap.as_mut());
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
 
     // Convert Pixmap to ImageBuffer
-    let image_buffer =
-        ImageBuffer::<Rgba<u8>, _>::from_raw(width as u32, height as u32, pixmap.data().to_vec())
-            .ok_or("Failed to create image buffer for svg")?;
+    let image_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(
+        target_width as u32,
+        target_height as u32,
+        pixmap.data().to_vec(),
+    )
+    .ok_or("Failed to create image buffer for svg")?;
 
     // Convert ImageBuffer to DynamicImage
     Ok(DynamicImage::ImageRgba8(image_buffer))
@@ -251,7 +272,10 @@ fn video_to_gif(input: impl AsRef<str>) -> Result<Vec<u8>, Box<dyn error::Error>
         let bytes = fs::read(path)?;
         return Ok(bytes);
     }
-    ffmpeg_sidecar::download::auto_download()?;
+    if !ffmpeg_sidecar::command::ffmpeg_is_installed() {
+        eprintln!("ffmpeg isn't installed, installing.. it may take a little");
+        ffmpeg_sidecar::download::auto_download()?;
+    }
 
     let mut command = FfmpegCommand::new();
     command
@@ -277,7 +301,10 @@ fn video_to_frames(
     input: impl AsRef<str>,
 ) -> Result<Box<dyn Iterator<Item = OutputVideoFrame>>, Box<dyn error::Error>> {
     let input = input.as_ref();
-    ffmpeg_sidecar::download::auto_download()?;
+    if !ffmpeg_sidecar::command::ffmpeg_is_installed() {
+        eprintln!("ffmpeg isn't installed, installing.. it may take a little");
+        ffmpeg_sidecar::download::auto_download()?;
+    }
 
     let mut command = FfmpegCommand::new();
     command.hwaccel("auto").input(input).rawvideo();

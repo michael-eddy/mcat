@@ -74,6 +74,9 @@ pub fn cat(
     let mut image_result: Option<DynamicImage> = None;
     let mut string_result: Option<String> = None;
     let mut from: &str = "unknown";
+    let width = Some("80%");
+    let height = Some("80%");
+    let to = opts.to.unwrap_or("unknown");
 
     //video
     if is_video(path) {
@@ -83,7 +86,7 @@ pub fn cat(
     //svg
     (image_result, from) = if ext == "svg" {
         let file = File::open(path)?;
-        let dyn_img = converter::svg_to_image(file)?;
+        let dyn_img = converter::svg_to_image(file, width, height)?;
         (Some(dyn_img), "image")
     } else {
         (image_result, from)
@@ -92,8 +95,6 @@ pub fn cat(
     (image_result, from) = if ImageFormat::from_extension(&ext).is_some() {
         let buf = fs::read(path)?;
         let dyn_img = image::load_from_memory(&buf)?;
-        // let (img, center) = dyn_img.resize_plus(None, None)?;
-        // converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
         (Some(dyn_img), "image")
     } else {
         (image_result, from)
@@ -115,7 +116,6 @@ pub fn cat(
     }
 
     // converting
-    let to = opts.to.unwrap_or("unknown");
     match (from.as_ref(), to.as_ref()) {
         ("md", "html") => {
             let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None}, opts.raw_html);
@@ -132,7 +132,7 @@ pub fn cat(
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
             let image = converter::wkhtmltox_convert(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
-            let (img, center) = dyn_img.resize_plus(None, None)?;
+            let (img, center) = dyn_img.resize_plus(width, height)?;
             converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
@@ -144,7 +144,7 @@ pub fn cat(
         ("html", "inline") => {
             let image = converter::wkhtmltox_convert(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
-            let (img, center) = dyn_img.resize_plus(None, None)?;
+            let (img, center) = dyn_img.resize_plus(width, height)?;
             converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
@@ -165,7 +165,7 @@ pub fn cat(
         },
         ("image", _) => {
             // default for image
-            let (img, center) = image_result.unwrap().resize_plus(None, None)?;
+            let (img, center) = image_result.unwrap().resize_plus(width, height)?;
             converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
