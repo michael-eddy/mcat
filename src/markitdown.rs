@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+use calamine::Reader;
 use tempfile::Builder;
 use zip::ZipArchive;
 
@@ -33,10 +34,10 @@ pub fn convert(
 
     let result = match ext.as_str() {
         "csv" => csv_converter(path)?,
-        "docx" => todo!(),
+        "docx" => todo!(), // failed hard :(
         "pdf" => todo!(),
         "pptx" => todo!(),
-        "xlsx" => todo!(),
+        "xlsx" => xlsx_converter(path)?,
         "zip" => zip_convert(path)?,
         "odt" => todo!(),
         "odp" => todo!(),
@@ -119,7 +120,50 @@ fn detect_delimiter(line: &str) -> u8 {
         .map(|(c, _)| c as u8)
         .unwrap_or(b',') // fallback to comma
 }
-fn csv_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+
+fn to_markdown_table(headers: &[String], rows: &[Vec<String>]) -> String {
+    let mut output = String::new();
+    output += &format!("| {} |\n", headers.join(" | "));
+    output += &format!("|{}|\n", vec!["---"; headers.len()].join("|"));
+
+    for row in rows {
+        output += &format!("| {} |\n", row.join(" | "));
+    }
+
+    output
+}
+
+pub fn xlsx_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let mut workbook = calamine::open_workbook_auto(path)?;
+    let mut output = String::new();
+
+    for sheet_name in workbook.sheet_names().to_owned() {
+        if let Ok(range) = workbook.worksheet_range(&sheet_name) {
+            let mut rows = range.rows();
+            if let Some(header_row) = rows.next() {
+                let headers = header_row
+                    .iter()
+                    .map(|cell| cell.to_string())
+                    .collect::<Vec<_>>();
+                let body = rows
+                    .map(|r| r.iter().map(|cell| cell.to_string()).collect::<Vec<_>>())
+                    .collect::<Vec<_>>();
+
+                output += &format!("# {}\n\n", sheet_name);
+                output += &to_markdown_table(&headers, &body);
+                output += "\n";
+            }
+        }
+    }
+
+    if output.is_empty() {
+        Err("No readable sheets found.".into())
+    } else {
+        Ok(output)
+    }
+}
+
+pub fn csv_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut file = File::open(path)?;
     let mut first_line = String::new();
     let _ = io::BufReader::new(&mut file).read_line(&mut first_line)?;
@@ -128,18 +172,17 @@ fn csv_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(delimiter)
         .from_path(path)?;
-    let headers = reader.headers()?.clone();
-    let mut output = String::new();
 
-    // Write table header
-    output += &format!("| {} |\n", headers.iter().collect::<Vec<_>>().join(" | "));
-    output += &format!("|{}|\n", vec!["---"; headers.len()].join("|"));
+    let headers = reader
+        .headers()?
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
 
-    // Write table rows
-    for record in reader.records() {
-        let record = record?;
-        output += &format!("| {} |\n", record.iter().collect::<Vec<_>>().join(" | "));
-    }
+    let rows = reader
+        .records()
+        .map(|r| r.map(|rec| rec.iter().map(|s| s.to_string()).collect::<Vec<_>>()))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(output)
+    Ok(to_markdown_table(&headers, &rows))
 }
