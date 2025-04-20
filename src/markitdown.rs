@@ -37,11 +37,10 @@ pub fn convert(
         "docx" => todo!(), // failed hard :(
         "pdf" => todo!(),
         "pptx" => todo!(),
-        "xlsx" => xlsx_converter(path)?,
+        "xlsx" | "xls" | "xlsm" | "xlsb" | "xla" | "xlam" | "ods" => sheets_convert(path)?,
         "zip" => zip_convert(path)?,
         "odt" => todo!(),
         "odp" => todo!(),
-        "ods" => todo!(),
         _ => {
             let content = fs::read_to_string(path)?;
             markitdown_fallback(&content, name_header, &ext)
@@ -133,7 +132,7 @@ fn to_markdown_table(headers: &[String], rows: &[Vec<String>]) -> String {
     output
 }
 
-pub fn xlsx_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+pub fn sheets_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut workbook = calamine::open_workbook_auto(path)?;
     let mut output = String::new();
 
