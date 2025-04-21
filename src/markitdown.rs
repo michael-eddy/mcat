@@ -34,8 +34,8 @@ pub fn convert(
 
     let result = match ext.as_str() {
         "csv" => csv_converter(path)?,
-        "docx" => todo!(), // failed hard :(
-        "pdf" => todo!(),
+        "docx" => todo!(),
+        "pdf" => pdf_convert(path)?,
         "pptx" => todo!(),
         "xlsx" | "xls" | "xlsm" | "xlsb" | "xla" | "xlam" | "ods" => sheets_convert(path)?,
         "zip" => zip_convert(path)?,
@@ -48,6 +48,34 @@ pub fn convert(
     };
 
     Ok(result)
+}
+
+fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let doc = lopdf::Document::load(path)?;
+    let mut result = String::new();
+
+    let num_pages = doc.get_pages().len();
+    for i in 1..=num_pages {
+        let page_text = doc.extract_text(&[i as u32])?.replace("  ", " ");
+
+        result.push_str(&format!("## Page {}\n\n", i));
+
+        result.push_str(&page_text);
+        result.push_str("\n\n");
+    }
+
+    let mut output = String::with_capacity(result.len());
+    for line in result.lines() {
+        output.push_str(line.trim());
+        output.push('\n');
+    }
+
+    let output = output.replace("\n\n\n", "\0");
+    let output = output.replace("\n\n", " ");
+    let output = output.replace("\n", " ");
+    let output = output.replace("\0", "\n\n\n");
+
+    Ok(output)
 }
 
 fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
