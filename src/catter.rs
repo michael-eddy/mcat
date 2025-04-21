@@ -124,25 +124,25 @@ pub fn cat(
         },
         ("md", "image") => {
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
-            let image = converter::headless_chrome_convert(&html)?;
+            let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
             return Ok(CatType::Image);
         },
         ("md", "inline") => {
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
-            let image = converter::headless_chrome_convert(&html)?;
+            let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let (img, center) = dyn_img.resize_plus(width, height)?;
             converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         ("html", "image") => {
-            let image = converter::headless_chrome_convert(&string_result.unwrap())?;
+            let image = converter::html_to_image(&string_result.unwrap())?;
             out.write_all(&image)?;
             return Ok(CatType::Image);
         },
         ("html", "inline") => {
-            let image = converter::headless_chrome_convert(&string_result.unwrap())?;
+            let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
             let (img, center) = dyn_img.resize_plus(width, height)?;
             converter::inline_an_image(&img, out, Some(center), inline_encoder)?;

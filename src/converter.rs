@@ -146,9 +146,15 @@ fn get_chromium_install_path() -> PathBuf {
     }
     p
 }
-pub fn headless_chrome_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+
+pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let encoded_html = urlencoding::encode(&html);
     let data_uri = format!("data:text/html;charset=utf-8,{}", encoded_html);
+    let data = screenshot_uri(&data_uri)?;
+
+    Ok(data)
+}
+fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -170,7 +176,7 @@ pub fn headless_chrome_convert(html: &str) -> Result<Vec<u8>, Box<dyn std::error
                     .build()?
             }
         };
-        let (browser, mut handler) = Browser::launch(config).await.map_err(|e| format!("failed to launch chromium\nplease remove: {} and rerun. or install chrome\noriginal error: {}", get_chromium_install_path().display(), e))?;
+        let (browser, mut handler) = Browser::launch(config).await.map_err(|e| format!("failed to launch chromium\neiter you need to kill chrome/edge process or\nremove: {} and rerun. or install chrome\noriginal error: {}", get_chromium_install_path().display(), e))?;
         tokio::spawn(async move { while let Some(_) = handler.next().await {} });
 
         let page = browser.new_page(data_uri).await?;
