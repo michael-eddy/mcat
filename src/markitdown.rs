@@ -58,24 +58,24 @@ fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     for i in 1..=num_pages {
         let page_text = doc.extract_text(&[i as u32])?.replace("  ", " ");
 
+        let mut output = String::with_capacity(page_text.len());
+        for line in page_text.lines() {
+            output.push_str(line.trim());
+            output.push('\n');
+        }
+        let page_text = output;
+        let page_text = page_text.replace("\n\n\n", "\0");
+        let page_text = page_text.replace("\n\n", " ");
+        let page_text = page_text.replace("\n", " ");
+        let page_text = page_text.replace("\0", "\n\n\n");
+
         result.push_str(&format!("## Page {}\n\n", i));
 
         result.push_str(&page_text);
         result.push_str("\n\n");
     }
 
-    let mut output = String::with_capacity(result.len());
-    for line in result.lines() {
-        output.push_str(line.trim());
-        output.push('\n');
-    }
-
-    let output = output.replace("\n\n\n", "\0");
-    let output = output.replace("\n\n", " ");
-    let output = output.replace("\n", " ");
-    let output = output.replace("\0", "\n\n\n");
-
-    Ok(output)
+    Ok(result)
 }
 
 fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
