@@ -6,22 +6,6 @@ use zip::ZipArchive;
 
 use super::sheets;
 
-#[derive(Debug)]
-enum OpenEvent {
-    P,
-    H,
-    A,
-    Span,
-    Table,
-    TableRow,
-    TableCell,
-    TableText,
-    List,
-    ListItem,
-    ListText,
-    None,
-}
-
 pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let data = std::fs::read(path)?;
     let cursor = Cursor::new(data);
@@ -39,63 +23,40 @@ pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>
     let mut reader = Reader::from_str(&xml_content);
     let mut buf = Vec::new();
     let mut markdown = String::new();
-    let mut event = OpenEvent::None;
     let mut table_rows: Vec<Vec<String>> = Vec::new();
     let mut current_row: Vec<String> = Vec::new();
-    let mut start = true;
+    let mut is_table = false;
+    let mut is_list_item = 0;
 
     loop {
-        let mut set = |e| {
-            match e {
-                OpenEvent::None => start = false,
-                _ => start = true,
-            }
-            if start {
-                match event {
-                    OpenEvent::TableCell | OpenEvent::TableText => event = OpenEvent::TableText,
-                    OpenEvent::List => event = OpenEvent::ListText,
-                    OpenEvent::ListItem => event = OpenEvent::ListText,
-                    OpenEvent::Table => {
-                        event = e;
-                    }
-                    _ => event = e,
-                }
-            } else {
-                event = e;
-            }
-        };
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
-                // maybe parsing attributes for more
-                // info, but good enough imo
-                b"text:p" => set(OpenEvent::P),
-                b"text:h" => set(OpenEvent::H),
-                b"text:span" => set(OpenEvent::Span),
-                b"table:table" => set(OpenEvent::Table),
-                b"table:table-row" => set(OpenEvent::TableRow),
-                b"table:table-cell" => set(OpenEvent::TableCell),
-                b"text:list" => set(OpenEvent::List),
-                b"text:list-item" => set(OpenEvent::ListItem),
-                b"text:a" => set(OpenEvent::A),
+                b"text:p" => continue,
+                b"text:h" => {
+                    is_list_item = 0;
+                    markdown.push_str("### ");
+                }
+                b"text:span" => continue,
+                b"table:table" => is_table = true,
+                b"table:table-row" => continue,
+                b"table:table-cell" => continue,
+                b"text:list" => markdown.push_str(""),
+                b"text:list-item" => is_list_item = 1,
+                b"text:a" => continue,
                 _ => {
                     // eprintln!("start {}", String::from_utf8(e.name().0.to_vec())?)
                 }
             },
             Ok(Event::Text(e)) => {
                 let text = &e.unescape()?.into_owned();
-                let text = match event {
-                    OpenEvent::P => &format!("{}\n\n", text),
-                    OpenEvent::H => &format!("### {}\n\n", text),
-                    OpenEvent::A => continue, //probs at the attributes, idc that much
-                    OpenEvent::Span => &format!(" {} ", text),
-                    OpenEvent::TableText => {
-                        current_row.push(text.into());
-                        continue;
-                    }
-                    OpenEvent::ListText => &format!(" * {}  \n", text),
-                    _ => continue,
-                };
-                markdown.push_str(text);
+                if is_table {
+                    current_row.push(text.into());
+                } else if is_list_item == 1 {
+                    markdown.push_str(&format!(" * {}", text));
+                    is_list_item = 2;
+                } else {
+                    markdown.push_str(text);
+                }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
                 b"table:table" => {
@@ -105,7 +66,7 @@ pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>
                     } else {
                         Vec::new()
                     };
-                    set(OpenEvent::None);
+                    is_table = false;
                     markdown.push_str(&sheets::to_markdown_table(&headers, &data_rows));
                     markdown.push_str("\n");
                     table_rows = Vec::new();
@@ -113,17 +74,22 @@ pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>
                 b"table:table-row" => {
                     table_rows.push(current_row);
                     current_row = Vec::new();
-                    set(OpenEvent::None);
                 }
-                b"text:p" | b"text:h" | b"text:list" | b"text:list-item" => {
-                    if markdown.chars().last().unwrap_or_default() != '\n' {
+                b"text:p" => {
+                    if is_list_item != 2 {
                         markdown.push_str("\n\n");
                     }
-                    set(OpenEvent::None);
                 }
-                _ => {
-                    set(OpenEvent::None);
+                b"text:h" => markdown.push_str("\n\n"),
+                b"text:span" => continue,
+                b"table:table-cell" => continue,
+                b"text:list" => markdown.push_str("\n"),
+                b"text:list-item" => {
+                    is_list_item = 0;
+                    markdown.push_str("  \n");
                 }
+                b"text:a" => continue,
+                _ => {}
             },
             Ok(Event::Eof) => break,
             Err(e) => {
@@ -136,5 +102,43 @@ pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>
         buf.clear();
     }
 
-    Ok(markdown.trim().to_string())
+    Ok(format(&markdown))
+}
+
+fn format(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut newline_count = 0;
+    let mut spaces_count = 0;
+
+    for line in input.lines() {
+        if line.trim() == "" {
+            result.push_str("\n");
+        } else {
+            result.push_str(&format!("{}\n", line));
+        }
+    }
+    let input = &result;
+    let mut result = String::with_capacity(input.len());
+
+    for c in input.chars() {
+        if c == ' ' {
+            spaces_count += 1;
+        }
+        if c == '\n' {
+            newline_count += 1;
+            if spaces_count >= 2 {
+                newline_count += 1;
+            }
+            spaces_count = 0;
+            if newline_count <= 2 {
+                result.push(c);
+            }
+        } else {
+            newline_count = 0;
+            spaces_count = 0;
+            result.push(c);
+        }
+    }
+
+    result
 }
