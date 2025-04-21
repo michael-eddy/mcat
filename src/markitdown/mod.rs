@@ -1,4 +1,5 @@
 mod docx;
+mod opendoc;
 mod pdf;
 mod pptx;
 mod sheets;
@@ -42,8 +43,8 @@ pub fn convert(
         "pptx" => pptx::pptx_converter(path)?,
         "xlsx" | "xls" | "xlsm" | "xlsb" | "xla" | "xlam" | "ods" => sheets::sheets_convert(path)?,
         "zip" => zip_convert(path)?,
-        "odt" => todo!(),
-        "odp" => todo!(),
+        "odt" => opendoc::opendoc_convert(path)?,
+        "odp" => opendoc::opendoc_convert(path)?,
         _ => {
             let content = fs::read_to_string(path)?;
             markitdown_fallback(&content, name_header, &ext)
