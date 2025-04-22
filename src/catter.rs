@@ -22,12 +22,14 @@ pub enum CatType {
     InlineVideo,
 }
 
+#[derive(Clone, Copy)]
 pub struct EncoderForce {
     pub kitty: bool,
     pub iterm: bool,
     pub sixel: bool,
 }
 
+#[derive(Clone, Copy)]
 pub struct CatOpts<'a> {
     pub to: Option<&'a str>,
     pub encoder: Option<EncoderForce>,

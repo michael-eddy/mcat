@@ -30,7 +30,7 @@ fn main() {
                 .header(AnsiColor::Green.on_default().bold())
                 .literal(AnsiColor::Blue.on_default()),
         )
-        .arg(Arg::new("input").index(1).help("file / dir").required(true))
+        .arg(Arg::new("input").index(1).num_args(1..).help("file / dir").required(true))
         .arg(
             Arg::new("output")
                 .short('o')
@@ -94,7 +94,7 @@ fn main() {
         .get_matches();
 
     // main
-    let input = opts.get_one::<String>("input").unwrap();
+    let input: Vec<String> = opts.get_many::<String>("input").unwrap().cloned().collect();
     let output = opts.get_one::<String>("output");
     let style = opts.get_one::<String>("theme").unwrap();
     let style_html = *opts.get_one::<bool>("style-html").unwrap();
@@ -138,13 +138,15 @@ fn main() {
         style_html,
         raw_html,
     };
-    match catter::cat(input.clone(), &mut out, Some(opts)) {
-        Ok(_) => {
-            out.flush().unwrap();
-        }
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            std::process::exit(1);
+    for i in input {
+        match catter::cat(i.clone(), &mut out, Some(opts)) {
+            Ok(_) => {
+                out.write_all(b"\n\n").unwrap();
+                out.flush().unwrap();
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+            }
         }
     }
 }
