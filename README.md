@@ -1,12 +1,12 @@
 <div align="center">
   
-<img src="https://github.com/user-attachments/assets/d6dddc88-2f75-44c3-9b1d-04ea5651c35d" width="128"/>
+<img src="https://github.com/user-attachments/assets/d6dddc88-2f75-44c3-9b1d-04ea5651c35d" width="256"/>
 
 
 # Mcat
 ![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)
 
-![mcat_demo](https://github.com/user-attachments/assets/607c1a41-af3b-428e-a8d8-c30ac8c5e884)
+![mcat_demo](https://github.com/user-attachments/assets/b47aa276-f0e4-4259-b2c5-1525d7d9d6cb)
 </div>
 
 ## ✨ Features
@@ -80,7 +80,7 @@ Mcat tries to have as little dependencies as possible.
 1. auto installs binaries if missing
 
 ## 🆘 Help
-```sh
+```txt
 mcat --help
 Usage: mcat.exe [OPTIONS] <input>
 
