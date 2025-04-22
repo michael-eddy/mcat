@@ -5,11 +5,13 @@ use std::{
 };
 
 use image::{DynamicImage, ImageFormat};
+use tempfile::NamedTempFile;
 
 use crate::{
     converter::{self},
     markitdown,
     rasteroid::{self, image_extended::InlineImage},
+    scrapy,
 };
 
 pub enum CatType {
@@ -50,7 +52,14 @@ pub fn cat(
     out: &mut impl Write,
     opts: Option<CatOpts>,
 ) -> Result<CatType, Box<dyn std::error::Error>> {
-    let path = Path::new(&input);
+    let maybe_temp_file: Option<NamedTempFile> = match input.starts_with("https://") {
+        true => Some(scrapy::scrape_biggest_media(&input)?),
+        false => None,
+    };
+    let path = match &maybe_temp_file {
+        Some(tmp_file) => tmp_file.path(),
+        None => Path::new(&input),
+    };
     if !path.exists() {
         return Err(format!("invalid path: {}", path.display()).into());
     }
@@ -79,8 +88,8 @@ pub fn cat(
     let to = opts.to.unwrap_or("unknown");
 
     //video
-    if is_video(path) {
-        converter::inline_a_video(input, out, &inline_encoder)?;
+    if is_video(&ext) {
+        converter::inline_a_video(path.to_string_lossy().into_owned(), out, &inline_encoder)?;
         return Ok(CatType::InlineVideo);
     }
     //svg
@@ -176,14 +185,9 @@ pub fn cat(
     };
 }
 
-fn is_video(input: &Path) -> bool {
-    let supported_extensions = [
-        "mp4", "mov", "avi", "mkv", "webm", "wmv", "flv", "m4v", "ts", "gif",
-    ];
-
-    input
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| supported_extensions.contains(&ext.to_lowercase().as_str()))
-        .unwrap_or(false)
+pub fn is_video(input: &str) -> bool {
+    matches!(
+        input,
+        "mp4" | "mov" | "avi" | "mkv" | "webm" | "wmv" | "flv" | "m4v" | "ts" | "gif"
+    )
 }

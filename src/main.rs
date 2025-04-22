@@ -3,6 +3,7 @@ mod converter;
 mod markitdown;
 mod prompter;
 mod rasteroid;
+mod scrapy;
 
 use std::io::{BufWriter, Write};
 
