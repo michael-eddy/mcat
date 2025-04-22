@@ -32,17 +32,23 @@ pub struct CatOpts<'a> {
     pub to: Option<&'a str>,
     pub encoder: Option<EncoderForce>,
     pub style: Option<&'a str>,
+    pub width: Option<&'a str>,
+    pub height: Option<&'a str>,
     pub style_html: bool,
     pub raw_html: bool,
+    pub center: bool,
 }
 impl<'a> CatOpts<'a> {
     pub fn default() -> Self {
         CatOpts {
             to: None,
             encoder: None,
+            width: Some("80%"),
+            height: Some("80%"),
             style: None,
             style_html: false,
             raw_html: false,
+            center: false,
         }
     }
 }
@@ -83,19 +89,22 @@ pub fn cat(
     let mut image_result: Option<DynamicImage> = None;
     let mut string_result: Option<String> = None;
     let mut from: &str = "unknown";
-    let width = Some("80%");
-    let height = Some("80%");
     let to = opts.to.unwrap_or("unknown");
 
     //video
     if is_video(&ext) {
-        converter::inline_a_video(path.to_string_lossy().into_owned(), out, &inline_encoder)?;
+        converter::inline_a_video(
+            path.to_string_lossy().into_owned(),
+            out,
+            &inline_encoder,
+            opts.center,
+        )?;
         return Ok(CatType::InlineVideo);
     }
     //svg
     (image_result, from) = if ext == "svg" {
         let file = File::open(path)?;
-        let dyn_img = converter::svg_to_image(file, width, height)?;
+        let dyn_img = converter::svg_to_image(file, opts.width, opts.height)?;
         (Some(dyn_img), "image")
     } else {
         (image_result, from)
@@ -141,8 +150,8 @@ pub fn cat(
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
-            let (img, center) = dyn_img.resize_plus(width, height)?;
-            rasteroid::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         ("html", "image") => {
@@ -153,8 +162,8 @@ pub fn cat(
         ("html", "inline") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
-            let (img, center) = dyn_img.resize_plus(width, height)?;
-            rasteroid::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         ("image", "image") => {
@@ -174,8 +183,8 @@ pub fn cat(
         },
         ("image", _) => {
             // default for image
-            let (img, center) = image_result.unwrap().resize_plus(width, height)?;
-            rasteroid::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            let (img, center) = image_result.unwrap().resize_plus(opts.width, opts.height)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         _ => return Err(format!(

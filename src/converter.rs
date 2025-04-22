@@ -202,19 +202,23 @@ pub fn inline_a_video(
     input: impl AsRef<str>,
     out: &mut impl Write,
     inline_encoder: &rasteroid::InlineEncoder,
+    center: bool,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
         rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
             let id = rand::random::<u32>();
-            rasteroid::kitty_encoder::encode_frames(frames, out, id)?;
+            rasteroid::kitty_encoder::encode_frames(frames, out, id, center)?;
             Ok(())
         }
         rasteroid::InlineEncoder::Iterm => {
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
-            let offset = rasteroid::term_misc::center_image(dyn_img.width() as u16);
-            rasteroid::iterm_encoder::encode_image(&gif, out, Some(offset))?;
+            let offset = match center {
+                true => Some(rasteroid::term_misc::center_image(dyn_img.width() as u16)),
+                false => None,
+            };
+            rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
             Ok(())
         }
         rasteroid::InlineEncoder::Sixel => return Err("Cannot view videos in sixel".into()),

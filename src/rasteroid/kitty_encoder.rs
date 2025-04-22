@@ -108,14 +108,17 @@ pub fn encode_frames(
     frames: Box<dyn Iterator<Item = OutputVideoFrame>>,
     out: &mut impl Write,
     id: u32,
+    center: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut frames = frames.into_iter();
 
     // getting the first frame
     let first = frames.next().ok_or("video doesn't contain any frames")?;
     let offset = term_misc::center_image(first.width as u16);
-    let center = converter::offset_to_terminal(Some(offset));
-    out.write_all(center.as_bytes())?;
+    if center {
+        let center = converter::offset_to_terminal(Some(offset));
+        out.write_all(center.as_bytes())?;
+    }
     let mut pre_timestamp = 0.0;
 
     // adding the root image
