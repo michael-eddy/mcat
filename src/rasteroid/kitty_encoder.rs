@@ -6,7 +6,7 @@ use flate2::{Compression, write::ZlibEncoder};
 
 use crate::{
     converter,
-    term_misc::{self, EnvIdentifiers},
+    rasteroid::term_misc::{self, EnvIdentifiers},
 };
 
 fn chunk_base64(

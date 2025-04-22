@@ -3,7 +3,7 @@ use std::{error, io::Cursor};
 use fast_image_resize::{IntoImageView, Resizer, images::Image};
 use image::{DynamicImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder};
 
-use crate::term_misc::{self, dim_to_px};
+use super::term_misc::{self, dim_to_px};
 
 pub trait InlineImage {
     fn resize_plus(

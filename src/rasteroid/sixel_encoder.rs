@@ -1,4 +1,4 @@
-use crate::{converter, term_misc::EnvIdentifiers};
+use crate::{converter, rasteroid::term_misc::EnvIdentifiers};
 use color_quant::NeuQuant;
 use image::{ImageBuffer, Rgb};
 use std::{

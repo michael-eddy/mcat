@@ -1,12 +1,8 @@
 mod catter;
 mod converter;
-mod image_extended;
-mod iterm_encoder;
-mod kitty_encoder;
 mod markitdown;
 mod prompter;
-mod sixel_encoder;
-mod term_misc;
+mod rasteroid;
 
 use std::io::{BufWriter, Write};
 

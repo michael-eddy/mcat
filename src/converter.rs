@@ -18,55 +18,10 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::{image_extended, iterm_encoder, kitty_encoder, sixel_encoder, term_misc};
-
-pub enum InlineEncoder {
-    Kitty,
-    Iterm,
-    Sixel,
-}
-impl InlineEncoder {
-    pub fn auto_detect(force_kitty: bool, force_iterm: bool, force_sixel: bool) -> Self {
-        if force_kitty {
-            return Self::Kitty;
-        }
-        if force_iterm {
-            return Self::Iterm;
-        }
-        if force_sixel {
-            return Self::Sixel;
-        }
-
-        let env = term_misc::EnvIdentifiers::new();
-        if kitty_encoder::is_kitty_capable(&env) {
-            return Self::Kitty;
-        }
-        if iterm_encoder::is_iterm_capable(&env) {
-            return Self::Iterm;
-        }
-        if sixel_encoder::is_sixel_capable(&env) {
-            return Self::Sixel;
-        }
-
-        return Self::Iterm;
-    }
-}
+use crate::rasteroid;
 
 pub fn image_to_base64(img: &Vec<u8>) -> String {
     general_purpose::STANDARD.encode(&img)
-}
-
-pub fn inline_an_image(
-    img: &Vec<u8>,
-    out: impl Write,
-    offset: Option<u16>,
-    inline_encoder: &InlineEncoder,
-) -> Result<(), Box<dyn error::Error>> {
-    match inline_encoder {
-        InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset),
-        InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset),
-        InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset),
-    }
 }
 
 pub fn offset_to_terminal(offset: Option<u16>) -> String {
@@ -101,15 +56,15 @@ pub fn svg_to_image(
     let src_width = pixmap_size.width();
     let src_height = pixmap_size.height();
     let width = match width {
-        Some(w) => term_misc::dim_to_px(w, term_misc::SizeDirection::Width)?,
+        Some(w) => rasteroid::term_misc::dim_to_px(w, rasteroid::term_misc::SizeDirection::Width)?,
         None => src_width as u32,
     };
     let height = match height {
-        Some(h) => term_misc::dim_to_px(h, term_misc::SizeDirection::Height)?,
+        Some(h) => rasteroid::term_misc::dim_to_px(h, rasteroid::term_misc::SizeDirection::Height)?,
         None => src_height as u32,
     };
     let (target_width, target_height) =
-        image_extended::calc_fit(src_width as u32, src_height as u32, width, height);
+        rasteroid::image_extended::calc_fit(src_width as u32, src_height as u32, width, height);
     let scale_x = target_width as f32 / src_width;
     let scale_y = target_height as f32 / src_height;
     let scale = scale_x.min(scale_y);
@@ -246,23 +201,23 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> Str
 pub fn inline_a_video(
     input: impl AsRef<str>,
     out: &mut impl Write,
-    inline_encoder: &InlineEncoder,
+    inline_encoder: &rasteroid::InlineEncoder,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
-        InlineEncoder::Kitty => {
+        rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
             let id = rand::random::<u32>();
-            kitty_encoder::encode_frames(frames, out, id)?;
+            rasteroid::kitty_encoder::encode_frames(frames, out, id)?;
             Ok(())
         }
-        InlineEncoder::Iterm => {
+        rasteroid::InlineEncoder::Iterm => {
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
-            let offset = term_misc::center_image(dyn_img.width() as u16);
-            iterm_encoder::encode_image(&gif, out, Some(offset))?;
+            let offset = rasteroid::term_misc::center_image(dyn_img.width() as u16);
+            rasteroid::iterm_encoder::encode_image(&gif, out, Some(offset))?;
             Ok(())
         }
-        InlineEncoder::Sixel => return Err("Cannot view videos in sixel".into()),
+        rasteroid::InlineEncoder::Sixel => return Err("Cannot view videos in sixel".into()),
     }
 }
 

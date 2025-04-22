@@ -8,8 +8,8 @@ use image::{DynamicImage, ImageFormat};
 
 use crate::{
     converter::{self},
-    image_extended::InlineImage,
     markitdown,
+    rasteroid::{self, image_extended::InlineImage},
 };
 
 pub enum CatType {
@@ -65,7 +65,7 @@ pub fn cat(
         sixel: false,
     });
     let inline_encoder =
-        &converter::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
+        &rasteroid::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -133,7 +133,7 @@ pub fn cat(
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let (img, center) = dyn_img.resize_plus(width, height)?;
-            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         ("html", "image") => {
@@ -145,7 +145,7 @@ pub fn cat(
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
             let (img, center) = dyn_img.resize_plus(width, height)?;
-            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         ("image", "image") => {
@@ -166,7 +166,7 @@ pub fn cat(
         ("image", _) => {
             // default for image
             let (img, center) = image_result.unwrap().resize_plus(width, height)?;
-            converter::inline_an_image(&img, out, Some(center), inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, Some(center), inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
         _ => return Err(format!(

@@ -1,4 +1,5 @@
 mod docx;
+mod msdoc;
 mod opendoc;
 mod pdf;
 mod pptx;
