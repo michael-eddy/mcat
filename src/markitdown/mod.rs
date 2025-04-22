@@ -1,4 +1,4 @@
-mod msdoc;
+mod docx;
 mod opendoc;
 mod pdf;
 mod pptx;
@@ -38,7 +38,7 @@ pub fn convert(
 
     let result = match ext.as_str() {
         "csv" => sheets::csv_converter(path)?,
-        "docx" => msdoc::docx_convert(path)?,
+        "docx" => docx::docx_convert(path)?,
         "pdf" => pdf::pdf_convert(path)?,
         "pptx" => pptx::pptx_converter(path)?,
         "xlsx" | "xls" | "xlsm" | "xlsb" | "xla" | "xlam" | "ods" => sheets::sheets_convert(path)?,

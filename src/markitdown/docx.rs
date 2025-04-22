@@ -42,7 +42,22 @@ fn get_attr<'a>(e: &'a quick_xml::events::BytesStart, key: &[u8]) -> Option<Stri
     None
 }
 
-fn handle_reader(mut rdr: Reader<&[u8]>) -> Result<String, Box<dyn std::error::Error>> {
+pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let data = std::fs::read(path)?;
+    let cursor = Cursor::new(data);
+
+    let mut archive = ZipArchive::new(cursor)?;
+    let mut xml_content = String::new();
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        if file.name() == "word/document.xml" {
+            file.read_to_string(&mut xml_content)?;
+            break;
+        }
+    }
+
+    let mut reader = Reader::from_str(&xml_content);
     let mut buf = Vec::new();
     let mut markdown = String::new();
 
@@ -51,7 +66,7 @@ fn handle_reader(mut rdr: Reader<&[u8]>) -> Result<String, Box<dyn std::error::E
     let mut styles = Styles::default();
 
     loop {
-        match rdr.read_event_into(&mut buf) {
+        match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 b"w:tbl" => styles.table = true,
                 _ => {
@@ -184,7 +199,9 @@ fn handle_reader(mut rdr: Reader<&[u8]>) -> Result<String, Box<dyn std::error::E
             },
             Ok(Event::Eof) => break,
             Err(e) => {
-                return Err(format!("Error at position {}: {:?}", rdr.buffer_position(), e).into());
+                return Err(
+                    format!("Error at position {}: {:?}", reader.buffer_position(), e).into(),
+                );
             }
             _ => {}
         }
@@ -192,25 +209,6 @@ fn handle_reader(mut rdr: Reader<&[u8]>) -> Result<String, Box<dyn std::error::E
     }
 
     Ok(format(&markdown))
-}
-pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let data = std::fs::read(path)?;
-    let cursor = Cursor::new(data);
-
-    let mut archive = ZipArchive::new(cursor)?;
-    let mut xml_content = String::new();
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.name() == "word/document.xml" {
-            file.read_to_string(&mut xml_content)?;
-            break;
-        }
-    }
-
-    let reader = Reader::from_str(&xml_content);
-    let output = handle_reader(reader)?;
-    Ok(output)
 }
 
 // Same format function from your ODT implementation
