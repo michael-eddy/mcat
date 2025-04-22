@@ -1,6 +1,15 @@
 [package]
 name = "mcat"
 version = "0.1.0"
+authors = ["Meron Bossin"]
+description = "a powerfull extended cat command, to cat all the things you couldn't before"
+keywords = ["mcat", "inline", "markitdown", "terminal", "rasterm"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/Skardyy/mcat"
+homepage = "https://github.com/Skardyy/mcat"
+documentation = "https://github.com/Skardyy/mcat"
+license = "MIT"
+readme = "README.md"
 edition = "2024"
 
 [dependencies]
