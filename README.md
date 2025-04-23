@@ -41,7 +41,7 @@ git clone https://github.com/Skardyy/mcat
 cd mcat
 cargo install --path .
 ```
-(Coming soon: prebuilt binaries for common platforms.)
+or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/latest)
 
 ## 🏋️ Example Usage
 ```sh
