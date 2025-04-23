@@ -1,8 +1,4 @@
-use std::{
-    fs::{self, File},
-    io::{BufReader, Read, Write},
-    path::{Path, PathBuf},
-};
+use std::{fs::File, io::Write, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{GenericImage, ImageFormat};

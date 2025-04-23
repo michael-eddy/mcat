@@ -20,6 +20,7 @@ use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
 };
+use rasteroid::term_misc;
 
 fn main() {
     let opts = Command::new("mcat")
@@ -96,7 +97,7 @@ fn main() {
         .arg(
             Arg::new("inline-options")
                 .long("inline-options")
-                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [doesn't work yet]\n*  x=<int> [doesn't work yet]\n*  y=<int> [doesn't work yet]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [doesn't work yet]\n*  x=<int> [doesn't work yet]\n*  y=<int> [doesn't work yet]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
         )
         .get_matches();
 
@@ -109,6 +110,11 @@ fn main() {
     let hori = *opts.get_one::<bool>("horizontal").unwrap();
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default());
+    let _ = term_misc::init_winsize(
+        &term_misc::break_size_string(inline_options.spx.unwrap_or_default()).unwrap_or_exit(),
+        &term_misc::break_size_string(inline_options.sc.unwrap_or_default()).unwrap_or_exit(),
+        inline_options.scale,
+    );
 
     // shortcuts
     let makurai = *opts.get_one::<bool>("makurai-theme").unwrap();
@@ -209,6 +215,7 @@ struct InlineOptions<'a> {
     height: Option<&'a str>,
     spx: Option<&'a str>,
     sc: Option<&'a str>,
+    scale: Option<f32>,
     zoom: Option<usize>,
     x: Option<i32>,
     y: Option<i32>,
@@ -222,6 +229,7 @@ impl<'a> InlineOptions<'a> {
             height: Some("80%"),
             spx: Some("1920x1080"),
             sc: Some("100x20"),
+            scale: Some(1.0),
             zoom: Some(1),
             x: Some(0),
             y: Some(0),
@@ -248,6 +256,9 @@ impl<'a> InlineOptions<'a> {
         }
         if let Some(&val) = map.get("sc") {
             options.sc = Some(val);
+        }
+        if let Some(&val) = map.get("scale") {
+            options.scale = val.parse().ok();
         }
         if let Some(&val) = map.get("zoom") {
             options.zoom = val.parse().ok();

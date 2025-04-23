@@ -4,7 +4,9 @@
 
 
 # Mcat
-![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)
+![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)  
+
+[Installation](#%EF%B8%8F-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANNELOG](./CHANNELOG.md)
 
 ![mcat_demo](https://github.com/user-attachments/assets/b47aa276-f0e4-4259-b2c5-1525d7d9d6cb)
 </div>
@@ -21,17 +23,13 @@
   
 * 🌐 **URL to Inline Image/Video**  
   View Images/Videos from a URL in your terminal
+
+* 🔗 **Concatenate Images and Video too!**  
+  Concatenate videos of the same format (time concat)
+  and Concatenate images by stacking them horizontal or vertical(default)
   
 * 💃🏻 **Automatic Styling for HTML**  
   automatically inject styles into the HTML to make the image cooler!
-  ```sh
-  # dark theme (default is light theme)
-  mcat somefile.md -i -theme makurai
-  # or for short ~
-  mcat somefile.md -im
-  # or you own theme ~
-  mcat somefile.md -i -t "somefile.css"
-  ```
 
 ## ⬇️ Installation
 ```sh
@@ -59,8 +57,26 @@ mcat diagram.png -i
 # Save a document as image
 mcat document.docx -o image > img.png
 
+# Show a document as image in the terminal
+mcat readme.md -i
+
+# Show a document as image in the terminal with dark theme
+mcat readme.md -im
+
+# Show a document as image in the terminal with your own css
+mcat document.pdf -it "path/to/your/file.css"
+
 # from a url
 mcat "https://giphy.com/gifs/..."
+
+# Concat images (stacks vertical)
+mcat SomeImage.png AnotherImage.bmp
+
+# Or save it (stacks horizontal)
+mcat someimage.png anotherimage.bmp --hori -o image > save.png
+
+# Concat Videos (must be same format: codec,audio..)
+mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 ```
 
 ## ⚙️ Supported Formats
@@ -82,31 +98,33 @@ Mcat tries to have as little dependencies as possible.
 ## 🆘 Help
 ```txt
 mcat --help
-Usage: mcat.exe [OPTIONS] <input>
+Usage: mcat.exe [OPTIONS] <input>...
 
 Arguments:
-  <input>  file / dir
+  <input>...  file / dir
 
 Options:
-  -o <output>                            the format to output [possible values: html, md, image, inline]
+  -o <output>                            the format to output [possible values: html, md, image, video, inline]
   -t <theme>                             alternative css file for images, valid options: [default, makurai, <local file>] [default: default]
   -s                                     add style to html too (when html is the output)
-      --inline-options <inline-options>  options for the --output inline
-                                         *  center=<bool>
-                                         *  width=<string> [only for images]
-                                         *  height=<string> [only for images]
-                                         *  spx=<string>
-                                         *  sc=<string>
-                                         *  zoom=<usize> [doesn't work yet]
-                                         *  x=<int> [doesn't work yet]
-                                         *  y=<int> [doesn't work yet]
-                                         *  exmp: --inline-options 'center=false,width=80%,height=20c,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
       --kitty                            makes the inline image encoded to kitty
       --iterm                            makes the inline image encoded to iterm
       --sixel                            makes the inline image encoded to sixel
   -r, --raw                              allows raw html to run (put only on your content)
   -i                                     shortcut for putting --output inline
   -m                                     shortcut for putting --theme makurai
+      --hori                             concat images horizontal instead of vertical
+      --inline-options <inline-options>  options for the --output inline
+                                         *  center=<bool>
+                                         *  width=<string> [only for images]
+                                         *  height=<string> [only for images]
+                                         *  scale=<f32>
+                                         *  spx=<string>
+                                         *  sc=<string>
+                                         *  zoom=<usize> [doesn't work yet]
+                                         *  x=<int> [doesn't work yet]
+                                         *  y=<int> [doesn't work yet]
+                                         *  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
   -h, --help                             Print help
   -V, --version                          Print version
 ```

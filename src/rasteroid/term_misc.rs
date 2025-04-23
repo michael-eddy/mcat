@@ -59,7 +59,7 @@ impl Winsize {
     }
 }
 
-pub fn _init_winsize(spx: &Size, sc: &Size, scale: Option<f32>) -> Result<(), &'static str> {
+pub fn init_winsize(spx: &Size, sc: &Size, scale: Option<f32>) -> Result<(), &'static str> {
     WINSIZE
         .set(Winsize::new(spx, sc, scale))
         .map_err(|_| "Winsize already initialized")?;
@@ -225,4 +225,17 @@ impl EnvIdentifiers {
             .iter()
             .any(|key| self.contains(key, term))
     }
+}
+
+pub fn break_size_string(s: &str) -> Result<Size, Box<dyn std::error::Error>> {
+    let mut parts = s.split("x");
+    let width = parts.next().ok_or("missing width")?.parse::<u16>()?;
+    let height = parts.next().ok_or("missing height")?.parse::<u16>()?;
+    let force = s.contains("force");
+
+    Ok(Size {
+        width,
+        height,
+        force,
+    })
 }
