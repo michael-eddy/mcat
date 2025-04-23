@@ -1,7 +1,12 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::{
+    fs::{self, File},
+    io::{BufReader, Read, Write},
+    path::{Path, PathBuf},
+};
 
+use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{GenericImage, ImageFormat};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
 
 use crate::{catter, converter, markitdown};
 
@@ -77,6 +82,66 @@ pub fn concat_images(
     let temp_file = NamedTempFile::with_suffix(".png")?;
     output.save_with_format(temp_file.path(), image::ImageFormat::Png)?;
     Ok(temp_file)
+}
+
+pub fn concat_video(
+    paths: &Vec<PathBuf>,
+) -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
+    let mut concat_list_file = NamedTempFile::new()?;
+
+    for path in paths {
+        if !path.exists() {
+            return Err(format!("{} is invalid path", path.display()).into());
+        }
+        let path_dis = path
+            .canonicalize()?
+            .to_string_lossy()
+            .into_owned()
+            .replace("\\\\?\\", "");
+        writeln!(concat_list_file, "file '{}'", path_dis)?;
+    }
+
+    let first_path = &paths[0];
+    let suffix = first_path
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+
+    if !ffmpeg_sidecar::command::ffmpeg_is_installed() {
+        eprintln!("ffmpeg isn't installed, installing.. it may take a little");
+        ffmpeg_sidecar::download::auto_download()?;
+    }
+
+    let random_temp_dir = tempfile::tempdir()?;
+    let output_path = random_temp_dir
+        .path()
+        .join(format!("concat_output.{}", suffix));
+    let output_path_string = output_path.to_string_lossy().into_owned();
+
+    let mut command = FfmpegCommand::new();
+    command
+        .hwaccel("auto")
+        .format("concat")
+        .arg("-safe")
+        .arg("0")
+        .input(concat_list_file.path().to_string_lossy().into_owned())
+        .arg("-c")
+        .arg("copy")
+        .output(&output_path_string);
+
+    let mut child = command.spawn()?;
+
+    let status = child.wait()?;
+    if status.success() {
+        Ok((random_temp_dir, output_path))
+    } else {
+        Err(format!(
+            "FFmpeg failed with code {:?}, make sure the videos are the same format",
+            status.code(),
+        )
+        .into())
+    }
 }
 
 pub fn check_unified_format(paths: &[PathBuf]) -> &'static str {

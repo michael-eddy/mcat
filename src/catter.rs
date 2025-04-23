@@ -16,6 +16,7 @@ pub enum CatType {
     Markdown,
     Html,
     Image,
+    Video,
     InlineImage,
     InlineVideo,
 }
@@ -85,6 +86,11 @@ pub fn cat(
 
     //video
     if is_video(&ext) {
+        if to == "video" {
+            let content = fs::read(path)?;
+            out.write_all(&content)?;
+            return Ok(CatType::Video);
+        }
         converter::inline_a_video(
             path.to_string_lossy().into_owned(),
             out,

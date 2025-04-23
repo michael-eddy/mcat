@@ -37,7 +37,7 @@ fn main() {
             Arg::new("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md", "image", "inline"]),
+                .value_parser(["html", "md", "image", "video", "inline"]),
         )
         .arg(
             Arg::new("theme")
@@ -185,7 +185,9 @@ fn main() {
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0], &mut out, Some(opts)).unwrap_or_exit();
             } else {
-                todo!()
+                #[allow(unused_variables)] //for lifetime
+                let (dir, path) = concater::concat_video(&path_bufs).unwrap_or_exit();
+                catter::cat(&path, &mut out, Some(opts)).unwrap_or_exit();
             }
         }
         "image" => {
