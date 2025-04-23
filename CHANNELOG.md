@@ -1,4 +1,4 @@
-## V0.1.2
+## V0.1.3
 removes feature that requires native-tls (for cross compile)
 
 ## V0.1.2
