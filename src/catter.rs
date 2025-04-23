@@ -5,13 +5,11 @@ use std::{
 };
 
 use image::{DynamicImage, ImageFormat};
-use tempfile::NamedTempFile;
 
 use crate::{
     converter::{self},
     markitdown,
     rasteroid::{self, image_extended::InlineImage},
-    scrapy,
 };
 
 pub enum CatType {
@@ -56,18 +54,10 @@ impl<'a> CatOpts<'a> {
 }
 
 pub fn cat(
-    input: String,
+    path: &Path,
     out: &mut impl Write,
     opts: Option<CatOpts>,
 ) -> Result<CatType, Box<dyn std::error::Error>> {
-    let maybe_temp_file: Option<NamedTempFile> = match input.starts_with("https://") {
-        true => Some(scrapy::scrape_biggest_media(&input)?),
-        false => None,
-    };
-    let path = match &maybe_temp_file {
-        Some(tmp_file) => tmp_file.path(),
-        None => Path::new(&input),
-    };
     if !path.exists() {
         return Err(format!("invalid path: {}", path.display()).into());
     }

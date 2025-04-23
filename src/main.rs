@@ -8,6 +8,7 @@ mod scrapy;
 use std::{
     collections::HashMap,
     io::{BufWriter, Write},
+    path::{Path, PathBuf},
 };
 
 #[macro_use]
@@ -18,6 +19,8 @@ use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
 };
+use image::ImageFormat;
+use tempfile::NamedTempFile;
 
 fn main() {
     let opts = Command::new("mcat")
@@ -126,8 +129,6 @@ fn main() {
         sixel,
     };
 
-    let stdout = std::io::stdout();
-    let mut out = BufWriter::new(stdout);
     let opts = CatOpts {
         to: output,
         width: inline_options.width,
@@ -138,17 +139,156 @@ fn main() {
         style_html,
         raw_html,
     };
+
+    let mut tmp_files = Vec::new(); //for lifetime
+    let mut path_bufs = Vec::new();
+    let mut base_dir = None;
     for i in input {
-        match catter::cat(i.clone(), &mut out, Some(opts)) {
-            Ok(_) => {
-                out.write_all(b"\n\n").unwrap();
-                out.flush().unwrap();
+        let path = Path::new(&i);
+        if i.starts_with("https://") {
+            if let Ok(tmp) = scrapy::scrape_biggest_media(&i) {
+                let path = tmp.path().to_path_buf();
+                tmp_files.push(tmp);
+                path_bufs.push(path);
+            } else {
+                eprintln!("{} didn't contain any supported media", i);
             }
-            Err(e) => {
-                eprintln!("Error: {}", e);
+        } else {
+            if path.is_dir() {
+                path_bufs.clear();
+                let selected_files = prompter::prompt_for_files(path).unwrap_or_default();
+                path_bufs.extend_from_slice(&selected_files);
+                base_dir = Some(path.to_string_lossy().into_owned());
+                break;
+            } else {
+                path_bufs.push(path.to_path_buf());
             }
         }
     }
+
+    let stdout = std::io::stdout();
+    let mut out = BufWriter::new(stdout);
+    let main_format = check_unified_format(&path_bufs);
+    let mut path_bufs = assign_names(&path_bufs, base_dir.as_ref());
+    path_bufs.sort_by_key(|(path, _)| *path);
+    match main_format {
+        "text" => {
+            let tmp = concat_text(path_bufs);
+            catter::cat(tmp.path(), &mut out, Some(opts)).unwrap();
+        }
+        "video" => {
+            if path_bufs.len() == 1 {
+                catter::cat(path_bufs[0].0, &mut out, Some(opts)).unwrap();
+            } else {
+                todo!()
+            }
+        }
+        "image" => {
+            if path_bufs.len() == 1 {
+                catter::cat(path_bufs[0].0, &mut out, Some(opts)).unwrap();
+            } else {
+                todo!()
+            }
+        }
+        _ => {}
+    }
+    out.flush().unwrap();
+}
+
+fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
+    let mut markdown = String::new();
+    for (path, name) in paths {
+        if let Ok(md) = markitdown::convert(&path, name.as_ref()) {
+            markdown.push_str(&format!("{}\n\n", md));
+        } else {
+            markdown.push_str("**[Failed Reading]**\n\n");
+        }
+    }
+
+    let mut tmp_file = NamedTempFile::with_suffix(".md").expect("failed to create tmp file");
+    tmp_file
+        .write_all(markdown.trim().as_bytes())
+        .expect("failed writing to tmp file");
+
+    tmp_file
+}
+
+fn check_unified_format(paths: &[PathBuf]) -> &'static str {
+    if paths.is_empty() {
+        return "text"; // Default if no files
+    }
+
+    let mut detected_format: Option<&'static str> = None;
+
+    for path in paths {
+        if let Some(extension) = path.extension() {
+            if let Some(ext_str) = extension.to_str() {
+                let ext = ext_str.to_lowercase();
+
+                let current_format = if catter::is_video(&ext) {
+                    "video"
+                } else if ImageFormat::from_extension(&ext).is_some() {
+                    "image"
+                } else {
+                    "text"
+                };
+
+                if let Some(prev_format) = detected_format {
+                    if prev_format != current_format {
+                        // Found conflicting formats
+                        eprintln!(
+                            "Error: Cannot have 2 different formats [text / images / videos]"
+                        );
+                        std::process::exit(1);
+                    }
+                } else {
+                    // First file, set the format
+                    detected_format = Some(current_format);
+                }
+            }
+        } else {
+            // Files with no extension are considered text
+            if detected_format.is_some() && detected_format.unwrap() != "text" {
+                eprintln!("Error: Cannot have 2 different formats");
+                std::process::exit(1);
+            }
+            detected_format = Some("text");
+        }
+    }
+    detected_format.unwrap_or("text")
+}
+
+fn assign_names<'a>(
+    paths: &'a [PathBuf],
+    base_dir: Option<&'a String>,
+) -> Vec<(&'a PathBuf, Option<String>)> {
+    let is_one_element = paths.len() == 1;
+    let result: Vec<(&PathBuf, Option<String>)> = paths
+        .iter()
+        .map(|path| {
+            let name = if is_one_element {
+                None
+            } else {
+                match base_dir {
+                    Some(base) => {
+                        let rel_path = path.strip_prefix(base).unwrap_or(path);
+                        Some(rel_path.to_string_lossy().into_owned())
+                    }
+                    None => {
+                        let name = path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .into_owned();
+                        Some(name)
+                    }
+                }
+            };
+            (path, name)
+        })
+        .collect();
+
+    result
 }
 
 #[derive(Debug)]

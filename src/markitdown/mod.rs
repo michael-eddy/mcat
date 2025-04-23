@@ -12,8 +12,6 @@ use std::{
 use tempfile::Builder;
 use zip::ZipArchive;
 
-use crate::prompter;
-
 pub fn convert(
     path: &Path,
     name_header: Option<&String>,
@@ -21,10 +19,6 @@ pub fn convert(
     let path = Path::new(path);
     if !path.exists() {
         return Err(format!("{} doesn't exists", path.display()).into());
-    }
-    if path.is_dir() {
-        let content = dir_converter(path)?;
-        return Ok(content);
     }
     if !path.is_file() {
         return Err(format!("Unknown path type for {}", path.display()).into());
@@ -45,6 +39,13 @@ pub fn convert(
         "zip" => zip_convert(path)?,
         "odt" => opendoc::opendoc_convert(path)?,
         "odp" => opendoc::opendoc_convert(path)?,
+        "md" | "html" => {
+            let res = fs::read_to_string(path)?;
+            match name_header {
+                Some(name) => format!("# {}\n\n{}\n\n", name, res),
+                None => format!("{}\n\n", res),
+            }
+        }
         _ => {
             let content = fs::read_to_string(path)?;
             markitdown_fallback(&content, name_header, &ext)
@@ -83,26 +84,6 @@ fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     }
 
     Ok(output)
-}
-
-fn dir_converter(path: &Path) -> Result<String, String> {
-    let mut selected_files = prompter::prompt_for_files(path)?;
-    selected_files.sort();
-
-    let mut markdown = String::new();
-    for file in selected_files {
-        let rel_path = file.strip_prefix(path).unwrap_or(path);
-        let name = rel_path.to_string_lossy().into_owned();
-        if let Ok(md) = convert(&file, Some(&name)) {
-            markdown.push_str(&md);
-            markdown.push_str("\n\n");
-        } else {
-            markdown.push_str("**[Failed Reading]**".into());
-            markdown.push_str("\n\n");
-        }
-    }
-
-    Ok(markdown.trim().to_string())
 }
 
 fn markitdown_fallback(content: &String, name: Option<&String>, ext: &String) -> String {
