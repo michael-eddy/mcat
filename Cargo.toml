@@ -1,6 +1,6 @@
 [package]
 name = "mcat"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Meron Bossin"]
 description = "a powerfull extended cat command, to cat all the things you couldn't before"
 keywords = ["mcat", "inline", "markitdown", "terminal", "rasterm"]
@@ -44,3 +44,8 @@ lopdf = "0.36.0"
 quick-xml = "0.37.4"
 scraper = "0.23.1"
 reqwest = { version = "0.12.15", default-features = false, features = ["rustls-tls"] }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
