@@ -1,4 +1,7 @@
 ## V0.1.2
+removes feature that requires native-tls (for cross compile)
+
+## V0.1.2
 #### new features  
 * concatenate images (vertical or horizontal)  
 * concatenate videos (time based, must be same format)  
