@@ -45,37 +45,48 @@ or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/l
 
 ## 🏋️ Example Usage
 ```sh
-# View a PDF as Markdown
+# View a document as Markdown
 mcat resume.pdf
 
-# Render Markdown to an image
-mcat notes.md -i
+# Or HTML
+mcat project.docx -o html
 
-# Show an image inline in your terminal
-mcat diagram.png -i
-
-# Save a document as image
-mcat document.docx -o image > img.png
-
-# Show a document as image in the terminal
+# Show a document inline as an image
 mcat readme.md -i
 
-# Show a document as image in the terminal with dark theme
-mcat readme.md -im
+# Show a document as an image inline with a dark theme
+mcat presentation.pptx -im
 
-# Show a document as image in the terminal with your own css
+# Show a document as an image in the terminal with your own css
 mcat document.pdf -it "path/to/your/file.css"
 
-# from a url
+# Render a document to an image and save it
+mcat readme.md -o image > img.png
+
+# Show media inline in your terminal
+mcat diagram.png
+mcat video.mp4
+
+# From a url
 mcat "https://giphy.com/gifs/..."
 
-# Concat images (stacks vertical)
-mcat SomeImage.png AnotherImage.bmp
+# Images too!
+mcat "https://website/images/..."
+
+# Concatenate documents and turn them into an image
+mcat document.docx presentation.odt table.xlsx archive.zip -o image > all.png
+
+# Or just select interactively and copy to clipboard
+# Replace scb with a command from your os
+mcat directory | scb
+
+# Concatenate images (stacks vertical)
+mcat someimage.png anotherimage.bmp
 
 # Or save it (stacks horizontal)
 mcat someimage.png anotherimage.bmp --hori -o image > save.png
 
-# Concat Videos (must be same format: codec,audio..)
+# Concatenate videos (must be same format: codec,audio..)
 mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 ```
 
