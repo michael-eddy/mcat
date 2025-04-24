@@ -1,3 +1,6 @@
+## V0.1.4
+now closing kitty animations when interrupted mid way
+
 ## V0.1.3
 removes feature that requires native-tls (for cross compile)
 

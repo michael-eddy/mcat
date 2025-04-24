@@ -1,4 +1,15 @@
-use std::{cmp::min, collections::HashMap, error::Error, io::Write};
+use signal_hook::consts::signal::*;
+use signal_hook::flag;
+use std::{
+    cmp::min,
+    collections::HashMap,
+    error::Error,
+    io::Write,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use base64::{Engine, engine::general_purpose};
 use ffmpeg_sidecar::event::OutputVideoFrame;
@@ -104,6 +115,25 @@ fn process_frame(
     Ok(())
 }
 
+fn setup_signal_handler() -> Arc<AtomicBool> {
+    let shutdown = Arc::new(AtomicBool::new(false));
+
+    // Register signal handlers
+    flag::register(SIGINT, Arc::clone(&shutdown)).unwrap();
+    flag::register(SIGTERM, Arc::clone(&shutdown)).unwrap();
+    #[cfg(windows)]
+    {
+        flag::register(SIGBREAK, Arc::clone(&shutdown)).unwrap();
+    }
+    #[cfg(unix)]
+    {
+        flag::register(SIGHUP, Arc::clone(&shutdown)).unwrap();
+        flag::register(SIGQUIT, Arc::clone(&shutdown)).unwrap();
+    }
+
+    shutdown
+}
+
 pub fn encode_frames(
     frames: Box<dyn Iterator<Item = OutputVideoFrame>>,
     out: &mut impl Write,
@@ -147,7 +177,12 @@ pub fn encode_frames(
     let z = 100;
     write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
 
+    let shutdown = setup_signal_handler();
+
     for (c, frame) in frames.enumerate() {
+        if shutdown.load(Ordering::SeqCst) {
+            break; // clean exit
+        }
         let s = frame.width.to_string();
         let v = frame.height.to_string();
         let i = id.to_string();
