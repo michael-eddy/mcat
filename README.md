@@ -76,7 +76,7 @@ mcat "https://website/images/..."
 # Concatenate documents and turn them into an image
 mcat document.docx presentation.odt table.xlsx archive.zip -o image > all.png
 
-# Or just select interactively and copy to clipboard
+# Or just select interactively and copy to clipboard (for ai prompts)
 # Replace scb with a command from your os
 mcat directory | scb
 

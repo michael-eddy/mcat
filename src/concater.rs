@@ -31,9 +31,6 @@ pub fn concat_images(
     // Load all images
     let mut images = Vec::new();
     for path in &image_paths {
-        if !path.exists() {
-            return Err(format!("{} is invalid path", path.display()).into());
-        }
         if path.extension().is_some_and(|e| e == "svg") {
             let file = File::open(path)?;
             let dyn_img = converter::svg_to_image(file, None, None)?;
@@ -86,9 +83,6 @@ pub fn concat_video(
     let mut concat_list_file = NamedTempFile::new()?;
 
     for path in paths {
-        if !path.exists() {
-            return Err(format!("{} is invalid path", path.display()).into());
-        }
         let path_dis = path
             .canonicalize()?
             .to_string_lossy()

@@ -17,9 +17,6 @@ pub fn convert(
     name_header: Option<&String>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let path = Path::new(path);
-    if !path.exists() {
-        return Err(format!("{} doesn't exists", path.display()).into());
-    }
     if !path.is_file() {
         return Err(format!("Unknown path type for {}", path.display()).into());
     }

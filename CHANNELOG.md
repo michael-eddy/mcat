@@ -1,3 +1,6 @@
+## V0.1.5 (not released)
+* now says when a path doesn't exists instead of saying Failed Reading
+
 ## V0.1.4
 now closing kitty animations when interrupted mid way
 

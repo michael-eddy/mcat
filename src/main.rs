@@ -155,7 +155,6 @@ fn main() {
     let mut path_bufs = Vec::new();
     let mut base_dir = None;
     for i in input {
-        let path = Path::new(&i);
         if i.starts_with("https://") {
             if let Ok(tmp) = scrapy::scrape_biggest_media(&i) {
                 let path = tmp.path().to_path_buf();
@@ -165,6 +164,11 @@ fn main() {
                 eprintln!("{} didn't contain any supported media", i);
             }
         } else {
+            let path = Path::new(&i);
+            if !path.exists() {
+                eprintln!("{} doesn't exists", path.display());
+                std::process::exit(1);
+            }
             if path.is_dir() {
                 path_bufs.clear();
                 let selected_files = prompter::prompt_for_files(path).unwrap_or_default();
