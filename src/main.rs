@@ -97,7 +97,7 @@ fn main() {
         .arg(
             Arg::new("inline-options")
                 .long("inline-options")
-                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [doesn't work yet]\n*  x=<int> [doesn't work yet]\n*  y=<int> [doesn't work yet]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
         )
         .get_matches();
 
@@ -145,6 +145,9 @@ fn main() {
         width: inline_options.width,
         height: inline_options.height,
         center: inline_options.center,
+        zoom: inline_options.zoom,
+        x: inline_options.x,
+        y: inline_options.y,
         encoder: Some(encoder),
         style: Some(style),
         style_html,
@@ -233,10 +236,10 @@ impl<'a> InlineOptions<'a> {
             height: Some("80%"),
             spx: Some("1920x1080"),
             sc: Some("100x20"),
-            scale: Some(1.0),
-            zoom: Some(1),
-            x: Some(0),
-            y: Some(0),
+            scale: None,
+            zoom: None,
+            x: None,
+            y: None,
             center: true,
         };
         let map: HashMap<_, _> = s

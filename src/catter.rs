@@ -35,6 +35,9 @@ pub struct CatOpts<'a> {
     pub style: Option<&'a str>,
     pub width: Option<&'a str>,
     pub height: Option<&'a str>,
+    pub zoom: Option<usize>,
+    pub x: Option<i32>,
+    pub y: Option<i32>,
     pub style_html: bool,
     pub raw_html: bool,
     pub center: bool,
@@ -46,6 +49,9 @@ impl<'a> CatOpts<'a> {
             encoder: None,
             width: Some("80%"),
             height: Some("80%"),
+            zoom: None,
+            x: None,
+            y: None,
             style: None,
             style_html: false,
             raw_html: false,
@@ -148,6 +154,7 @@ pub fn cat(
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
+            let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             return Ok(CatType::InlineImage)
@@ -160,6 +167,7 @@ pub fn cat(
         ("html", "inline") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
+            let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             return Ok(CatType::InlineImage)
@@ -181,7 +189,8 @@ pub fn cat(
         },
         ("image", _) => {
             // default for image
-            let (img, center) = image_result.unwrap().resize_plus(opts.width, opts.height)?;
+            let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
+            let (img, center) = image_result.resize_plus(opts.width, opts.height)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             return Ok(CatType::InlineImage)
         },
