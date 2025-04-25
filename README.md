@@ -6,7 +6,7 @@
 # Mcat
 ![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)  
 
-[Installation](#%EF%B8%8F-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANNELOG](./CHANNELOG.md)
+[Installation](#%EF%B8%8F-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANGELOG](./CHANGELOG.md)
 
 ![mcat_demo](https://github.com/user-attachments/assets/b47aa276-f0e4-4259-b2c5-1525d7d9d6cb)
 </div>
