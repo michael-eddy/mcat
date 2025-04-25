@@ -1,6 +1,6 @@
-## V0.1.5 (not released)
+## V0.1.5
 * now says when a path doesn't exists instead of saying Failed Reading
-* adding zoom, x, y in the inline-options
+* adding zoom, x, y in the inline-options (--inline-options "")
 
 ## V0.1.4
 now closing kitty animations when interrupted mid way
