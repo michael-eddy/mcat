@@ -95,8 +95,7 @@ pub fn center_image(image_width: u16) -> u16 {
     let offset_x = (winsize.spx_width as f32 - image_width as f32) / 2.0;
     let offset_x = offset_x / (winsize.spx_width as f32 / winsize.sc_width as f32);
 
-    let offset = offset_x.round() as u16;
-    offset
+    offset_x.round() as u16
 }
 
 /// convert any format of width / height into pixels.

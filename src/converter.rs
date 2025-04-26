@@ -21,7 +21,7 @@ use std::io::Write;
 use crate::rasteroid;
 
 pub fn image_to_base64(img: &Vec<u8>) -> String {
-    general_purpose::STANDARD.encode(&img)
+    general_purpose::STANDARD.encode(img)
 }
 
 pub fn offset_to_terminal(offset: Option<u16>) -> String {
@@ -78,12 +78,9 @@ pub fn svg_to_image(
     resvg::render(&tree, transform, &mut pixmap.as_mut());
 
     // Convert Pixmap to ImageBuffer
-    let image_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(
-        target_width as u32,
-        target_height as u32,
-        pixmap.data().to_vec(),
-    )
-    .ok_or("Failed to create image buffer for svg")?;
+    let image_buffer =
+        ImageBuffer::<Rgba<u8>, _>::from_raw(target_width, target_height, pixmap.data().to_vec())
+            .ok_or("Failed to create image buffer for svg")?;
 
     // Convert ImageBuffer to DynamicImage
     Ok(DynamicImage::ImageRgba8(image_buffer))
@@ -92,7 +89,7 @@ pub fn svg_to_image(
 fn get_chromium_install_path() -> PathBuf {
     let base_dir = dirs::cache_dir()
         .or_else(dirs::data_dir)
-        .unwrap_or_else(|| std::env::temp_dir());
+        .unwrap_or_else(std::env::temp_dir);
 
     let p = base_dir.join("chromiumoxide").join("chromium");
     if !p.exists() {
@@ -103,7 +100,7 @@ fn get_chromium_install_path() -> PathBuf {
 }
 
 pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let encoded_html = urlencoding::encode(&html);
+    let encoded_html = urlencoding::encode(html);
     let data_uri = format!("data:text/html;charset=utf-8,{}", encoded_html);
     let data = screenshot_uri(&data_uri)?;
 
@@ -221,7 +218,7 @@ pub fn inline_a_video(
             rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
             Ok(())
         }
-        rasteroid::InlineEncoder::Sixel => return Err("Cannot view videos in sixel".into()),
+        rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
     }
 }
 

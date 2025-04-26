@@ -36,8 +36,8 @@ impl InlineImage for DynamicImage {
         let center = term_misc::center_image(new_width as u16);
 
         let mut dst_image = Image::new(
-            new_width.into(),
-            new_height.into(),
+            new_width,
+            new_height,
             self.pixel_type().ok_or("image is invalid")?,
         );
         let mut resizer = Resizer::new();
@@ -53,7 +53,7 @@ impl InlineImage for DynamicImage {
             self.color().into(),
         )?;
 
-        return Ok((buffer, center));
+        Ok((buffer, center))
     }
 
     fn zoom_pan(self, zoom: Option<usize>, x: Option<i32>, y: Option<i32>) -> Self {

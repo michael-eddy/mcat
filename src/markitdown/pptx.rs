@@ -104,7 +104,7 @@ pub fn pptx_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>>
                                     Vec::new()
                                 };
                                 markdown.push_str(&sheets::to_markdown_table(&headers, &data_rows));
-                                markdown.push_str("\n");
+                                markdown.push('\n');
                             }
                         }
                         b"a:tr" => {

@@ -31,7 +31,7 @@ impl Styles {
     }
 }
 
-fn get_attr<'a>(e: &'a quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
+fn get_attr(e: &quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
     for attr in e.attributes().with_checks(false) {
         if let Ok(attr) = attr {
             if attr.key.as_ref() == key {
@@ -147,7 +147,7 @@ pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                 }
 
                 if styles.table {
-                    current_row.push(text.into());
+                    current_row.push(text);
                     continue;
                 }
                 if styles.title {
@@ -178,7 +178,7 @@ pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                             Vec::new()
                         };
                         markdown.push_str(&sheets::to_markdown_table(&headers, &data_rows));
-                        markdown.push_str("\n");
+                        markdown.push('\n');
                         table_rows = Vec::new();
                         styles = Styles::default();
                     }
@@ -219,7 +219,7 @@ fn format(input: &str) -> String {
 
     for line in input.lines() {
         if line.trim() == "" {
-            result.push_str("\n");
+            result.push('\n');
         } else {
             result.push_str(&format!("{}\n", line));
         }

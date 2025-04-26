@@ -13,9 +13,9 @@ pub fn encode_image(
 
     out.write_all(b"\x1b]1337;File=inline=1;size=")?;
     write!(out, "{}", base64_encoded.len())?;
-    out.write_all(&[b':'])?;
+    out.write_all(b":")?;
     out.write_all(base64_encoded.as_bytes())?;
-    out.write_all(&[b'\x07'])?;
+    out.write_all(b"\x07")?;
 
     Ok(())
 }

@@ -13,7 +13,7 @@ pub fn encode_image(
     mut out: impl Write,
     offset: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let dyn_img = image::load_from_memory_with_format(&img, image::ImageFormat::Png)?;
+    let dyn_img = image::load_from_memory_with_format(img, image::ImageFormat::Png)?;
     let rgb_img = dyn_img.to_rgb8();
 
     let center = converter::offset_to_terminal(offset);

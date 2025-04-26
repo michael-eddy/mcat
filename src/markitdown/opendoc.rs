@@ -68,7 +68,7 @@ pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>
                     };
                     is_table = false;
                     markdown.push_str(&sheets::to_markdown_table(&headers, &data_rows));
-                    markdown.push_str("\n");
+                    markdown.push('\n');
                     table_rows = Vec::new();
                 }
                 b"table:table-row" => {
@@ -83,7 +83,7 @@ pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>
                 b"text:h" => markdown.push_str("\n\n"),
                 b"text:span" => continue,
                 b"table:table-cell" => continue,
-                b"text:list" => markdown.push_str("\n"),
+                b"text:list" => markdown.push('\n'),
                 b"text:list-item" => {
                     is_list_item = 0;
                     markdown.push_str("  \n");
@@ -112,7 +112,7 @@ fn format(input: &str) -> String {
 
     for line in input.lines() {
         if line.trim() == "" {
-            result.push_str("\n");
+            result.push('\n');
         } else {
             result.push_str(&format!("{}\n", line));
         }

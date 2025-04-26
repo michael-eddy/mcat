@@ -42,7 +42,7 @@ pub struct CatOpts<'a> {
     pub raw_html: bool,
     pub center: bool,
 }
-impl<'a> CatOpts<'a> {
+impl CatOpts<'_> {
     pub fn default() -> Self {
         CatOpts {
             to: None,
@@ -97,12 +97,7 @@ pub fn cat(
             out.write_all(&content)?;
             return Ok(CatType::Video);
         }
-        converter::inline_a_video(
-            path.to_string_lossy().into_owned(),
-            out,
-            &inline_encoder,
-            opts.center,
-        )?;
+        converter::inline_a_video(path.to_string_lossy(), out, inline_encoder, opts.center)?;
         return Ok(CatType::InlineVideo);
     }
     //svg
@@ -130,7 +125,7 @@ pub fn cat(
                     (Some(r), ext.as_ref())
                 }
                 _ => {
-                    let f = markitdown::convert(&path, None)?;
+                    let f = markitdown::convert(path, None)?;
                     (Some(f), "md")
                 }
             }
@@ -138,17 +133,17 @@ pub fn cat(
     }
 
     // converting
-    match (from.as_ref(), to.as_ref()) {
+    match (from, to) {
         ("md", "html") => {
             let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None}, opts.raw_html);
-            out.write_all(&html.as_bytes().to_vec())?;
-            return Ok(CatType::Html);
+            out.write_all(html.as_bytes())?;
+            Ok(CatType::Html)
         },
         ("md", "image") => {
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
             let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
-            return Ok(CatType::Image);
+            Ok(CatType::Image)
         },
         ("md", "inline") => {
             let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
@@ -157,12 +152,12 @@ pub fn cat(
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
-            return Ok(CatType::InlineImage)
+            Ok(CatType::InlineImage)
         },
         ("html", "image") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
             out.write_all(&image)?;
-            return Ok(CatType::Image);
+            Ok(CatType::Image)
         },
         ("html", "inline") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
@@ -170,35 +165,35 @@ pub fn cat(
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
-            return Ok(CatType::InlineImage)
+            Ok(CatType::InlineImage)
         },
         ("image", "image") => {
             let buf = fs::read(path)?;
             out.write_all(&buf)?;
-            return Ok(CatType::Image)
+            Ok(CatType::Image)
         },
         ("md", _) => {
             //default for md
-            out.write_all(&string_result.unwrap().as_bytes())?;
-            return Ok(CatType::Markdown);
+            out.write_all(string_result.unwrap().as_bytes())?;
+            Ok(CatType::Markdown)
         }
         ("html", _) => {
             // default for html
-            out.write_all(&string_result.unwrap().as_bytes())?;
-            return Ok(CatType::Html);
+            out.write_all(string_result.unwrap().as_bytes())?;
+            Ok(CatType::Html)
         },
         ("image", _) => {
             // default for image
             let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = image_result.resize_plus(opts.width, opts.height)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
-            return Ok(CatType::InlineImage)
+            Ok(CatType::InlineImage)
         },
-        _ => return Err(format!(
+        _ => Err(format!(
             "converting: {} to: {}, is not supported.\nsupported pipeline is: md -> html -> image -> inline_image",
             from, to
         ).into()),
-    };
+    }
 }
 
 pub fn is_video(input: &str) -> bool {

@@ -47,6 +47,6 @@ impl InlineEncoder {
             return Self::Sixel;
         }
 
-        return Self::Iterm;
+        Self::Iterm
     }
 }

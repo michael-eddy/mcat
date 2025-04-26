@@ -9,7 +9,7 @@ use crate::{catter, converter, markitdown};
 pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
     let mut markdown = String::new();
     for (path, name) in paths {
-        if let Ok(md) = markitdown::convert(&path, name.as_ref()) {
+        if let Ok(md) = markitdown::convert(path, name.as_ref()) {
             markdown.push_str(&format!("{}\n\n", md));
         } else {
             markdown.push_str("**[Failed Reading]**\n\n");
@@ -115,7 +115,7 @@ pub fn concat_video(
         .format("concat")
         .arg("-safe")
         .arg("0")
-        .input(concat_list_file.path().to_string_lossy().into_owned())
+        .input(concat_list_file.path().to_string_lossy())
         .arg("-c")
         .arg("copy")
         .output(&output_path_string);

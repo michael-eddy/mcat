@@ -110,13 +110,12 @@ pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::err
                                     _ => false,
                                 };
 
-                                if is_valid {
-                                    if biggest_media.is_none()
-                                        || media_size > biggest_media.as_ref().unwrap().0
-                                    {
-                                        biggest_media =
-                                            Some((media_size, media_bytes.to_vec(), extension));
-                                    }
+                                if is_valid
+                                    && (biggest_media.is_none()
+                                        || media_size > biggest_media.as_ref().unwrap().0)
+                                {
+                                    biggest_media =
+                                        Some((media_size, media_bytes.to_vec(), extension));
                                 }
                             }
                         }
