@@ -32,11 +32,9 @@ impl Styles {
 }
 
 fn get_attr(e: &quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
-    for attr in e.attributes().with_checks(false) {
-        if let Ok(attr) = attr {
-            if attr.key.as_ref() == key {
-                return Some(attr.unescape_value().ok()?.into_owned());
-            }
+    for attr in e.attributes().with_checks(false).flatten() {
+        if attr.key.as_ref() == key {
+            return Some(attr.unescape_value().ok()?.into_owned());
         }
     }
     None

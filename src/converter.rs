@@ -18,9 +18,9 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::rasteroid;
+use crate::rasteroid::{self};
 
-pub fn image_to_base64(img: &Vec<u8>) -> String {
+pub fn image_to_base64(img: &[u8]) -> String {
     general_purpose::STANDARD.encode(img)
 }
 
@@ -142,7 +142,7 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
     })
 }
 
-pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> String {
+pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     let mut options = ComrakOptions::default();
 
     let mut plugins = ComrakPlugins::default();
@@ -162,7 +162,7 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>, raw_html: bool) -> Str
     options.parse.smart = true; // fancy quotes, dashes, ellipses
 
     // 💄 Render options
-    options.render.unsafe_ = raw_html;
+    options.render.unsafe_ = true;
     options.render.hardbreaks = false;
     options.render.github_pre_lang = true; // <pre lang="rust">
     options.render.full_info_string = true;

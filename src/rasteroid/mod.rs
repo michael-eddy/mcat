@@ -7,7 +7,7 @@ pub mod sixel_encoder;
 pub mod term_misc;
 
 pub fn inline_an_image(
-    img: &Vec<u8>,
+    img: &[u8],
     out: impl Write,
     offset: Option<u16>,
     inline_encoder: &InlineEncoder,

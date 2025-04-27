@@ -121,7 +121,6 @@ Options:
       --kitty                            makes the inline image encoded to kitty
       --iterm                            makes the inline image encoded to iterm
       --sixel                            makes the inline image encoded to sixel
-  -r, --raw                              allows raw html to run (put only on your content)
   -i                                     shortcut for putting --output inline
   -m                                     shortcut for putting --theme makurai
       --hori                             concat images horizontal instead of vertical

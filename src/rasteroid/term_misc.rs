@@ -1,6 +1,12 @@
-use std::{collections::HashMap, env, f32, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    env, f32,
+    sync::{Arc, OnceLock, atomic::AtomicBool},
+};
 
 use crossterm::terminal::{size, window_size};
+use signal_hook::consts::signal::*;
+use signal_hook::flag;
 
 pub struct Winsize {
     pub sc_width: u16,
@@ -237,4 +243,23 @@ pub fn break_size_string(s: &str) -> Result<Size, Box<dyn std::error::Error>> {
         height,
         force,
     })
+}
+
+pub fn setup_signal_handler() -> Arc<AtomicBool> {
+    let shutdown = Arc::new(AtomicBool::new(false));
+
+    // Register signal handlers
+    flag::register(SIGINT, Arc::clone(&shutdown)).unwrap();
+    flag::register(SIGTERM, Arc::clone(&shutdown)).unwrap();
+    #[cfg(windows)]
+    {
+        flag::register(SIGBREAK, Arc::clone(&shutdown)).unwrap();
+    }
+    #[cfg(unix)]
+    {
+        flag::register(SIGHUP, Arc::clone(&shutdown)).unwrap();
+        flag::register(SIGQUIT, Arc::clone(&shutdown)).unwrap();
+    }
+
+    shutdown
 }

@@ -1,15 +1,4 @@
-use signal_hook::consts::signal::*;
-use signal_hook::flag;
-use std::{
-    cmp::min,
-    collections::HashMap,
-    error::Error,
-    io::Write,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
 use base64::{Engine, engine::general_purpose};
 use ffmpeg_sidecar::event::OutputVideoFrame;
@@ -68,7 +57,7 @@ fn chunk_base64(
         out.write_all(b"\x1b_G")?;
         out.write_all(opts)?;
         write!(out, "m={};{}", more_chunks, chunk_data)?;
-        out.write(b"\x1b\\")?;
+        out.write_all(b"\x1b\\")?;
 
         start = end;
     }
@@ -77,7 +66,7 @@ fn chunk_base64(
 }
 
 pub fn encode_image(
-    img: &Vec<u8>,
+    img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -100,7 +89,7 @@ pub fn encode_image(
 }
 
 fn process_frame(
-    data: &Vec<u8>,
+    data: &[u8],
     out: &mut impl Write,
     first_opts: HashMap<String, String>,
     sub_opts: HashMap<String, String>,
@@ -113,25 +102,6 @@ fn process_frame(
     chunk_base64(&base64, out, 4096, first_opts, sub_opts)?;
 
     Ok(())
-}
-
-fn setup_signal_handler() -> Arc<AtomicBool> {
-    let shutdown = Arc::new(AtomicBool::new(false));
-
-    // Register signal handlers
-    flag::register(SIGINT, Arc::clone(&shutdown)).unwrap();
-    flag::register(SIGTERM, Arc::clone(&shutdown)).unwrap();
-    #[cfg(windows)]
-    {
-        flag::register(SIGBREAK, Arc::clone(&shutdown)).unwrap();
-    }
-    #[cfg(unix)]
-    {
-        flag::register(SIGHUP, Arc::clone(&shutdown)).unwrap();
-        flag::register(SIGQUIT, Arc::clone(&shutdown)).unwrap();
-    }
-
-    shutdown
 }
 
 pub fn encode_frames(
@@ -177,7 +147,7 @@ pub fn encode_frames(
     let z = 100;
     write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
 
-    let shutdown = setup_signal_handler();
+    let shutdown = term_misc::setup_signal_handler();
 
     for (c, frame) in frames.enumerate() {
         if shutdown.load(Ordering::SeqCst) {

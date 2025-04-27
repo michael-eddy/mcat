@@ -39,7 +39,6 @@ pub struct CatOpts<'a> {
     pub x: Option<i32>,
     pub y: Option<i32>,
     pub style_html: bool,
-    pub raw_html: bool,
     pub center: bool,
 }
 impl CatOpts<'_> {
@@ -54,7 +53,6 @@ impl CatOpts<'_> {
             y: None,
             style: None,
             style_html: false,
-            raw_html: false,
             center: false,
         }
     }
@@ -135,18 +133,18 @@ pub fn cat(
     // converting
     match (from, to) {
         ("md", "html") => {
-            let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None}, opts.raw_html);
+            let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
         },
         ("md", "image") => {
-            let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
+            let html = converter::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
             Ok(CatType::Image)
         },
         ("md", "inline") => {
-            let html = converter::md_to_html(&string_result.unwrap(), opts.style, opts.raw_html);
+            let html = converter::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);

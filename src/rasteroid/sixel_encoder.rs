@@ -9,7 +9,7 @@ use std::{
 const SIXEL_MIN: u8 = 0x3f; // '?'
 
 pub fn encode_image(
-    img: &Vec<u8>,
+    img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {

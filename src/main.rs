@@ -71,13 +71,6 @@ fn main() {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
-            Arg::new("raw")
-                .long("raw")
-                .short('r')
-                .help("allows raw html to run (put only on your content)")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
             Arg::new("inline")
                 .short('i')
                 .help("shortcut for putting --output inline")
@@ -106,7 +99,6 @@ fn main() {
     let output = opts.get_one::<String>("output");
     let style = opts.get_one::<String>("theme").unwrap();
     let style_html = *opts.get_one::<bool>("style-html").unwrap();
-    let raw_html = *opts.get_one::<bool>("raw").unwrap();
     let hori = *opts.get_one::<bool>("horizontal").unwrap();
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default());
@@ -151,7 +143,6 @@ fn main() {
         encoder: Some(encoder),
         style: Some(style),
         style_html,
-        raw_html,
     };
 
     let mut tmp_files = Vec::new(); //for lifetime

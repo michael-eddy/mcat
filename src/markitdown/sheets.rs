@@ -32,7 +32,7 @@ pub fn sheets_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>>
     let mut workbook = calamine::open_workbook_auto(path)?;
     let mut output = String::new();
 
-    for sheet_name in workbook.sheet_names().to_owned() {
+    for sheet_name in workbook.sheet_names() {
         if let Ok(range) = workbook.worksheet_range(&sheet_name) {
             let mut rows = range.rows();
             if let Some(header_row) = rows.next() {
