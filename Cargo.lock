@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "mcat"
-version = "0.1.5"
+version = "0.1.51"
 dependencies = [
  "base64",
  "calamine",
