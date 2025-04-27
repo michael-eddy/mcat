@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose};
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
 use ffmpeg_sidecar::{command::FfmpegCommand, event::OutputVideoFrame};
-use futures::stream::StreamExt;
+use futures::{lock::Mutex, stream::StreamExt};
 use image::{DynamicImage, ImageBuffer, Rgba};
 use resvg::{
     tiny_skia,
@@ -11,14 +11,16 @@ use std::{
     error, fs,
     io::Read,
     path::{Path, PathBuf},
+    sync::{Arc, atomic::Ordering},
 };
+use tokio::sync::oneshot;
 
 use comrak::{
     ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins, plugins::syntect::SyntectAdapter,
 };
 use std::io::Write;
 
-use crate::rasteroid::{self};
+use crate::rasteroid::{self, term_misc};
 
 pub fn image_to_base64(img: &[u8]) -> String {
     general_purpose::STANDARD.encode(img)
@@ -128,14 +130,45 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
                     .build()?
             }
         };
+
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        let shutdown = term_misc::setup_signal_handler();
+
         let (browser, mut handler) = Browser::launch(config).await.map_err(|e| format!("failed to launch chromium\neiter you need to kill chrome/edge process or\nremove: {} and rerun. or install chrome\noriginal error: {}", get_chromium_install_path().display(), e))?;
-        tokio::spawn(async move { while let Some(_) = handler.next().await {} });
+        let browser_arc = Arc::new(Mutex::new(browser));
+        let signal_browser = browser_arc.clone();
 
-        let page = browser.new_page(data_uri).await?;
+        // freeing the browser when process is killed, to avoid zombie process
+        tokio::spawn(async move {
+            loop {
+                if shutdown.load(Ordering::SeqCst) {
+                    if !cancel_tx.is_closed() {
+                        let _ = cancel_tx.send(true);
+                        let mut browser = signal_browser.lock().await;
+                        let _ = browser.close().await;
+                        let _ = browser.wait().await;
+                        std::process::exit(1);
+                    }
+                };
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        });
+        // main function
+        tokio::spawn(async move { while handler.next().await.is_some() {} });
 
-        let mut prms = chromiumoxide::page::ScreenshotParams::default();
-        prms.full_page = Some(true);
-        prms.omit_background = Some(true);
+        let data_uri = data_uri.to_string();
+        let page = tokio::spawn(async move {
+            tokio::select! {
+                result = async {
+                    let browser = browser_arc.lock().await;
+                    browser.new_page(data_uri).await
+                } => Some(result),
+                _ = cancel_rx => None
+            }
+        }).await?;
+        let page = page.ok_or("Canceled")??;
+
+        let prms = chromiumoxide::page::ScreenshotParams::builder().full_page(true).omit_background(true).build();
         let screenshot = page.screenshot(prms).await?;
 
         Ok(screenshot)

@@ -1,3 +1,8 @@
+## V0.1.6 (not released)
+* fixed issue with zombie process of chromium
+* removed the --raw flag (chromium sandbox should suffice)
+* added option to not wait for videos / images when taking a screenshot
+
 ## V0.1.5
 * now says when a path doesn't exists instead of saying Failed Reading
 * adding zoom, x, y in the inline-options (--inline-options "")
