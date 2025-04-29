@@ -48,6 +48,9 @@ or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/l
 # View a document as Markdown
 mcat resume.pdf
 
+# View a document as pretty text in the terminal
+mcat resume.pdf -p
+
 # Or HTML
 mcat project.docx -o html
 

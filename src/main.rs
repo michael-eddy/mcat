@@ -39,7 +39,7 @@ fn main() {
             Arg::new("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md", "image", "video", "inline"]),
+                .value_parser(["html", "md", "pretty", "image", "video", "inline"]),
         )
         .arg(
             Arg::new("theme")
@@ -75,6 +75,12 @@ fn main() {
             Arg::new("inline")
                 .short('i')
                 .help("shortcut for putting --output inline")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("pretty")
+                .short('p')
+                .help("shortcut for putting --output pretty")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -145,8 +151,11 @@ fn main() {
     let style: &str = if makurai { "makurai" } else { style };
 
     let inline = opts.get_flag("inline");
+    let pretty = opts.get_flag("pretty");
     let output: Option<&str> = if inline {
         Some("inline")
+    } else if pretty {
+        Some("pretty")
     } else {
         match output {
             Some(o) => Some(o.as_ref()),

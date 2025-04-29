@@ -5,6 +5,7 @@ use std::{
 };
 
 use image::{DynamicImage, ImageFormat};
+use termimad::{FmtText, MadSkin, crossterm::style::Color};
 
 use crate::{
     converter::{self},
@@ -14,6 +15,7 @@ use crate::{
 
 pub enum CatType {
     Markdown,
+    Pretty,
     Html,
     Image,
     Video,
@@ -136,6 +138,21 @@ pub fn cat(
             let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
+        },
+        ("md", "pretty") => {
+            let res = string_result.unwrap();
+            let mut skin = MadSkin::default();
+            skin.set_headers_fg(Color::Green);
+            skin.bold.set_fg(Color::Yellow);
+            skin.italic.set_fg(Color::Magenta);
+            skin.inline_code.set_fg(Color::Blue);
+            skin.strikeout.set_fg(Color::Red);
+            skin.code_block.set_fg(Color::White);
+            skin.table.set_fg(Color::Cyan);
+
+            let fmt_text = FmtText::from(&skin, &res, None);
+            write!(out, "{}", &fmt_text)?;
+            Ok(CatType::Pretty)
         },
         ("md", "image") => {
             let html = converter::md_to_html(&string_result.unwrap(), opts.style);

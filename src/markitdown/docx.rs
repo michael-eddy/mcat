@@ -128,7 +128,7 @@ pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
             Ok(Event::Text(e)) => {
                 let mut text = e.unescape()?.into_owned();
                 if styles.bold {
-                    text = format!("__{}__ ", text.trim());
+                    text = format!("**{}** ", text.trim());
                     styles.bold = false;
                 }
                 if styles.underline {
@@ -140,7 +140,7 @@ pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     styles.strike = false;
                 }
                 if styles.italics {
-                    text = format!("_{}_ ", text.trim());
+                    text = format!("*{}* ", text.trim());
                     styles.italics = false;
                 }
 

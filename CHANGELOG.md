@@ -1,5 +1,6 @@
 ## V0.1.52
 * auto download is now an option through the flags --fetch-chormium, --fetch--ffmpeg. and also adding --fetch-clean to remove after them.
+* added a --output pretty and -p for printing markdown as pretty text in the terminal
 
 ## V0.1.51
 * fixed issue with zombie process of chromium
