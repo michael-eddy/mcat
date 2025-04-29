@@ -1,3 +1,6 @@
+## V0.1.52
+* auto download is now an option through the flags --fetch-chormium, --fetch--ffmpeg. and also adding --fetch-clean to remove after them.
+
 ## V0.1.51
 * fixed issue with zombie process of chromium
 * removed the --raw flag (chromium sandbox should suffice)

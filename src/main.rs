@@ -1,6 +1,7 @@
 mod catter;
 mod concater;
 mod converter;
+mod fetch_manager;
 mod markitdown;
 mod prompter;
 mod rasteroid;
@@ -33,7 +34,7 @@ fn main() {
                 .header(AnsiColor::Green.on_default().bold())
                 .literal(AnsiColor::Blue.on_default()),
         )
-        .arg(Arg::new("input").index(1).num_args(1..).help("file / dir").required(true))
+        .arg(Arg::new("input").index(1).num_args(1..).help("file / dir").required_unless_present_any(["fetch-clean", "fetch-chromium", "fetch-ffmpeg"]))
         .arg(
             Arg::new("output")
                 .short('o')
@@ -92,13 +93,44 @@ fn main() {
                 .long("inline-options")
                 .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
         )
+        .arg(
+            Arg::new("fetch-chromium")
+                .long("fetch-chromium")
+                .help("download and prepare chromium")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("fetch-ffmpeg")
+                .long("fetch-ffmpeg")
+                .help("download and prepare ffmpeg")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("fetch-clean")
+                .long("fetch-clean")
+                .help("Clean up the local binaries")
+                .action(clap::ArgAction::SetTrue))
         .get_matches();
+
+    //subcommand
+    if opts.get_flag("fetch-chromium") {
+        fetch_manager::fetch_chromium().unwrap_or_exit();
+        return;
+    }
+    if opts.get_flag("fetch-ffmpeg") {
+        fetch_manager::fetch_ffmpeg().unwrap_or_exit();
+        return;
+    }
+    if opts.get_flag("fetch-clean") {
+        fetch_manager::clean().unwrap_or_exit();
+        return;
+    }
 
     // main
     let input: Vec<String> = opts.get_many::<String>("input").unwrap().cloned().collect();
     let output = opts.get_one::<String>("output");
     let style = opts.get_one::<String>("theme").unwrap();
-    let style_html = *opts.get_one::<bool>("style-html").unwrap();
+    let style_html = opts.get_flag("style-html");
     let hori = *opts.get_one::<bool>("horizontal").unwrap();
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default());
@@ -109,10 +141,10 @@ fn main() {
     );
 
     // shortcuts
-    let makurai = *opts.get_one::<bool>("makurai-theme").unwrap();
+    let makurai = opts.get_flag("makurai-theme");
     let style: &str = if makurai { "makurai" } else { style };
 
-    let inline = *opts.get_one::<bool>("inline").unwrap();
+    let inline = opts.get_flag("inline");
     let output: Option<&str> = if inline {
         Some("inline")
     } else {
@@ -123,9 +155,9 @@ fn main() {
     };
 
     // encoders
-    let kitty = *opts.get_one::<bool>("kitty").unwrap();
-    let iterm = *opts.get_one::<bool>("iterm").unwrap();
-    let sixel = *opts.get_one::<bool>("sixel").unwrap();
+    let kitty = opts.get_flag("kitty");
+    let iterm = opts.get_flag("iterm");
+    let sixel = opts.get_flag("sixel");
     let encoder = EncoderForce {
         kitty,
         iterm,

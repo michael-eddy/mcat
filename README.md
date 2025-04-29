@@ -101,18 +101,18 @@ mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 ## 🛐 Dependencies
 Mcat tries to have as little dependencies as possible.
 #### chromium (for rendering HTML to image):
-1. exists on every windows machine through msedge.
-2. auto installs the binaries if missing
+1. exists on every windows machine through msedge. and other machines that have chrome/msedge/chromium
+2. can be installed by doing `mcat --fetch-chormium`
 #### ffmpeg (for videos)
-1. auto installs binaries if missing
+1. can be installed by doing `mcat --fetch-ffmpeg`
 
 ## 🆘 Help
 ```txt
 mcat --help
-Usage: mcat.exe [OPTIONS] <input>...
+Usage: mcat [OPTIONS] [input]...
 
 Arguments:
-  <input>...  file / dir
+  [input]...  file / dir
 
 Options:
   -o <output>                            the format to output [possible values: html, md, image, video, inline]
@@ -131,10 +131,13 @@ Options:
                                          *  scale=<f32>
                                          *  spx=<string>
                                          *  sc=<string>
-                                         *  zoom=<usize> [doesn't work yet]
-                                         *  x=<int> [doesn't work yet]
-                                         *  y=<int> [doesn't work yet]
+                                         *  zoom=<usize> [only for images]
+                                         *  x=<int> [only for images]
+                                         *  y=<int> [only for images]
                                          *  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
+      --fetch-chromium                   download and prepare chromium
+      --fetch-ffmpeg                     download and prepare ffmpeg
+      --fetch-clean                      Clean up the local binaries
   -h, --help                             Print help
   -V, --version                          Print version
 ```

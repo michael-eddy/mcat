@@ -1,6 +1,6 @@
 use base64::{Engine, engine::general_purpose};
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
-use ffmpeg_sidecar::{command::FfmpegCommand, event::OutputVideoFrame};
+use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
 use image::{DynamicImage, ImageBuffer, Rgba};
 use resvg::{
@@ -10,7 +10,7 @@ use resvg::{
 use std::{
     error, fs,
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{Arc, atomic::Ordering},
 };
 use tokio::sync::oneshot;
@@ -20,7 +20,10 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::rasteroid::{self, term_misc};
+use crate::{
+    fetch_manager,
+    rasteroid::{self, term_misc},
+};
 
 pub fn image_to_base64(img: &[u8]) -> String {
     general_purpose::STANDARD.encode(img)
@@ -88,19 +91,6 @@ pub fn svg_to_image(
     Ok(DynamicImage::ImageRgba8(image_buffer))
 }
 
-fn get_chromium_install_path() -> PathBuf {
-    let base_dir = dirs::cache_dir()
-        .or_else(dirs::data_dir)
-        .unwrap_or_else(std::env::temp_dir);
-
-    let p = base_dir.join("chromiumoxide").join("chromium");
-    if !p.exists() {
-        eprintln!("couldn't find chromium installed, trying to install.. it may take a little.");
-        let _ = fs::create_dir_all(p.clone());
-    }
-    p
-}
-
 pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let encoded_html = urlencoding::encode(html);
     let data_uri = format!("data:text/html;charset=utf-8,{}", encoded_html);
@@ -108,6 +98,7 @@ pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> 
 
     Ok(data)
 }
+
 fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -117,24 +108,31 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
         let config = match BrowserConfig::builder().new_headless_mode().build() {
             Ok(c) => c,
             Err(_) => {
-                let download_path = get_chromium_install_path();
-                let fetcher = BrowserFetcher::new(
-                    BrowserFetcherOptions::builder()
-                        .with_path(&download_path)
-                        .build()?,
-                );
-                let info = fetcher.fetch().await?;
-                BrowserConfig::builder()
-                    .chrome_executable(info.executable_path)
-                    .new_headless_mode()
-                    .build()?
+                let cache_path = fetch_manager::get_cache_path();
+                let download_path = cache_path.join("chromium");
+                if download_path.join("installed.txt").exists() {
+                    let fetcher = BrowserFetcher::new(
+                        BrowserFetcherOptions::builder()
+                            .with_path(&download_path)
+                            .build()?,
+                    );
+                    let info = fetcher.fetch().await?;
+                    BrowserConfig::builder()
+                        .chrome_executable(info.executable_path)
+                        .new_headless_mode()
+                        .build()?
+                } else {
+                    return Err("chromium isn't installed. either install it manually (chrome/msedge will do so too) or call `mcat --fetch-chromium`".into())
+                }
             }
         };
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let shutdown = term_misc::setup_signal_handler();
 
-        let (browser, mut handler) = Browser::launch(config).await.map_err(|e| format!("failed to launch chromium\neiter you need to kill chrome/edge process or\nremove: {} and rerun. or install chrome\noriginal error: {}", get_chromium_install_path().display(), e))?;
+        let (browser, mut handler) = Browser::launch(config)
+            .await
+            .map_err(|e| format!("failed to launch chromium\noriginal error: {}", e))?;
         let browser_arc = Arc::new(Mutex::new(browser));
         let signal_browser = browser_arc.clone();
 
@@ -165,10 +163,14 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
                 } => Some(result),
                 _ = cancel_rx => None
             }
-        }).await?;
+        })
+        .await?;
         let page = page.ok_or("Canceled")??;
 
-        let prms = chromiumoxide::page::ScreenshotParams::builder().full_page(true).omit_background(true).build();
+        let prms = chromiumoxide::page::ScreenshotParams::builder()
+            .full_page(true)
+            .omit_background(true)
+            .build();
         let screenshot = page.screenshot(prms).await?;
 
         Ok(screenshot)
@@ -262,12 +264,15 @@ fn video_to_gif(input: impl AsRef<str>) -> Result<Vec<u8>, Box<dyn error::Error>
         let bytes = fs::read(path)?;
         return Ok(bytes);
     }
-    if !ffmpeg_sidecar::command::ffmpeg_is_installed() {
-        eprintln!("ffmpeg isn't installed, installing.. it may take a little");
-        ffmpeg_sidecar::download::auto_download()?;
-    }
 
-    let mut command = FfmpegCommand::new();
+    let mut command =
+        match fetch_manager::get_ffmpeg() {
+            Some(c) => c,
+            None => return Err(
+                "ffmpeg isn't installed. either install it manually, or call `mcat --fetch-ffmpeg`"
+                    .into(),
+            ),
+        };
     command
         .hwaccel("auto")
         .input(input)
@@ -296,7 +301,14 @@ fn video_to_frames(
         ffmpeg_sidecar::download::auto_download()?;
     }
 
-    let mut command = FfmpegCommand::new();
+    let mut command =
+        match fetch_manager::get_ffmpeg() {
+            Some(c) => c,
+            None => return Err(
+                "ffmpeg isn't installed. either install it manually, or call `mcat --fetch-ffmpeg`"
+                    .into(),
+            ),
+        };
     command.hwaccel("auto").input(input).rawvideo();
 
     let mut child = command.spawn()?;
