@@ -19,6 +19,7 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
             })
             .collect();
         let mut current_encoding = None;
+        let mut pre_height = 0.0;
         let operations = lopdf::content::Content::decode(&page)?;
         for op in operations.operations {
             match op.operator.as_ref() {
@@ -30,20 +31,13 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     eprintln!("TJ: '{text}'");
                 }
                 "BT" => {} //start of text
-                "ET" => {
-                    eprintln!(
-                        "new line:----------------------------------------------------------------------------------------------------"
-                    );
-                    eprintln!("{}", result.get(1..).unwrap());
-                    result.push_str("\n");
-                } //end of text
-                "Q" => {}  //restore graphic state (pop the stack)
-                "q" => {}  //save graphic state (insert to stack)
+                "ET" => {} //end of text
                 "Tm" => {
                     //Tm: [150, 0, 0, 150, 0, 0]
                     //     six, x, y, siy, x, y
                 }
                 "Tf" => {
+                    // when it says symbol. likely a list item (worth looking out for)
                     let font_alias = op
                         .operands
                         .first()
@@ -60,11 +54,46 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     eprintln!("Tf: {:?}, {:?}", font, font_desc_id);
                     // eprintln!("Font Desc Obj: {:?}", font_desc_obj);
                 } //fonts, very imp
-                "Td" => {}                   //may be indent (list items)
-                "f*" | "S" | "l" | "w" => {} //may help finding underline / strikethrough
-                "h" => {}                    //maybe can give highlights??
-                "sc" | "cs" | "W" | "n" | "re" | "Tc" | "W*" | "rg" | "J" | "j" | "m" | "Do"
-                | "cm" | "RG" => {} //colors, and shapes, spacing not imp
+                "Td" => {
+                    let height = op
+                        .operands
+                        .get(1)
+                        .ok_or("failed to get height from matrix")?
+                        .as_float()?;
+                    if height != pre_height {
+                        eprintln!(
+                            "new line:----------------------------------------------------------------------------------------------------"
+                        );
+                        result.push_str("\n");
+                        pre_height = height
+                    }
+                }
+                "cm" => {
+                    let height = op
+                        .operands
+                        .get(5)
+                        .ok_or("failed to get height from matrix")?
+                        .as_float()?;
+                    if height != pre_height {
+                        eprintln!(
+                            "new line:----------------------------------------------------------------------------------------------------"
+                        );
+                        result.push_str("\n");
+                        pre_height = height
+                    }
+                }
+                "l" => {
+                    // [x, y]
+                    // store those in unique within 3 standard div
+                    // by that, figure out how many rows / columns are there.
+                    // create bounds from min max of x and y: minx maxxm miny maxy
+                    // later append those text into a 2d list, go to new line when reaching x
+                    // limit, stop appending when text is out of bounds
+                }
+                "f*" | "S" | "w" => {} //may help finding underline / strikethrough
+                "h" => {}              //maybe can give highlights??
+                "sc" | "re" | "cs" | "W" | "n" | "Tc" | "W*" | "rg" | "J" | "j" | "m" | "Do"
+                | "q" | "Q" | "RG" => {} //colors, and shapes, spacing not imp
                 _ => {
                     eprintln!("didn't handle: {}", op.operator)
                 }
