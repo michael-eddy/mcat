@@ -7,6 +7,118 @@ use std::io::Write;
 
 use crate::catter;
 
+fn extension_from_mime(mime: &str) -> Option<&'static str> {
+    if mime.contains("image/avif") {
+        Some("avif")
+    } else if mime.contains("image/jpeg") {
+        Some("jpg")
+    } else if mime.contains("image/png") {
+        Some("png")
+    } else if mime.contains("image/apng") {
+        Some("apng")
+    } else if mime.contains("image/gif") {
+        Some("gif")
+    } else if mime.contains("image/webp") {
+        Some("webp")
+    } else if mime.contains("image/tiff") {
+        Some("tiff")
+    } else if mime.contains("image/x-tga") {
+        Some("tga")
+    } else if mime.contains("image/vnd.ms-dds") {
+        Some("dds")
+    } else if mime.contains("image/bmp") {
+        Some("bmp")
+    } else if mime.contains("image/x-icon") || mime.contains("image/vnd.microsoft.icon") {
+        Some("ico")
+    } else if mime.contains("image/vnd.radiance") {
+        Some("hdr")
+    } else if mime.contains("image/aces") || mime.contains("image/exr") {
+        Some("exr")
+    } else if mime.contains("image/x-portable-bitmap") {
+        Some("pbm")
+    } else if mime.contains("image/x-portable-graymap") {
+        Some("pgm")
+    } else if mime.contains("image/x-portable-pixmap") {
+        Some("ppm")
+    } else if mime.contains("image/x-portable-anymap") {
+        Some("pam")
+    } else if mime.contains("image/x-farbfeld") {
+        Some("ff")
+    } else if mime.contains("image/x-qoi") {
+        Some("qoi")
+    } else if mime.contains("image/x-pcx") {
+        Some("pcx")
+    } else if mime.contains("image/svg+xml") {
+        Some("svg")
+
+    // Video
+    } else if mime.contains("video/mp4") {
+        Some("mp4")
+    } else if mime.contains("video/webm") {
+        Some("webm")
+    } else if mime.contains("video/x-msvideo") {
+        Some("avi")
+    } else if mime.contains("video/x-matroska") {
+        Some("mkv")
+    } else if mime.contains("video/quicktime") {
+        Some("mov")
+
+    // Documents
+    } else if mime.contains("application/pdf") {
+        Some("pdf")
+    } else if mime.contains("text/markdown") || mime.contains("text/x-markdown") {
+        Some("md")
+    } else if mime.contains("application/msword") {
+        Some("doc")
+    } else if mime
+        .contains("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    {
+        Some("docx")
+    } else if mime.contains("application/vnd.oasis.opendocument.text") {
+        Some("odt")
+    } else if mime.contains("application/vnd.ms-excel") {
+        Some("xls")
+    } else if mime.contains("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+        Some("xlsx")
+    } else if mime.contains("application/vnd.ms-excel.sheet.macroenabled.12") {
+        Some("xlsm")
+    } else if mime.contains("application/vnd.ms-excel.sheet.binary.macroenabled.12") {
+        Some("xlsb")
+    } else if mime.contains("application/vnd.ms-excel.addin.macroenabled.12") {
+        Some("xlam")
+    } else if mime.contains("application/vnd.ms-excel.addin") {
+        Some("xla")
+    } else if mime.contains("application/vnd.oasis.opendocument.spreadsheet") {
+        Some("ods")
+    } else if mime.contains("application/vnd.ms-powerpoint") {
+        Some("ppt")
+    } else if mime
+        .contains("application/vnd.openxmlformats-officedocument.presentationml.presentation")
+    {
+        Some("pptx")
+    } else if mime.contains("application/vnd.oasis.opendocument.presentation") {
+        Some("odp")
+    } else if mime.contains("text/csv") || mime.contains("application/csv") {
+        Some("csv")
+
+    // Archives
+    } else if mime.contains("application/zip") {
+        Some("zip")
+    } else if mime.contains("application/x-rar-compressed") {
+        Some("rar")
+    } else if mime.contains("application/x-7z-compressed") {
+        Some("7z")
+    } else if mime.contains("application/x-tar") {
+        Some("tar")
+    } else if mime.contains("application/gzip") {
+        Some("gz")
+    } else if mime.contains("application/x-bzip2") {
+        Some("bz2")
+    } else {
+        None
+    }
+}
+
 pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
@@ -26,15 +138,17 @@ pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::err
             .get("Content-Type")
             .and_then(|h| h.to_str().ok());
 
+        // by mime
         if let Some(ct) = content_type {
-            if ct.contains("image/svg+xml") {
-                let svg_bytes = response.bytes().await?;
-                let mut tmp_file = NamedTempFile::with_suffix(".svg")?;
-                tmp_file.write_all(&svg_bytes)?;
+            if let Some(ext) = extension_from_mime(ct) {
+                let file_bytes = response.bytes().await?;
+                let mut tmp_file = NamedTempFile::with_suffix(&format!(".{}", ext))?;
+                tmp_file.write_all(&file_bytes)?;
                 return Ok(tmp_file);
             }
         }
 
+        // search for something inside the html.
         let html_content = response.text().await?;
         let html_size = html_content.len();
         let document = Html::parse_document(&html_content);

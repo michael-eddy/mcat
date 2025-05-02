@@ -76,7 +76,10 @@ fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         let temp_path = temp.path().to_path_buf(); // clone path before move
 
         // convert using original convert function
-        let md = convert(&temp_path, None).unwrap_or("**[Failed Reading]**".into());
+        let md = match convert(&temp_path, None) {
+            Ok(result) => result,
+            Err(err) => format!("**[Failed Reading: {}]**", err),
+        };
         output += &format!("# `{}`\n\n{}\n\n", name, md);
     }
 

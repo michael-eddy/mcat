@@ -1,5 +1,5 @@
 use core::str;
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, mem::take, path::Path};
 
 use lopdf::{Dictionary, Document, Encoding, Object};
 
@@ -453,6 +453,30 @@ impl StyledText {
     }
 }
 
+fn compute_pdf_position(
+    cm: Option<Vec<f32>>,
+    tm: Option<Vec<f32>>,
+    td: Option<Vec<f32>>,
+) -> (f32, f32) {
+    if let Some(td) = td {
+        return (td[0], td[1]);
+    }
+    let cm = cm.unwrap_or(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+    let tm = tm.unwrap_or(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
+
+    let rel_x = tm[4];
+    let rel_y = tm[5];
+    let x_scale = cm[0];
+    let y_scale = cm[3];
+    let x_origin = cm[4];
+    let y_origin = cm[5];
+
+    let final_x = rel_x * x_scale + x_origin;
+    let final_y = rel_y * y_scale + y_origin;
+
+    (final_x, final_y)
+}
+
 pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let doc = lopdf::Document::load(path)?;
     let mut result = String::new();
@@ -474,6 +498,9 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         let mut current_encoding = None;
         let mut styled_text = StyledText::new();
         let mut text_list: Vec<StyledText> = Vec::new();
+        let mut cm = None;
+        let mut tm = None;
+        let mut td = None;
         let operations = lopdf::content::Content::decode(&page)?;
         for op in operations.operations {
             match op.operator.as_ref() {
@@ -482,6 +509,9 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                         current_encoding.expect("text didn't contain font encoding. Invalid pdf");
                     let text = extract_text_from_objs(&op.operands, encoding);
                     styled_text.text = Some(text);
+                    let (x, y) = compute_pdf_position(take(&mut cm), take(&mut tm), take(&mut td));
+                    styled_text.x = x;
+                    styled_text.y = y;
                     text_list.push(styled_text.clone());
                     styled_text = StyledText::new();
                 }
@@ -506,14 +536,7 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                         .operands
                         .get(..6)
                         .ok_or("failed to position for text in pdf")?;
-                    let x = items[4].as_float()?;
-                    let y = items[5].as_float()?;
-                    if x != 0.0 {
-                        styled_text.x = x;
-                    }
-                    if y != 0.0 {
-                        styled_text.y = y;
-                    }
+                    tm = Some(items.iter().map(|f| f.as_float().unwrap()).collect());
                     styled_text.italic = items[1].as_float()? != 0.0 || items[2].as_float()? != 0.0
                 }
                 "Td" => {
@@ -521,28 +544,14 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                         .operands
                         .get(..2)
                         .ok_or("failed to position for text in pdf")?;
-                    let x = items[0].as_float()?;
-                    let y = items[1].as_float()?;
-                    if x != 0.0 {
-                        styled_text.x = x;
-                    }
-                    if y != 0.0 {
-                        styled_text.y = y;
-                    }
+                    td = Some(items.iter().map(|f| f.as_float().unwrap()).collect());
                 }
                 "cm" => {
                     let items = op
                         .operands
-                        .get(4..6)
+                        .get(..6)
                         .ok_or("failed to position for text in pdf")?;
-                    let x = items[0].as_float()?;
-                    let y = items[1].as_float()?;
-                    if x != 0.0 {
-                        styled_text.x = x;
-                    }
-                    if y != 0.0 {
-                        styled_text.y = y;
-                    }
+                    cm = Some(items.iter().map(|f| f.as_float().unwrap()).collect());
                 }
                 "l" => {
                     let items = op
@@ -556,20 +565,18 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     styled_text = StyledText::new();
                 }
                 "sc" | "rg" => {
-                    let items = op
-                        .operands
-                        .get(..3)
-                        .ok_or("failed to get color from color operand in pdf")?;
-                    let r = items[0].as_float()?;
-                    let g = items[1].as_float()?;
-                    let b = items[2].as_float()?;
-                    if r != 0.0 || g != 0.0 || b != 0.0 {
-                        let color = rgb_to_hex(
-                            items[0].as_float()?,
-                            items[1].as_float()?,
-                            items[2].as_float()?,
-                        );
-                        styled_text.color = Some(color);
+                    if let Some(items) = op.operands.get(..3) {
+                        let r = items[0].as_float()?;
+                        let g = items[1].as_float()?;
+                        let b = items[2].as_float()?;
+                        if r != 0.0 || g != 0.0 || b != 0.0 {
+                            let color = rgb_to_hex(
+                                items[0].as_float()?,
+                                items[1].as_float()?,
+                                items[2].as_float()?,
+                            );
+                            styled_text.color = Some(color);
+                        }
                     }
                 }
                 "SC" | "RG" => {

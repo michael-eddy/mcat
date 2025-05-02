@@ -9,11 +9,11 @@ use crate::{catter, converter, markitdown};
 pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
     let mut markdown = String::new();
     for (path, name) in paths {
-        if let Ok(md) = markitdown::convert(path, name.as_ref()) {
-            markdown.push_str(&format!("{}\n\n", md));
-        } else {
-            markdown.push_str("**[Failed Reading]**\n\n");
-        }
+        let md = match markitdown::convert(path, name.as_ref()) {
+            Ok(md) => md,
+            Err(err) => format!("**[Failed Reading: {}]**", err),
+        };
+        markdown.push_str(&format!("{}\n\n", md));
     }
 
     let mut tmp_file = NamedTempFile::with_suffix(".md").expect("failed to create tmp file");
