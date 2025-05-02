@@ -1,6 +1,6 @@
 <div align="center">
   
-<img src="https://github.com/user-attachments/assets/d6dddc88-2f75-44c3-9b1d-04ea5651c35d" width="256"/>
+<img src="https://i.imgur.com/qSSM6Iy.png" width="256"/>
 
 
 # Mcat
@@ -21,8 +21,8 @@
 * 🖼️ **Inline Image/Videos**  
   Display images/videos *inside* your terminal using protocols like Kitty, iTerm, or Sixel.
   
-* 🌐 **URL to Inline Image/Video**  
-  View Images/Videos from a URL in your terminal
+* 🌐 **Handles URL too!**  
+  View Images/Videos/Document from a URL in your terminal (or save them)
 
 * 🔗 **Concatenate Images and Video too!**  
   Concatenate videos of the same format (time concat)
@@ -51,6 +51,9 @@ mcat resume.pdf
 # View a document as pretty text in the terminal
 mcat resume.pdf -p
 
+# Or from a url!
+mcat "https://somewebite.com/file.pdf"
+
 # Or HTML
 mcat project.docx -o html
 
@@ -76,6 +79,9 @@ mcat "https://giphy.com/gifs/..."
 # Images too!
 mcat "https://website/images/..."
 
+# From stdin?
+mcat < somefile.png
+
 # Concatenate documents and turn them into an image
 mcat document.docx presentation.odt table.xlsx archive.zip -o image > all.png
 
@@ -97,9 +103,10 @@ mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 | Input Type | Output Options |
 |---|---|
 | DOCX, PDF, CSV, ODT, PPTX, and more.. | Markdown, HTML, Image, Inline |
+| Markdown | Pretty terminal formatting |
 | Markdown / HTML | Image, Inline Image |
 | Images, Videos | Inline Display |
-| URLs | Image/Video Fetch + Inline View |
+| URLs | Fetch + Everything above! |
 
 ## 🛐 Dependencies
 Mcat tries to have as little dependencies as possible.
@@ -107,24 +114,26 @@ Mcat tries to have as little dependencies as possible.
 1. exists on every windows machine through msedge. and other machines that have chrome/msedge/chromium
 2. can be installed by doing `mcat --fetch-chormium`
 #### ffmpeg (for videos)
-1. can be installed by doing `mcat --fetch-ffmpeg`
+1. if you're machine has it 🫠.
+2. can be installed by doing `mcat --fetch-ffmpeg`
 
 ## 🆘 Help
 ```txt
 mcat --help
-Usage: mcat [OPTIONS] [input]...
+Usage: mcat.exe [OPTIONS] [input]...
 
 Arguments:
-  [input]...  file / dir
+  [input]...  file / dir / url
 
 Options:
-  -o <output>                            the format to output [possible values: html, md, image, video, inline]
+  -o <output>                            the format to output [possible values: html, md, pretty, image, video, inline]
   -t <theme>                             alternative css file for images, valid options: [default, makurai, <local file>] [default: default]
   -s                                     add style to html too (when html is the output)
       --kitty                            makes the inline image encoded to kitty
       --iterm                            makes the inline image encoded to iterm
       --sixel                            makes the inline image encoded to sixel
   -i                                     shortcut for putting --output inline
+  -p                                     shortcut for putting --output pretty
   -m                                     shortcut for putting --theme makurai
       --hori                             concat images horizontal instead of vertical
       --inline-options <inline-options>  options for the --output inline

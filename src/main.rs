@@ -2,6 +2,7 @@ mod catter;
 mod concater;
 mod converter;
 mod fetch_manager;
+mod interpolator;
 mod markitdown;
 mod prompter;
 mod rasteroid;
@@ -9,7 +10,7 @@ mod scrapy;
 
 use std::{
     collections::HashMap,
-    io::{BufWriter, Write},
+    io::{BufWriter, Read, Write},
     path::Path,
 };
 
@@ -21,9 +22,22 @@ use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
 };
+use crossterm::tty::IsTty;
 use rasteroid::term_misc;
 
 fn main() {
+    let stdin_steamed = !std::io::stdin().is_tty();
+    let mut input_arg = Arg::new("input")
+        .index(1)
+        .num_args(1..)
+        .help("file / dir / url");
+    if !stdin_steamed {
+        input_arg = input_arg.required_unless_present_any([
+            "fetch-clean",
+            "fetch-chromium",
+            "fetch-ffmpeg",
+        ]);
+    }
     let opts = Command::new("mcat")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -34,7 +48,7 @@ fn main() {
                 .header(AnsiColor::Green.on_default().bold())
                 .literal(AnsiColor::Blue.on_default()),
         )
-        .arg(Arg::new("input").index(1).num_args(1..).help("file / dir").required_unless_present_any(["fetch-clean", "fetch-chromium", "fetch-ffmpeg"]))
+        .arg(input_arg)
         .arg(
             Arg::new("output")
                 .short('o')
@@ -133,7 +147,11 @@ fn main() {
     }
 
     // main
-    let input: Vec<String> = opts.get_many::<String>("input").unwrap().cloned().collect();
+    let input: Vec<String> = opts
+        .get_many::<String>("input")
+        .unwrap_or_default()
+        .cloned()
+        .collect();
     let output = opts.get_one::<String>("output");
     let style = opts.get_one::<String>("theme").unwrap();
     let style_html = opts.get_flag("style-html");
@@ -189,6 +207,21 @@ fn main() {
     let mut tmp_files = Vec::new(); //for lifetime
     let mut path_bufs = Vec::new();
     let mut base_dir = None;
+    // if stdin is streamed into
+    if stdin_steamed {
+        let mut buffer = Vec::new();
+        std::io::stdin().read_to_end(&mut buffer).unwrap_or_exit();
+
+        let inter = interpolator::InterpolatedBytes::from_bytes(&buffer).unwrap_or_exit();
+        match inter {
+            interpolator::InterpolatedBytes::File(named_temp_file) => {
+                let path = named_temp_file.path().to_path_buf();
+                path_bufs.push(path);
+                tmp_files.push(named_temp_file);
+            }
+            interpolator::InterpolatedBytes::Path(path_buf) => path_bufs.push(path_buf),
+        };
+    }
     for i in input {
         if i.starts_with("https://") {
             if let Ok(tmp) = scrapy::scrape_biggest_media(&i) {

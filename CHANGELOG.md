@@ -1,7 +1,7 @@
-## V0.1.6 (Not released yet)
-- [x] improved the PDF parser.
-- [ ] added codec flag (-c) to enable reading from stdin with specified codec.
-- [x] handles URLs way better now, with more support for mime types. (including documents like PDF, ZIP, et..)
+## V0.1.6
+* improved the PDF parser.
+* now accepts from stdin (interpolates the file type on its own.)
+* handles URLs way better now, with more support for mime types. (including documents like PDF, ZIP, et..)
 
 ## V0.1.52
 * auto download is now an option through the flags --fetch-chormium, --fetch--ffmpeg. and also adding --fetch-clean to remove after them.
