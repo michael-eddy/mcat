@@ -5,7 +5,7 @@ use lopdf::{Dictionary, Document, Encoding, Object};
 
 use crate::markitdown::sheets;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct StyledText {
     x: f32,
     y: f32,
@@ -24,119 +24,172 @@ struct Table {
     items: Vec<StyledText>,
 }
 
+#[derive(Debug)]
+struct TableBoundary {
+    minx: f32,
+    maxx: f32,
+    miny: f32,
+    maxy: f32,
+    text: Option<Vec<StyledText>>,
+}
+
+impl TableBoundary {
+    pub fn get_text(self) -> String {
+        match self.text {
+            Some(mut st) => {
+                st.sort_by(|a, b| b.y.partial_cmp(&a.y).unwrap_or(std::cmp::Ordering::Equal));
+                let result: Vec<String> =
+                    st.iter().map(|item| item.clone().to_markdown()).collect();
+                result.join(" ")
+            }
+            None => "".to_string(),
+        }
+    }
+
+    pub fn assign(&mut self, cont: &StyledText) {
+        let x = cont.x + 3.0;
+        let y = cont.y - 3.0;
+        if x > self.minx && x < self.maxx && y < self.maxy && y > self.miny {
+            match self.text.as_mut() {
+                Some(texts) => texts.push(cont.clone()),
+                None => self.text = Some(vec![cont.clone()]),
+            };
+        }
+    }
+
+    pub fn create_boundaries(coords: &[(f32, f32)]) -> Vec<TableBoundary> {
+        let mut xs: Vec<f32> = Vec::new();
+        let mut ys: Vec<f32> = Vec::new();
+        let mut heights: Vec<f32> = coords.iter().map(|f| f.1).collect();
+        let mut table_bondaries: Vec<TableBoundary> = Vec::new();
+        let fair_gap = StyledText::fair_gap(&mut heights);
+
+        // assigning xs (+-3) and ys (+-fair gap)
+        for coord in coords {
+            //xs
+            let mut found_matching_x = false;
+            for x in xs.iter() {
+                if (x - coord.0).abs() < 3.0 {
+                    found_matching_x = true;
+                    break;
+                }
+            }
+            if !found_matching_x {
+                xs.push(coord.0);
+            }
+            //ys
+            let mut found_matching_y = false;
+            for y in ys.iter() {
+                let sub: f32 = y - coord.1;
+                if sub.abs() < fair_gap {
+                    found_matching_y = true;
+                    break;
+                }
+            }
+            if !found_matching_y {
+                ys.push(coord.1);
+            }
+        }
+
+        xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        ys.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        let mut smallest_y = f32::INFINITY;
+        for y_pair in ys.windows(2) {
+            let miny = y_pair[1];
+            let maxy = y_pair[0];
+            if miny < smallest_y {
+                smallest_y = miny;
+            }
+
+            let mut biggest_x = 0.0;
+            for x_pair in xs.windows(2) {
+                let minx = x_pair[0];
+                let maxx = x_pair[1];
+                if maxx > biggest_x {
+                    biggest_x = maxx;
+                }
+
+                table_bondaries.push(TableBoundary {
+                    minx,
+                    maxx,
+                    miny,
+                    maxy,
+                    text: None,
+                });
+            }
+            table_bondaries.push(TableBoundary {
+                minx: biggest_x,
+                maxx: biggest_x * 2.0,
+                miny,
+                maxy,
+                text: None,
+            });
+        }
+        let mut biggest_x = 0.0;
+        for x_pair in xs.windows(2) {
+            let minx = x_pair[0];
+            let maxx = x_pair[1];
+            if maxx > biggest_x {
+                biggest_x = maxx;
+            }
+
+            table_bondaries.push(TableBoundary {
+                minx,
+                maxx,
+                miny: smallest_y - 500.0,
+                maxy: smallest_y,
+                text: None,
+            });
+        }
+        table_bondaries.push(TableBoundary {
+            minx: biggest_x,
+            maxx: biggest_x * 2.0,
+            miny: smallest_y - 500.0,
+            maxy: smallest_y,
+            text: None,
+        });
+
+        table_bondaries
+    }
+}
+
 impl Table {
-    pub fn to_markdown(mut self) -> String {
-        self.items
-            .sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
-
-        let mut gaps = Vec::new();
-        for i in 1..self.items.len() {
-            let gap = self.items[i].y - self.items[i - 1].y;
-            if gap > 0.0 {
-                gaps.push(gap);
-            }
+    pub fn to_markdown(self) -> String {
+        if self.items.is_empty() {
+            return "".to_string();
         }
+        let coords: Vec<(f32, f32)> = self.items.iter().map(|f| (f.x, f.y)).collect();
+        let mut boundaries = TableBoundary::create_boundaries(&coords);
 
-        let median_gap = if !gaps.is_empty() {
-            gaps.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            let mid = gaps.len() / 2;
-            if gaps.len() % 2 == 0 {
-                (gaps[mid - 1] + gaps[mid]) / 2.0
-            } else {
-                gaps[mid]
-            }
-        } else {
-            0.0
-        };
-
-        // Step 2: Group into row clusters (by Y)
-        let mut row_clusters: Vec<Vec<StyledText>> = Vec::new();
         for item in self.items {
-            if let Some(last_row) = row_clusters.last_mut() {
-                let y_avg = last_row.iter().map(|i| i.y).sum::<f32>() / last_row.len() as f32;
-                if (item.y - y_avg).abs() <= 3.0 {
-                    last_row.push(item);
-                    continue;
-                }
-            }
-            row_clusters.push(vec![item]);
-        }
-
-        // Step 3: Discover all global column positions
-        let mut col_x_positions: Vec<f32> = Vec::new();
-        for row in &row_clusters {
-            for item in row {
-                let mut found = false;
-                for x in &mut col_x_positions {
-                    if (item.x - *x).abs() <= 3.0 {
-                        *x = (*x + item.x) / 2.0; // smooth merge
-                        found = true;
-                        break;
-                    }
-                }
-                if !found {
-                    col_x_positions.push(item.x);
-                }
+            for boundary in boundaries.iter_mut() {
+                boundary.assign(&item);
             }
         }
-        col_x_positions.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-        // Step 4: Build matrix
-        let mut matrix: Vec<Vec<Option<StyledText>>> = Vec::new();
-        for mut row in row_clusters {
-            row.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
-
-            let mut row_vec: Vec<Option<StyledText>> = vec![None; col_x_positions.len()];
-
-            for item in row {
-                // Find the closest column index for this x
-                if let Some((col_idx, _)) =
-                    col_x_positions
-                        .iter()
-                        .enumerate()
-                        .min_by(|(_, x1), (_, x2)| {
-                            (item.x - **x1)
-                                .abs()
-                                .partial_cmp(&(item.x - **x2).abs())
-                                .unwrap()
-                        })
-                {
-                    // Optional: merge with previous if gap < median_gap
-                    if let Some(Some(prev)) = row_vec.get_mut(col_idx) {
-                        if (item.x - prev.x).abs() < median_gap {
-                            // Merge text (basic example)
-                            if let (Some(t1), Some(t2)) = (&prev.text, &item.text) {
-                                prev.text = Some(format!("{} {}", t1, t2));
-                            }
-                        } else {
-                            row_vec[col_idx] = Some(item);
-                        }
-                    } else {
-                        row_vec[col_idx] = Some(item);
-                    }
-                }
+        let mut pre_height = 0.0;
+        let mut matrix: Vec<Vec<String>> = Vec::new();
+        let mut current_row: Vec<String> = Vec::new();
+        let mut start = true;
+        for boundary in boundaries {
+            if start {
+                start = false;
+                pre_height = boundary.maxy;
             }
-
-            matrix.push(row_vec);
+            if boundary.maxy < pre_height {
+                pre_height = boundary.maxy;
+                matrix.push(std::mem::take(&mut current_row));
+            }
+            current_row.push(boundary.get_text());
         }
+        matrix.push(current_row);
 
-        let mds: Vec<Vec<String>> = matrix
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|cell| {
-                        if cell.is_some() {
-                            cell.clone().unwrap().to_markdown()
-                        } else {
-                            "".to_string()
-                        }
-                    })
-                    .collect()
-            })
-            .collect();
-        let headers = mds[0].to_vec();
-        let rest = mds[1..].to_vec();
-        sheets::to_markdown_table(&headers, &rest)
+        if matrix.is_empty() {
+            return "".to_string();
+        }
+        let headers = matrix.get(0).unwrap();
+        let rows = matrix.get(1..).unwrap_or_default();
+        sheets::to_markdown_table(&headers, &rows)
     }
 }
 
@@ -187,7 +240,8 @@ impl StyledText {
             } else {
                 // Found a text item
                 if in_table {
-                    let (min_x, max_x, min_y, max_y) = bounding_box.unwrap();
+                    let bbox = bounding_box.unwrap_or_default();
+                    let (min_x, max_x, min_y, max_y) = bbox;
                     let padded_min_x = min_x - 10.0;
                     let padded_max_x = max_x + 10.0;
                     let padded_min_y = min_y - 10.0;
@@ -205,7 +259,6 @@ impl StyledText {
                         // This text is outside the table - finish the current table
                         if !table_items.is_empty() {
                             let mut item = StyledText::new();
-                            let bbox = bounding_box.unwrap();
                             //minx maxx, miny maxy
                             item.x = bbox.1 - ((bbox.1 - bbox.0) / 2.0);
                             item.y = bbox.3 - ((bbox.3 - bbox.2) / 2.0);
@@ -243,23 +296,31 @@ impl StyledText {
             if self.is_spacer {
                 return "".to_string();
             }
-            let mut text = self.text.unwrap();
-            let fd = self.font_descriptor.unwrap();
-            let fd = extract_dict_from_obj(&fd).unwrap();
-            let font_name = fd.get(b"FontName").unwrap().as_name().unwrap();
+
+            // gathering styles but not a must.
+            let mut text = self.text.unwrap_or_default();
             let mut bold = false;
-            if let Ok(font_name) = str::from_utf8(font_name) {
-                let font_name = font_name.to_lowercase();
-                if font_name.contains("bold") {
-                    bold = true;
+            if let Some(fd) = self
+                .font_descriptor
+                .as_ref()
+                .and_then(|fd_obj| extract_dict_from_obj(fd_obj).ok())
+            {
+                if let Ok(font_name) = fd.get(b"FontName").and_then(|f| f.as_name()) {
+                    if let Ok(font_name) = str::from_utf8(font_name) {
+                        let font_name = font_name.to_lowercase();
+                        if font_name.contains("bold") {
+                            bold = true;
+                        }
+                        if font_name.contains("italic") {
+                            self.italic = true;
+                        }
+                    }
                 }
-                if font_name.contains("italic") {
-                    self.italic = true;
+                if let Ok(italic_angle) = fd.get(b"ItalicAngle").and_then(|f| f.as_float()) {
+                    if italic_angle != 0.0 {
+                        self.italic = true;
+                    }
                 }
-            }
-            let italic_angle = fd.get(b"ItalicAngle").unwrap().as_float().unwrap();
-            if italic_angle != 0.0 {
-                self.italic = true;
             }
 
             //format
@@ -283,7 +344,7 @@ impl StyledText {
     }
 
     fn fair_gap(numbers: &mut [f32]) -> f32 {
-        numbers.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        numbers.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let gaps: Vec<f32> = numbers.windows(2).map(|pair| pair[1] - pair[0]).collect();
         if gaps.is_empty() {
@@ -291,7 +352,7 @@ impl StyledText {
         }
 
         let mut sorted_gaps = gaps;
-        sorted_gaps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        sorted_gaps.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let idx = ((sorted_gaps.len() as f32) * 0.8).floor() as usize;
         sorted_gaps[idx.min(sorted_gaps.len() - 1)]
@@ -304,10 +365,13 @@ impl StyledText {
         for i in 0..len {
             let current_row: Vec<StyledText> = items[i].iter().map(|f| (*f).clone()).collect();
             let mut spacer = None;
-            let first = current_row.first().map(|f| f.clone()).unwrap();
+            let first = current_row.first().map(|f| f.clone()).unwrap_or_default();
 
             if i + 1 < len {
                 let next_row = items[i + 1].to_owned();
+                if next_row.is_empty() {
+                    continue;
+                }
                 let next = next_row.first().unwrap();
                 let gap = first.y - next.y;
                 if gap > valid_gap * 1.5 {
@@ -429,8 +493,7 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                         .operands
                         .first()
                         .expect("Syntax Error: Couldn't get font id")
-                        .as_name()
-                        .unwrap();
+                        .as_name()?;
                     current_encoding = encodings.get(font_alias);
                     let font_info = fonts[font_alias];
                     let font_desc = font_info.get(b"FontDescriptor")?;
@@ -510,13 +573,13 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     }
                 }
                 "SC" | "RG" => {
-                    text_list.last_mut().unwrap().underlined = true;
+                    if let Some(last) = text_list.last_mut() {
+                        last.underlined = true;
+                    }
                 }
                 "h" | "re" | "cs" | "f*" | "S" | "w" | "W" | "n" | "Tc" | "W*" | "J" | "j"
                 | "m" | "Do" | "q" | "Q" => {} //colors, and shapes, spacing not imp
-                _ => {
-                    eprintln!("didn't handle: {} - {:?}", op.operator, op.operands)
-                }
+                _ => {}
             };
         }
         let matrix = StyledText::normalize(&text_list);
