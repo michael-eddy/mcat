@@ -1,4 +1,3 @@
-use base64::{Engine, engine::general_purpose};
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -20,21 +19,7 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::{
-    fetch_manager,
-    rasteroid::{self, term_misc},
-};
-
-pub fn image_to_base64(img: &[u8]) -> String {
-    general_purpose::STANDARD.encode(img)
-}
-
-pub fn offset_to_terminal(offset: Option<u16>) -> String {
-    match offset {
-        Some(offset) => format!("\x1b[{}C", offset),
-        None => "".to_string(),
-    }
-}
+use crate::fetch_manager;
 
 pub fn svg_to_image(
     mut reader: impl Read,
@@ -61,15 +46,25 @@ pub fn svg_to_image(
     let src_width = pixmap_size.width();
     let src_height = pixmap_size.height();
     let width = match width {
-        Some(w) => rasteroid::term_misc::dim_to_px(w, rasteroid::term_misc::SizeDirection::Width)?,
+        Some(w) => mcat_rasteroid::term_misc::dim_to_px(
+            w,
+            mcat_rasteroid::term_misc::SizeDirection::Width,
+        )?,
         None => src_width as u32,
     };
     let height = match height {
-        Some(h) => rasteroid::term_misc::dim_to_px(h, rasteroid::term_misc::SizeDirection::Height)?,
+        Some(h) => mcat_rasteroid::term_misc::dim_to_px(
+            h,
+            mcat_rasteroid::term_misc::SizeDirection::Height,
+        )?,
         None => src_height as u32,
     };
-    let (target_width, target_height) =
-        rasteroid::image_extended::calc_fit(src_width as u32, src_height as u32, width, height);
+    let (target_width, target_height) = mcat_rasteroid::image_extended::calc_fit(
+        src_width as u32,
+        src_height as u32,
+        width,
+        height,
+    );
     let scale_x = target_width as f32 / src_width;
     let scale_y = target_height as f32 / src_height;
     let scale = scale_x.min(scale_y);
@@ -128,7 +123,7 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
         };
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
-        let shutdown = term_misc::setup_signal_handler();
+        let shutdown = mcat_rasteroid::term_misc::setup_signal_handler();
 
         let (browser, mut handler) = Browser::launch(config)
             .await
@@ -233,27 +228,29 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
 pub fn inline_a_video(
     input: impl AsRef<str>,
     out: &mut impl Write,
-    inline_encoder: &rasteroid::InlineEncoder,
+    inline_encoder: &mcat_rasteroid::InlineEncoder,
     center: bool,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
-        rasteroid::InlineEncoder::Kitty => {
+        mcat_rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
             let id = rand::random::<u32>();
-            rasteroid::kitty_encoder::encode_frames(frames, out, id, center)?;
+            mcat_rasteroid::kitty_encoder::encode_frames(frames, out, id, center)?;
             Ok(())
         }
-        rasteroid::InlineEncoder::Iterm => {
+        mcat_rasteroid::InlineEncoder::Iterm => {
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
             let offset = match center {
-                true => Some(rasteroid::term_misc::center_image(dyn_img.width() as u16)),
+                true => Some(mcat_rasteroid::term_misc::center_image(
+                    dyn_img.width() as u16
+                )),
                 false => None,
             };
-            rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
+            mcat_rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
             Ok(())
         }
-        rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
+        mcat_rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
     }
 }
 

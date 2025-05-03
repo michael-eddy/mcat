@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, mem::take, path::Path};
 
 use lopdf::{Dictionary, Document, Encoding, Object};
 
-use crate::markitdown::sheets;
+use crate::sheets;
 
 #[derive(Clone, Debug, Default)]
 struct StyledText {

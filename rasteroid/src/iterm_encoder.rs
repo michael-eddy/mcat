@@ -1,4 +1,4 @@
-use crate::{converter, rasteroid::term_misc::EnvIdentifiers};
+use crate::term_misc::{self, EnvIdentifiers};
 use std::io::Write;
 
 pub fn encode_image(
@@ -6,9 +6,9 @@ pub fn encode_image(
     mut out: impl Write,
     offset: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let base64_encoded = converter::image_to_base64(img);
+    let base64_encoded = term_misc::image_to_base64(img);
 
-    let center = converter::offset_to_terminal(offset);
+    let center = term_misc::offset_to_terminal(offset);
     out.write_all(center.as_ref())?;
 
     out.write_all(b"\x1b]1337;File=inline=1;size=")?;

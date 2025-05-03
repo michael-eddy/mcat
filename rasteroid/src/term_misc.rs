@@ -4,6 +4,7 @@ use std::{
     sync::{Arc, OnceLock, atomic::AtomicBool},
 };
 
+use base64::{Engine, engine::general_purpose};
 use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
@@ -13,6 +14,17 @@ pub struct Winsize {
     pub sc_height: u16,
     pub spx_width: u16,
     pub spx_height: u16,
+}
+
+pub fn image_to_base64(img: &[u8]) -> String {
+    general_purpose::STANDARD.encode(img)
+}
+
+pub fn offset_to_terminal(offset: Option<u16>) -> String {
+    match offset {
+        Some(offset) => format!("\x1b[{}C", offset),
+        None => "".to_string(),
+    }
 }
 
 lazy_static! {

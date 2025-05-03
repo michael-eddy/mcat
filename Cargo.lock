@@ -2271,6 +2271,8 @@ dependencies = [
  "inquire",
  "lazy_static",
  "lopdf",
+ "mcat-markitdown",
+ "mcat-rasteroid",
  "quick-xml 0.37.4",
  "rand 0.9.1",
  "reqwest",
@@ -2282,6 +2284,37 @@ dependencies = [
  "termimad",
  "tokio",
  "urlencoding",
+ "windows",
+ "zip 2.6.1",
+]
+
+[[package]]
+name = "mcat-markitdown"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "csv",
+ "flate2",
+ "lopdf",
+ "quick-xml 0.37.4",
+ "rand 0.9.1",
+ "tempfile",
+ "zip 2.6.1",
+]
+
+[[package]]
+name = "mcat-rasteroid"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "color_quant",
+ "crossterm 0.29.0",
+ "fast_image_resize",
+ "ffmpeg-sidecar",
+ "flate2",
+ "image",
+ "lazy_static",
+ "signal-hook",
  "windows",
  "zip 2.6.1",
 ]

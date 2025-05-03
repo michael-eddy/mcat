@@ -3,9 +3,7 @@ mod concater;
 mod converter;
 mod fetch_manager;
 mod inspector;
-mod markitdown;
 mod prompter;
-mod rasteroid;
 mod scrapy;
 
 use std::{
@@ -14,16 +12,13 @@ use std::{
     path::Path,
 };
 
-#[macro_use]
-extern crate lazy_static;
-
 use catter::{CatOpts, EncoderForce};
 use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
 };
 use crossterm::tty::IsTty;
-use rasteroid::term_misc;
+use mcat_rasteroid::term_misc;
 
 fn main() {
     let stdin_steamed = !std::io::stdin().is_tty();

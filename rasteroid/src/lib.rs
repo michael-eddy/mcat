@@ -6,6 +6,9 @@ pub mod kitty_encoder;
 pub mod sixel_encoder;
 pub mod term_misc;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub fn inline_an_image(
     img: &[u8],
     out: impl Write,

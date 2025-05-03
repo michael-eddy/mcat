@@ -1,4 +1,4 @@
-use crate::{converter, rasteroid::term_misc::EnvIdentifiers};
+use crate::term_misc::{EnvIdentifiers, offset_to_terminal};
 use color_quant::NeuQuant;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -16,7 +16,7 @@ pub fn encode_image(
     let dyn_img = image::load_from_memory_with_format(img, image::ImageFormat::Png)?;
     let rgb_img = dyn_img.to_rgb8();
 
-    let center = converter::offset_to_terminal(offset);
+    let center = offset_to_terminal(offset);
     out.write_all(center.as_bytes())?;
 
     encode_sixel(&rgb_img, out)?;

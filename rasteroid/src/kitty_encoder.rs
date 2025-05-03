@@ -4,10 +4,7 @@ use base64::{Engine, engine::general_purpose};
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use flate2::{Compression, write::ZlibEncoder};
 
-use crate::{
-    converter,
-    rasteroid::term_misc::{self, EnvIdentifiers},
-};
+use crate::term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal};
 
 fn chunk_base64(
     base64: &str,
@@ -70,8 +67,8 @@ pub fn encode_image(
     mut out: impl Write,
     offset: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let center_string = converter::offset_to_terminal(offset);
-    let base64 = converter::image_to_base64(img);
+    let center_string = offset_to_terminal(offset);
+    let base64 = image_to_base64(img);
 
     out.write_all(center_string.as_bytes())?;
     chunk_base64(
@@ -116,7 +113,7 @@ pub fn encode_frames(
     let first = frames.next().ok_or("video doesn't contain any frames")?;
     let offset = term_misc::center_image(first.width as u16);
     if center {
-        let center = converter::offset_to_terminal(Some(offset));
+        let center = offset_to_terminal(Some(offset));
         out.write_all(center.as_bytes())?;
     }
     let mut pre_timestamp = 0.0;
