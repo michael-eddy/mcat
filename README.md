@@ -21,7 +21,7 @@
 * 🖼️ **Inline Image/Videos**  
   Display images/videos *inside* your terminal using protocols like Kitty, iTerm, or Sixel.
   
-* 🌐 **Handles URL too!**  
+* 🌐 **Handles URLs too!**  
   View Images/Videos/Document from a URL in your terminal (or save them)
 
 * 🔗 **Concatenate Images and Video too!**  
@@ -114,7 +114,7 @@ Mcat tries to have as little dependencies as possible.
 1. exists on every windows machine through msedge. and other machines that have chrome/msedge/chromium
 2. can be installed by doing `mcat --fetch-chormium`
 #### ffmpeg (for videos)
-1. if you're machine has it 🫠.
+1. if your machine has it 🫠.
 2. can be installed by doing `mcat --fetch-ffmpeg`
 
 ## 🆘 Help
