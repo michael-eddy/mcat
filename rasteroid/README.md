@@ -24,7 +24,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rasteroid = "0.1.0"
+rasteroid = "0.1.1"
 ```
 
 ## Usage

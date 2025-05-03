@@ -15,14 +15,12 @@ markdownify is a Rust implementation inspired by Microsoft's [markitdown](https:
 | Format | Extension | Description |
 |--------|-----------|-------------|
 | Word Documents | .docx | Microsoft Word documents |
-| OpenDocument Text | .odt | OpenDocument text files |
+| OpenDocument Text | .odt, .odp | OpenDocument text files |
 | PDF | .pdf | Portable Document Format files |
 | PowerPoint | .pptx | Microsoft PowerPoint presentations |
 | Excel/Spreadsheets | .xlsx, .xls, .xlsm, .xlsb, .xla, .xlam, .ods | Various spreadsheet formats |
 | CSV | .csv | Comma-separated values (auto-detects delimiter) |
 | ZIP Archives | .zip | Extracts and converts contained files |
-| Markdown | .md | Passes through with formatting |
-| HTML | .html | Passes through with formatting |
 | Other text formats | (various) | Falls back to code block formatting |
 
 ## Installation
@@ -31,7 +29,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-markdownify = "0.1.0"
+markdownify = "0.1.1"
 ```
 
 ## Usage
