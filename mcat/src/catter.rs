@@ -5,7 +5,7 @@ use std::{
 };
 
 use image::{DynamicImage, ImageFormat};
-use mcat_rasteroid::image_extended::InlineImage;
+use rasteroid::image_extended::InlineImage;
 use termimad::{FmtText, MadSkin, crossterm::style::Color};
 
 use crate::converter::{self};
@@ -76,7 +76,7 @@ pub fn cat(
         sixel: false,
     });
     let inline_encoder =
-        &mcat_rasteroid::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
+        &rasteroid::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -122,7 +122,7 @@ pub fn cat(
                     (Some(r), ext.as_ref())
                 }
                 _ => {
-                    let f = mcat_markitdown::convert(path, None)?;
+                    let f = markdownify::convert(path, None)?;
                     (Some(f), "md")
                 }
             }
@@ -163,7 +163,7 @@ pub fn cat(
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
-            mcat_rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
         ("html", "image") => {
@@ -176,7 +176,7 @@ pub fn cat(
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
-            mcat_rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
         ("image", "image") => {
@@ -198,7 +198,7 @@ pub fn cat(
             // default for image
             let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = image_result.resize_plus(opts.width, opts.height)?;
-            mcat_rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
         _ => Err(format!(

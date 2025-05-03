@@ -9,6 +9,17 @@ pub mod term_misc;
 #[macro_use]
 extern crate lazy_static;
 
+/// encode an image bytes into inline image using the given encoder
+/// # example:
+/// ```
+/// let path = Path::new("image.png");
+/// let bytes = std::fs::read(path).unwrap();
+/// let mut stdout = std::io::stdout();
+/// let encoder = InlineEncoder::auto_detect(true, false, false); // force kitty as fallback
+/// inline_an_image(&bytes, &stdout, None, encoder).unwrap();
+/// stdout.flush().unwrap();
+/// ```
+/// MENTION: it should work for Iterm Gifs too.
 pub fn inline_an_image(
     img: &[u8],
     out: impl Write,
@@ -28,6 +39,8 @@ pub enum InlineEncoder {
     Sixel,
 }
 impl InlineEncoder {
+    /// auto detect which Encoder works for the current terminal
+    /// allows forcing certain encoders (sort of a fallback).
     pub fn auto_detect(force_kitty: bool, force_iterm: bool, force_sixel: bool) -> Self {
         if force_kitty {
             return Self::Kitty;

@@ -8,11 +8,30 @@ use image::{
 use super::term_misc::{self, dim_to_px};
 
 pub trait InlineImage {
+    /// fast image resizer, that takes logic units.
+    /// # example:
+    /// ```
+    /// let path = Path::new("image.png");
+    /// let buf = std::fs::read(path).unwrap();
+    /// let dyn_img = image::load_from_memory(&image).unwrap();
+    /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c")).unwrap();
+    /// ```
+    /// * the offset is for centering the image
+    /// * it accepts either `%` (percentage) / `c` (cells) / just a number
     fn resize_plus(
         &self,
         width: Option<&str>,
         height: Option<&str>,
     ) -> Result<(Vec<u8>, u16), Box<dyn error::Error>>;
+    /// zoom into the image, and move around
+    /// # example:
+    /// ```
+    /// let path = Path::new("image.png");
+    /// let buf = std::fs::read(path).unwrap();
+    /// let dyn_img = image::load_from_memory(&image).unwrap();
+    /// let dyn_img = dyn_img.zoom_pan(Some(5), Some(3), Some(2))
+    /// ```
+    /// the above zooms 50%, moves right 15% and down 10%
     fn zoom_pan(self, zoom: Option<usize>, x: Option<i32>, y: Option<i32>) -> Self;
 }
 
@@ -92,6 +111,12 @@ impl InlineImage for DynamicImage {
     }
 }
 
+/// calculates the dimensions of an image into fit bounding box
+/// # example:
+/// ```
+/// let (new_width, new_height) = calc_fit(1920, 1080, 800, 400);
+/// ```
+/// the above will return dimensions close to 800x400 that maintain the aspect ratio of 1920x1080
 pub fn calc_fit(src_width: u32, src_height: u32, dst_width: u32, dst_height: u32) -> (u32, u32) {
     let src_ar = src_width as f32 / src_height as f32;
     let dst_ar = dst_width as f32 / dst_height as f32;

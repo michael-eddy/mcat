@@ -9,7 +9,7 @@ use crate::{catter, converter};
 pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
     let mut markdown = String::new();
     for (path, name) in paths {
-        let md = match mcat_markitdown::convert(path, name.as_ref()) {
+        let md = match markdownify::convert(path, name.as_ref()) {
             Ok(md) => md,
             Err(err) => format!("**[Failed Reading: {}]**", err),
         };

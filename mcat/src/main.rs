@@ -18,7 +18,7 @@ use clap::{
     builder::{Styles, styling::AnsiColor},
 };
 use crossterm::tty::IsTty;
-use mcat_rasteroid::term_misc;
+use rasteroid::term_misc;
 
 fn main() {
     let stdin_steamed = !std::io::stdin().is_tty();

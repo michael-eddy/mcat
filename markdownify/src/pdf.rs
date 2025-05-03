@@ -477,6 +477,13 @@ fn compute_pdf_position(
     (final_x, final_y)
 }
 
+/// convert `pdf` into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/file.pdf");
+/// let md = pdf_convert(&path).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let doc = lopdf::Document::load(path)?;
     let mut result = String::new();

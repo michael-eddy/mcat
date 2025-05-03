@@ -10,24 +10,13 @@ A Rust library for displaying images and videos inline in terminal emulators, pa
 
 rasteroid is a Rust library that enables displaying images and videos directly within terminal emulators. It provides support for multiple terminal graphics protocols, making it easy to integrate rich visual content into terminal applications.
 
-> **Note:** As part of the mcat project, this crate's API may change. Use with caution in production environments.
-
-## Supported Terminal Protocols
+## Auto Detection
 
 | Protocol | Terminal Emulators | Description |
 |----------|-------------------|-------------|
 | Kitty    | Kitty, Ghostty    | High-performance terminal graphics protocol |
 | iTerm2   | iTerm2, WezTerm, Mintty, Rio, Warp, Konsole | Widely supported protocol for inline images |
 | Sixel    | Foot, Windows Terminal, sixel-tmux | Legacy but widely supported pixel graphics format |
-
-## Features
-
-- **Auto-detection**: Automatically detects the appropriate protocol based on terminal environment
-- **Aspect ratio preservation**: Maintains image proportions during resizing
-- **Centering**: Utilities for centering images in the terminal
-- **Zoom and pan**: Support for zooming and panning within images
-- **Video support**: Display video frames inline (Kitty protocol)
-- **Flexible sizing**: Specify dimensions in pixels, cells, or percentages
 
 ## Installation
 
@@ -45,7 +34,7 @@ mcat-rasteroid = "0.1.0"
 ```rust
 use std::fs::File;
 use std::io::{self, Read};
-use mcat_rasteroid::{InlineEncoder, inline_an_image};
+use rasteroid::{InlineEncoder, inline_an_image};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load an image file
@@ -65,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use std::io;
-use mcat_rasteroid::{InlineEncoder, inline_an_image};
+use rasteroid::{InlineEncoder, inline_an_image};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load image data
@@ -88,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use image::io::Reader as ImageReader;
-use mcat_rasteroid::image_extended::InlineImage;
+use rasteroid::image_extended::InlineImage;
 use std::io;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -110,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use image::io::Reader as ImageReader;
-use mcat_rasteroid::image_extended::InlineImage;
+use rasteroid::image_extended::InlineImage;
 use std::io;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -214,32 +203,48 @@ fn video_to_frames(
 
 #### Finally: 
 ```rs
+// OutputVideoFrame is from ffmpeg-sidecar (you can use whatever suits you, just needs to impl frame)
+pub struct KittyFrames(pub OutputVideoFrame);
+impl Frame for KittyFrames {
+    fn width(&self) -> u16 {
+        self.0.width as u16
+    }
+    fn height(&self) -> u16 {
+        self.0.height as u16
+    }
+    fn timestamp(&self) -> f32 {
+        self.0.timestamp
+    }
+    fn data(&self) -> &[u8] {
+        &self.0.data
+    }
+}
+
 pub fn inline_a_video(
     input: impl AsRef<str>,
     out: &mut impl Write,
-    inline_encoder: &mcat_rasteroid::InlineEncoder,
+    inline_encoder: &rasteroid::InlineEncoder,
     center: bool,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
-        mcat_rasteroid::InlineEncoder::Kitty => {
+        rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
+            let mut kitty_frames = frames.map(KittyFrames);
             let id = rand::random::<u32>();
-            mcat_rasteroid::kitty_encoder::encode_frames(frames, out, id, center)?;
+            rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, id, center)?;
             Ok(())
         }
-        mcat_rasteroid::InlineEncoder::Iterm => {
+        rasteroid::InlineEncoder::Iterm => {
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
             let offset = match center {
-                true => Some(mcat_rasteroid::term_misc::center_image(
-                    dyn_img.width() as u16
-                )),
+                true => Some(rasteroid::term_misc::center_image(dyn_img.width() as u16)),
                 false => None,
             };
-            mcat_rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
+            rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
             Ok(())
         }
-        mcat_rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
+        rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
     }
 }
 ```
@@ -249,7 +254,7 @@ pub fn inline_a_video(
 rasteroid provides utilities for working with terminal dimensions:
 
 ```rust
-use mcat_rasteroid::term_misc::{init_winsize, break_size_string, get_winsize, SizeDirection, dim_to_px};
+use rasteroid::term_misc::{init_winsize, break_size_string, get_winsize, SizeDirection, dim_to_px};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize with fallback values

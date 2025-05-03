@@ -40,6 +40,13 @@ fn get_attr(e: &quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
     None
 }
 
+/// convert docx into markdown
+/// usuage:
+/// ```rs
+/// let path = Path::new("path/to/file.docx");
+/// let md = docx_convert(&path).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let data = std::fs::read(path)?;
     let cursor = Cursor::new(data);

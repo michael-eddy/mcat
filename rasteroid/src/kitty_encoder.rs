@@ -1,7 +1,6 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
 use base64::{Engine, engine::general_purpose};
-use ffmpeg_sidecar::event::OutputVideoFrame;
 use flate2::{Compression, write::ZlibEncoder};
 
 use crate::term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal};
@@ -62,6 +61,18 @@ fn chunk_base64(
     Ok(())
 }
 
+/// encode an image bytes into inline image
+/// should work with only png.
+/// you can use crates like `image` to convert images into png
+/// # example:
+/// ```
+/// let path = Path::new("image.png");
+/// let bytes = std::fs::read(path).unwrap();
+/// let mut stdout = std::io::stdout();
+/// encode_image(&bytes, &stdout, None).unwrap();
+/// stdout.flush().unwrap();
+/// ```
+/// the option offset just offsets the image to the right by the amount of cells you specify
 pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
@@ -101,17 +112,58 @@ fn process_frame(
     Ok(())
 }
 
+pub trait Frame {
+    fn width(&self) -> u16;
+    fn height(&self) -> u16;
+    fn timestamp(&self) -> f32;
+    fn data(&self) -> &[u8];
+}
+
+/// encode a video into inline video.
+/// recommended to use in conjunction with video parsing library
+/// # example:
+/// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
+/// ```
+/// use ffmpeg_sidecar::command::FfmpegCommand;
+/// use ffmpeg_sidecar::event::OutputVideoFrame;
+/// pub struct KittyFrames(pub OutputVideoFrame);
+/// impl Frame for KittyFrames {
+///     fn width(&self) -> u16 {
+///         self.0.width as u16
+///     }
+///     fn height(&self) -> u16 {
+///         self.0.height as u16
+///     }
+///     fn timestamp(&self) -> f32 {
+///         self.0.timestamp
+///     }
+///     fn data(&self) -> &[u8] {
+///         &self.0.data
+///     }
+/// }
+/// ```
+/// next get the frames (taken from ffmpeg-sidecar)
+/// ```
+/// let mut out = std::io::stdout();
+/// let iter = FfmpegCommand::new() // <- Builder API like `std::process::Command`
+///   .testsrc()  // <- Discoverable aliases for FFmpeg args
+///   .rawvideo() // <- Convenient argument presets
+///   .spawn()?   // <- Ordinary `std::process::Child`
+///   .iter()?;   // <- Blocking iterator over logs and output
+/// // now convert to compatible frames
+/// let mut kitty_frames = frames.map(KittyFrames);
+/// let id = rand::random::<u32>();
+/// encode_frames(&mut kitty_frames, out, id, True)?;
+/// ```
 pub fn encode_frames(
-    frames: Box<dyn Iterator<Item = OutputVideoFrame>>,
+    frames: &mut dyn Iterator<Item = impl Frame>,
     out: &mut impl Write,
     id: u32,
     center: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mut frames = frames.into_iter();
-
     // getting the first frame
     let first = frames.next().ok_or("video doesn't contain any frames")?;
-    let offset = term_misc::center_image(first.width as u16);
+    let offset = term_misc::center_image(first.width() as u16);
     if center {
         let center = offset_to_terminal(Some(offset));
         out.write_all(center.as_bytes())?;
@@ -120,13 +172,13 @@ pub fn encode_frames(
 
     // adding the root image
     let i = id.to_string();
-    let s = first.width.to_string();
-    let v = first.height.to_string();
+    let s = first.width().to_string();
+    let v = first.height().to_string();
     let f = "24".to_string();
     let o = "z".to_string();
     let q = "2".to_string();
     process_frame(
-        &first.data,
+        &first.data(),
         out,
         HashMap::from([
             ("a".to_string(), "T".to_string()),
@@ -150,13 +202,13 @@ pub fn encode_frames(
         if shutdown.load(Ordering::SeqCst) {
             break; // clean exit
         }
-        let s = frame.width.to_string();
-        let v = frame.height.to_string();
+        let s = frame.width().to_string();
+        let v = frame.height().to_string();
         let i = id.to_string();
         let f = "24".to_string();
         let o = "z".to_string();
-        let z = ((frame.timestamp - pre_timestamp) * 1000.0) as u32;
-        pre_timestamp = frame.timestamp;
+        let z = ((frame.timestamp() - pre_timestamp) * 1000.0) as u32;
+        pre_timestamp = frame.timestamp();
 
         let first_opts = HashMap::from([
             ("a".to_string(), "f".to_string()),
@@ -170,13 +222,20 @@ pub fn encode_frames(
         ]);
         let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
 
-        process_frame(&frame.data, out, first_opts, sub_opts)?;
+        process_frame(&frame.data(), out, first_opts, sub_opts)?;
     }
 
     write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;
     Ok(())
 }
 
+/// checks if the current terminal supports Kitty's graphic protocol
+/// # example:
+/// ```
+/// let env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_capable = is_kitty_capable(&env);
+/// println!("Kitty: {}", is_capable);
+/// ```
 pub fn is_kitty_capable(env: &EnvIdentifiers) -> bool {
     env.has_key("KITTY_WINDOW_ID") || env.term_contains("kitty") || env.term_contains("ghostty")
 }

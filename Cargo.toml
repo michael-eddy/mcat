@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "mcat",
-    "markitdown",
+    "markdownify",
     "rasteroid"
 ]
 resolver = "3"

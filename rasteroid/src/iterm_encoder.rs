@@ -1,6 +1,17 @@
 use crate::term_misc::{self, EnvIdentifiers};
 use std::io::Write;
 
+/// encode an image bytes into inline image
+/// should work with all formats Iterm, which include but not limited to GIF,PNG,JPEG..
+/// # example:
+/// ```
+/// let path = Path::new("image.png");
+/// let bytes = std::fs::read(path).unwrap();
+/// let mut stdout = std::io::stdout();
+/// encode_image(&bytes, &stdout, None).unwrap();
+/// stdout.flush().unwrap();
+/// ```
+/// the option offset just offsets the image to the right by the amount of cells you specify
 pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
@@ -20,6 +31,13 @@ pub fn encode_image(
     Ok(())
 }
 
+/// checks if the current terminal supports Iterm graphic protocol
+/// # example:
+/// ```
+/// let env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_capable = is_iterm_capable(&env);
+/// println!("Iterm: {}", is_capable);
+/// ```
 pub fn is_iterm_capable(env: &EnvIdentifiers) -> bool {
     env.term_contains("mintty")
         || env.term_contains("wezterm")
