@@ -1,4 +1,4 @@
-use crate::{converter, rasteroid::term_misc::EnvIdentifiers};
+use crate::term_misc::{EnvIdentifiers, offset_to_terminal};
 use color_quant::NeuQuant;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -8,15 +8,26 @@ use std::{
 
 const SIXEL_MIN: u8 = 0x3f; // '?'
 
+/// encode an image into inline image ()
+/// works with all the formats that the image crate supports
+/// # example:
+/// ```
+/// let path = Path::new("image.png");
+/// let bytes = std::fs::read(path).unwrap();
+/// let mut stdout = std::io::stdout();
+/// encode_image(&bytes, &stdout, None).unwrap();
+/// stdout.flush().unwrap();
+/// ```
+/// the option offset just offsets the image to the right by the amount of cells you specify
 pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let dyn_img = image::load_from_memory_with_format(img, image::ImageFormat::Png)?;
+    let dyn_img = image::load_from_memory(img)?;
     let rgb_img = dyn_img.to_rgb8();
 
-    let center = converter::offset_to_terminal(offset);
+    let center = offset_to_terminal(offset);
     out.write_all(center.as_bytes())?;
 
     encode_sixel(&rgb_img, out)?;
@@ -24,6 +35,13 @@ pub fn encode_image(
     Ok(())
 }
 
+/// checks if the current terminal supports Sixel's graphic protocol
+/// # example:
+/// ```
+/// let env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_capable = is_sixel_capable(&env);
+/// println!("Sixel: {}", is_capable);
+/// ```
 pub fn is_sixel_capable(env: &EnvIdentifiers) -> bool {
     // has way more support, i just think sixel is bad
     env.term_contains("foot") 
@@ -31,7 +49,7 @@ pub fn is_sixel_capable(env: &EnvIdentifiers) -> bool {
         || env.term_contains("sixel-tmux")
 }
 
-pub fn encode_sixel(
+fn encode_sixel(
     img: &ImageBuffer<Rgb<u8>, Vec<u8>>,
     mut out: impl Write,
 ) -> Result<(), Box<dyn Error>> {

@@ -16,6 +16,17 @@ fn detect_delimiter(line: &str) -> u8 {
         .unwrap_or(b',') // fallback to comma
 }
 
+/// creates a markdown table
+/// # usuage:
+/// ```
+/// let headers = vec!["Names".to_string(), "Salary".to_string()];
+/// let row = vec![
+///     vec!["Sarah".to_string(), "100".to_string()],
+///     vec!["Jeff".to_string(), "200".to_string()],
+/// ];
+/// let md = to_markdown_table(&headers, &rows);
+/// println!("{}", md);
+/// ```
 pub fn to_markdown_table(headers: &[String], rows: &[Vec<String>]) -> String {
     let mut output = String::new();
     output += &format!("| {} |\n", headers.join(" | "));
@@ -28,6 +39,13 @@ pub fn to_markdown_table(headers: &[String], rows: &[Vec<String>]) -> String {
     output
 }
 
+/// convert `xlsx` | `xls` | `xlsm` | `xlsb` | `xla` | `xlam` | `ods` files into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/file.xlsx");
+/// let md = sheets_convert(&path).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn sheets_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut workbook = calamine::open_workbook_auto(path)?;
     let mut output = String::new();
@@ -58,6 +76,13 @@ pub fn sheets_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>>
     }
 }
 
+/// convert `csv` into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/file.csv");
+/// let md = csv_converter(&path).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn csv_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut file = File::open(path)?;
     let mut first_line = String::new();

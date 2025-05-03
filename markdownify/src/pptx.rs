@@ -9,6 +9,13 @@ use zip::ZipArchive;
 
 use super::sheets;
 
+/// convert `pptx` files into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/file.pptx");
+/// let md = pptx_converter(&path).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn pptx_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let data = fs::read(path)?;
     let cursor = Cursor::new(data);

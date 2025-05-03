@@ -1,8 +1,8 @@
-mod docx;
-mod opendoc;
-mod pdf;
-mod pptx;
-mod sheets;
+pub mod docx;
+pub mod opendoc;
+pub mod pdf;
+pub mod pptx;
+pub mod sheets;
 
 use std::{
     fs::{self, File},
@@ -12,6 +12,22 @@ use std::{
 use tempfile::Builder;
 use zip::ZipArchive;
 
+/// convert `any` document into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/file.docx");
+/// let md = convert(&path, None).unwrap();
+/// println!("{}", md);
+/// ```
+///
+/// # with name:
+///
+/// ```
+/// let path = Path::new("path/to/file.docx");
+/// let name = "file.docx".to_string()
+/// let md = convert(&path, Some(&name)).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn convert(
     path: &Path,
     name_header: Option<&String>,
@@ -52,7 +68,14 @@ pub fn convert(
     Ok(result)
 }
 
-fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+/// convert `zip` into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/archive.zip");
+/// let md = zip_convert(&path).unwrap();
+/// println!("{}", md);
+/// ```
+pub fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
 

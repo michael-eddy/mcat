@@ -3,9 +3,7 @@ mod concater;
 mod converter;
 mod fetch_manager;
 mod inspector;
-mod markitdown;
 mod prompter;
-mod rasteroid;
 mod scrapy;
 
 use std::{
@@ -13,9 +11,6 @@ use std::{
     io::{BufWriter, Read, Write},
     path::Path,
 };
-
-#[macro_use]
-extern crate lazy_static;
 
 use catter::{CatOpts, EncoderForce};
 use clap::{

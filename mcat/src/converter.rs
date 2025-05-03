@@ -1,8 +1,8 @@
-use base64::{Engine, engine::general_purpose};
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
 use image::{DynamicImage, ImageBuffer, Rgba};
+use rasteroid::kitty_encoder::Frame;
 use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
@@ -20,21 +20,7 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::{
-    fetch_manager,
-    rasteroid::{self, term_misc},
-};
-
-pub fn image_to_base64(img: &[u8]) -> String {
-    general_purpose::STANDARD.encode(img)
-}
-
-pub fn offset_to_terminal(offset: Option<u16>) -> String {
-    match offset {
-        Some(offset) => format!("\x1b[{}C", offset),
-        None => "".to_string(),
-    }
-}
+use crate::fetch_manager;
 
 pub fn svg_to_image(
     mut reader: impl Read,
@@ -128,7 +114,7 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
         };
 
         let (cancel_tx, cancel_rx) = oneshot::channel();
-        let shutdown = term_misc::setup_signal_handler();
+        let shutdown = rasteroid::term_misc::setup_signal_handler();
 
         let (browser, mut handler) = Browser::launch(config)
             .await
@@ -230,6 +216,22 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     }
 }
 
+pub struct KittyFrames(pub OutputVideoFrame);
+impl Frame for KittyFrames {
+    fn width(&self) -> u16 {
+        self.0.width as u16
+    }
+    fn height(&self) -> u16 {
+        self.0.height as u16
+    }
+    fn timestamp(&self) -> f32 {
+        self.0.timestamp
+    }
+    fn data(&self) -> &[u8] {
+        &self.0.data
+    }
+}
+
 pub fn inline_a_video(
     input: impl AsRef<str>,
     out: &mut impl Write,
@@ -239,8 +241,9 @@ pub fn inline_a_video(
     match inline_encoder {
         rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
+            let mut kitty_frames = frames.map(KittyFrames);
             let id = rand::random::<u32>();
-            rasteroid::kitty_encoder::encode_frames(frames, out, id, center)?;
+            rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, id, center)?;
             Ok(())
         }
         rasteroid::InlineEncoder::Iterm => {

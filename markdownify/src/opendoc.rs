@@ -6,6 +6,13 @@ use zip::ZipArchive;
 
 use super::sheets;
 
+/// convert `odt` and `odp` files into markdown
+/// # usuage:
+/// ```
+/// let path = Path::new("path/to/file.odt");
+/// let md = opendoc_convert(&path).unwrap();
+/// println!("{}", md);
+/// ```
 pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let data = std::fs::read(path)?;
     let cursor = Cursor::new(data);

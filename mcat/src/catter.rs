@@ -5,13 +5,10 @@ use std::{
 };
 
 use image::{DynamicImage, ImageFormat};
+use rasteroid::image_extended::InlineImage;
 use termimad::{FmtText, MadSkin, crossterm::style::Color};
 
-use crate::{
-    converter::{self},
-    markitdown,
-    rasteroid::{self, image_extended::InlineImage},
-};
+use crate::converter::{self};
 
 pub enum CatType {
     Markdown,
@@ -125,7 +122,7 @@ pub fn cat(
                     (Some(r), ext.as_ref())
                 }
                 _ => {
-                    let f = markitdown::convert(path, None)?;
+                    let f = markdownify::convert(path, None)?;
                     (Some(f), "md")
                 }
             }

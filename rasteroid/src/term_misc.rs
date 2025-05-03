@@ -4,6 +4,7 @@ use std::{
     sync::{Arc, OnceLock, atomic::AtomicBool},
 };
 
+use base64::{Engine, engine::general_purpose};
 use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
@@ -13,6 +14,19 @@ pub struct Winsize {
     pub sc_height: u16,
     pub spx_width: u16,
     pub spx_height: u16,
+}
+
+/// converts image bytse into base64
+pub fn image_to_base64(img: &[u8]) -> String {
+    general_purpose::STANDARD.encode(img)
+}
+
+/// turns offset into terminal escape characters that move the cursor
+pub fn offset_to_terminal(offset: Option<u16>) -> String {
+    match offset {
+        Some(offset) => format!("\x1b[{}C", offset),
+        None => "".to_string(),
+    }
 }
 
 lazy_static! {
@@ -65,6 +79,22 @@ impl Winsize {
     }
 }
 
+/// setting a fallback for when fails to query spx and sc.
+/// scale is for scaling while maintaing center. (scale the box not the image)
+/// # example:
+/// ```
+/// let spx = Size {
+///     width: 1920,  // width in pixels
+///     height: 1080, // height in pixels
+///     force: false, // use that instead of checking
+/// };
+/// let sc = Size {
+///     width: 100,   // width in cells
+///     height: 20,   // height in cells
+///     force: false, // use that instead of checking
+/// };
+/// init_winsize(&spx, &sc, None).unwrap(); // going to error if you called it before already.
+/// ```
 pub fn init_winsize(spx: &Size, sc: &Size, scale: Option<f32>) -> Result<(), &'static str> {
     WINSIZE
         .set(Winsize::new(spx, sc, scale))
@@ -77,7 +107,7 @@ pub enum SizeDirection {
     Height,
 }
 
-/// call init_winsize before it if you need to
+/// call init_winsize before it if you need to;
 /// if not going to use 1920x1080, 100x20 fallback for when failing to query sizes
 pub fn get_winsize() -> &'static Winsize {
     WINSIZE.get_or_init(|| {
@@ -95,7 +125,7 @@ pub fn get_winsize() -> &'static Winsize {
     })
 }
 
-/// returns a the offset needed to center the image
+/// returns a the offset needed to center the image inside the terminal
 pub fn center_image(image_width: u16) -> u16 {
     let winsize = get_winsize();
     let offset_x = (winsize.spx_width as f32 - image_width as f32) / 2.0;
@@ -245,6 +275,7 @@ pub fn break_size_string(s: &str) -> Result<Size, Box<dyn std::error::Error>> {
     })
 }
 
+/// get a handle to when the program is killed (will overide so kill the program shortly after)
 pub fn setup_signal_handler() -> Arc<AtomicBool> {
     let shutdown = Arc::new(AtomicBool::new(false));
 
