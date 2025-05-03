@@ -2,8 +2,8 @@
 
 A Rust library for displaying images and videos inline in terminal emulators, part of the [mcat](https://github.com/Skardyy/mcat) project.
 
-[![Crates.io](https://img.shields.io/crates/v/mcat-rasteroid.svg)](https://crates.io/crates/mcat-rasteroid)
-[![Documentation](https://docs.rs/mcat-rasteroid/badge.svg)](https://docs.rs/mcat-rasteroid)
+[![Crates.io](https://img.shields.io/crates/v/rasteroid.svg)](https://crates.io/crates/rasteroid)
+[![Documentation](https://docs.rs/rasteroid/badge.svg)](https://docs.rs/rasteroid)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Overview
@@ -24,7 +24,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcat-rasteroid = "0.1.0"
+rasteroid = "0.1.0"
 ```
 
 ## Usage

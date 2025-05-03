@@ -13,7 +13,7 @@ use tempfile::Builder;
 use zip::ZipArchive;
 
 /// convert `any` document into markdown
-/// # usuage:
+/// # example:
 /// ```
 /// let path = Path::new("path/to/file.docx");
 /// let md = convert(&path, None).unwrap();

@@ -2,8 +2,8 @@
 
 A Rust library for converting various document formats to Markdown, part of the [mcat](https://github.com/Skardyy/mcat) project.
 
-[![Crates.io](https://img.shields.io/crates/v/mcat-markitdown.svg)](https://crates.io/crates/mcat-markitdown)
-[![Documentation](https://docs.rs/mcat-markitdown/badge.svg)](https://docs.rs/mcat-markitdown)
+[![Crates.io](https://img.shields.io/crates/v/markdownify.svg)](https://crates.io/crates/markdownify)
+[![Documentation](https://docs.rs/markdownify/badge.svg)](https://docs.rs/markdownify)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Overview
@@ -31,7 +31,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mcat-markitdown = "0.1.0"
+markdownify = "0.1.0"
 ```
 
 ## Usage
