@@ -2,7 +2,7 @@ mod catter;
 mod concater;
 mod converter;
 mod fetch_manager;
-mod interpolator;
+mod inspector;
 mod markitdown;
 mod prompter;
 mod rasteroid;
@@ -212,14 +212,14 @@ fn main() {
         let mut buffer = Vec::new();
         std::io::stdin().read_to_end(&mut buffer).unwrap_or_exit();
 
-        let inter = interpolator::InterpolatedBytes::from_bytes(&buffer).unwrap_or_exit();
+        let inter = inspector::InspectedBytes::from_bytes(&buffer).unwrap_or_exit();
         match inter {
-            interpolator::InterpolatedBytes::File(named_temp_file) => {
+            inspector::InspectedBytes::File(named_temp_file) => {
                 let path = named_temp_file.path().to_path_buf();
                 path_bufs.push(path);
                 tmp_files.push(named_temp_file);
             }
-            interpolator::InterpolatedBytes::Path(path_buf) => path_bufs.push(path_buf),
+            inspector::InspectedBytes::Path(path_buf) => path_bufs.push(path_buf),
         };
     }
     for i in input {

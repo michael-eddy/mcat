@@ -5,12 +5,12 @@ use std::{
 
 use tempfile::{Builder, NamedTempFile};
 
-pub enum InterpolatedBytes {
+pub enum InspectedBytes {
     File(NamedTempFile),
     Path(PathBuf),
 }
 
-impl InterpolatedBytes {
+impl InspectedBytes {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         if let Some(ext) = detect_video(bytes) {
             return Ok(write_with_ext(bytes, ext));
@@ -36,7 +36,7 @@ impl InterpolatedBytes {
         if let Ok(s) = std::str::from_utf8(bytes) {
             let path = Path::new(s.trim());
             if path.exists() {
-                return Ok(InterpolatedBytes::Path(path.to_path_buf()));
+                return Ok(InspectedBytes::Path(path.to_path_buf()));
             } else {
                 return Ok(write_with_ext(bytes, "txt"));
             }
@@ -46,13 +46,13 @@ impl InterpolatedBytes {
     }
 }
 
-fn write_with_ext(bytes: &[u8], ext: &str) -> InterpolatedBytes {
+fn write_with_ext(bytes: &[u8], ext: &str) -> InspectedBytes {
     let mut file = Builder::new()
         .suffix(&format!(".{}", ext))
         .tempfile()
         .expect("Failed to create temp file");
     file.write_all(bytes).expect("Failed to write to temp file");
-    InterpolatedBytes::File(file)
+    InspectedBytes::File(file)
 }
 
 fn detect_video(bytes: &[u8]) -> Option<&'static str> {

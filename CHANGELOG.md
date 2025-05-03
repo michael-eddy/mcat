@@ -1,6 +1,6 @@
-## V0.1.6
+## V0.2.0
 * improved the PDF parser.
-* now accepts from stdin (interpolates the file type on its own.)
+* now accepts from stdin (introspects the file type on its own.)
 * handles URLs way better now, with more support for mime types. (including documents like PDF, ZIP, et..)
 
 ## V0.1.52
