@@ -19,8 +19,8 @@ readme = "README.md"
 edition = "2024"
 
 [dependencies]
-markdownify = { path = "../markdownify" }
-rasteroid = { path = "../rasteroid" }
+markdownify = { version = "0.1.0" }
+rasteroid = { version = "0.1.0" }
 clap = "4.5.36"
 comrak = "0.38.0"
 crossterm = "0.29.0"
@@ -44,3 +44,7 @@ zip = "2.6.1"
 scraper = "0.23.1"
 reqwest = { version = "0.12.15", default-features = false, features = ["rustls-tls"] }
 termimad = "0.31.3"
+
+[patch.crates-io]
+markdownify = { path = "../markdownify" }
+rasteroid = { path = "../rasteroid" }

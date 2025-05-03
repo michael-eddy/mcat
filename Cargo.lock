@@ -2226,6 +2226,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "markdownify"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72ad8b9e48451d9ae52b8715d768450857e74dfffff73057a7420280c12ae9e8"
+dependencies = [
+ "calamine",
+ "csv",
+ "lopdf",
+ "quick-xml 0.37.4",
+ "tempfile",
+ "zip 2.6.1",
+]
+
+[[package]]
 name = "markup5ever"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2276,9 +2290,9 @@ dependencies = [
  "image",
  "inquire",
  "lazy_static",
- "markdownify",
+ "markdownify 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.9.1",
- "rasteroid",
+ "rasteroid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest",
  "resvg",
  "scraper",
@@ -2961,6 +2975,23 @@ checksum = "f60fcc7d6849342eff22c4350c8b9a989ee8ceabc4b481253e8946b9fe83d684"
 [[package]]
 name = "rasteroid"
 version = "0.1.0"
+dependencies = [
+ "base64",
+ "color_quant",
+ "crossterm 0.29.0",
+ "fast_image_resize",
+ "flate2",
+ "image",
+ "lazy_static",
+ "signal-hook",
+ "windows",
+]
+
+[[package]]
+name = "rasteroid"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d9692088d9c0c6fb553412bf40f61267c281736a151d46a652b8eb73f52664f"
 dependencies = [
  "base64",
  "color_quant",
