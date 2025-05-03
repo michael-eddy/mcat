@@ -9,7 +9,6 @@ categories = [
   "text-processing",
   "rendering",
   "multimedia",
-  "developer-tools"
 ]
 repository = "https://github.com/Skardyy/mcat"
 homepage = "https://github.com/Skardyy/mcat"

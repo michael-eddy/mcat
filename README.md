@@ -39,7 +39,7 @@ or ~
 ```sh
 git clone https://github.com/Skardyy/mcat
 cd mcat
-cargo install --path .
+cargo install --path ./mcat
 ```
 or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/latest)
 

@@ -2216,6 +2216,8 @@ checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
 [[package]]
 name = "markdownify"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72ad8b9e48451d9ae52b8715d768450857e74dfffff73057a7420280c12ae9e8"
 dependencies = [
  "calamine",
  "csv",
@@ -2227,9 +2229,7 @@ dependencies = [
 
 [[package]]
 name = "markdownify"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72ad8b9e48451d9ae52b8715d768450857e74dfffff73057a7420280c12ae9e8"
+version = "0.1.1"
 dependencies = [
  "calamine",
  "csv",
@@ -2290,9 +2290,9 @@ dependencies = [
  "image",
  "inquire",
  "lazy_static",
- "markdownify 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "markdownify 0.1.0",
  "rand 0.9.1",
- "rasteroid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rasteroid 0.1.0",
  "reqwest",
  "resvg",
  "scraper",
@@ -2975,6 +2975,8 @@ checksum = "f60fcc7d6849342eff22c4350c8b9a989ee8ceabc4b481253e8946b9fe83d684"
 [[package]]
 name = "rasteroid"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d9692088d9c0c6fb553412bf40f61267c281736a151d46a652b8eb73f52664f"
 dependencies = [
  "base64",
  "color_quant",
@@ -2989,9 +2991,7 @@ dependencies = [
 
 [[package]]
 name = "rasteroid"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d9692088d9c0c6fb553412bf40f61267c281736a151d46a652b8eb73f52664f"
+version = "0.1.1"
 dependencies = [
  "base64",
  "color_quant",
