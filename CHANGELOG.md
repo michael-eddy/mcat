@@ -1,3 +1,6 @@
+## V0.2.01
+* fixed an issue in the interactive dir selector, where branches with the same name will be confused
+
 ## V0.2.0
 * improved the PDF parser.
 * now accepts from stdin (introspects the file type on its own.)

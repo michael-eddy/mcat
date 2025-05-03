@@ -1,8 +1,8 @@
-mod docx;
-mod opendoc;
-mod pdf;
-mod pptx;
-mod sheets;
+pub mod docx;
+pub mod opendoc;
+pub mod pdf;
+pub mod pptx;
+pub mod sheets;
 
 use std::{
     fs::{self, File},
@@ -52,7 +52,7 @@ pub fn convert(
     Ok(result)
 }
 
-fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+pub fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
     let mut archive = ZipArchive::new(file)?;
 
