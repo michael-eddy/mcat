@@ -2219,7 +2219,6 @@ version = "0.1.1"
 dependencies = [
  "calamine",
  "csv",
- "lopdf",
  "quick-xml 0.37.4",
  "tempfile",
  "zip 2.6.1",
@@ -2588,6 +2587,13 @@ checksum = "f8ed6a7761f76e3b9f92dfb0a60a6a6477c61024b775147ff0973a02653abaf2"
 dependencies = [
  "digest",
  "hmac",
+]
+
+[[package]]
+name = "pdfr"
+version = "0.1.0"
+dependencies = [
+ "lopdf",
 ]
 
 [[package]]
