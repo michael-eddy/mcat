@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "mcat",
-    "markdownify",
-    "rasteroid"
+    "crates/core",
+    "crates/markdownify",
+    "crates/rasteroid"
 ]
 resolver = "3"
 

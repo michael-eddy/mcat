@@ -14,7 +14,7 @@ repository = "https://github.com/Skardyy/mcat"
 homepage = "https://github.com/Skardyy/mcat"
 documentation = "https://github.com/Skardyy/mcat"
 license = "MIT"
-readme = "README.md"
+readme = "../../README.md"
 edition = "2024"
 
 [dependencies]
