@@ -303,7 +303,7 @@ impl StyledText {
             if let Some(fd) = self
                 .font_descriptor
                 .as_ref()
-                .and_then(|fd_obj| extract_dict_from_obj(fd_obj).ok())
+                .and_then(|fd_obj| fd_obj.as_dict().ok())
             {
                 if let Ok(font_name) = fd.get(b"FontName").and_then(|f| f.as_name()) {
                     if let Ok(font_name) = str::from_utf8(font_name) {
@@ -453,28 +453,129 @@ impl StyledText {
     }
 }
 
-fn compute_pdf_position(
-    cm: Option<Vec<f32>>,
-    tm: Option<Vec<f32>>,
-    td: Option<Vec<f32>>,
-) -> (f32, f32) {
-    if let Some(td) = td {
-        return (td[0], td[1]);
+#[derive(Debug, Clone, Copy)]
+pub struct Matrix3x3 {
+    pub a: f32,
+    pub b: f32,
+    pub c: f32,
+    pub d: f32,
+    pub e: f32,
+    pub f: f32,
+}
+
+impl Matrix3x3 {
+    pub fn identity() -> Self {
+        Self {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: 0.0,
+            f: 0.0,
+        }
     }
-    let cm = cm.unwrap_or(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
-    let tm = tm.unwrap_or(vec![1.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
 
-    let rel_x = tm[4];
-    let rel_y = tm[5];
-    let x_scale = cm[0];
-    let y_scale = cm[3];
-    let x_origin = cm[4];
-    let y_origin = cm[5];
+    pub fn from_components(a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) -> Self {
+        Self { a, b, c, d, e, f }
+    }
 
-    let final_x = rel_x * x_scale + x_origin;
-    let final_y = rel_y * y_scale + y_origin;
+    pub fn translate(&self, tx: f32, ty: f32) -> Self {
+        self.multiply(&Matrix3x3 {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: tx,
+            f: ty,
+        })
+    }
 
-    (final_x, final_y)
+    pub fn multiply(&self, other: &Self) -> Self {
+        Self {
+            a: self.a * other.a + self.c * other.b,
+            b: self.b * other.a + self.d * other.b,
+            c: self.a * other.c + self.c * other.d,
+            d: self.b * other.c + self.d * other.d,
+            e: self.a * other.e + self.c * other.f + self.e,
+            f: self.b * other.e + self.d * other.f + self.f,
+        }
+    }
+
+    pub fn apply_to_origin(&self) -> (f32, f32) {
+        (self.e, self.f)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TextState {
+    tm: Matrix3x3,
+    tlm: Matrix3x3,
+    leading: f32,
+    ctm: Matrix3x3,
+}
+
+impl TextState {
+    pub fn new() -> Self {
+        Self {
+            tm: Matrix3x3::identity(),
+            tlm: Matrix3x3::identity(),
+            ctm: Matrix3x3::identity(),
+            leading: 0.0,
+        }
+    }
+
+    pub fn bt(&mut self) {
+        eprintln!("begin-------------------");
+        self.tm = Matrix3x3::identity();
+        self.tlm = Matrix3x3::identity();
+    }
+
+    pub fn et(&mut self) {
+        eprintln!("end---------------------");
+        // No-op
+    }
+
+    pub fn tl(&mut self, leading: f32) {
+        eprintln!("setting lead to: {}", leading);
+        self.leading = leading;
+    }
+
+    pub fn td(&mut self, tx: f32, ty: f32) {
+        let translation = Matrix3x3::from_components(1.0, 0.0, 0.0, 1.0, tx, ty);
+        self.tlm = translation.multiply(&self.tlm);
+        eprintln!("Td: {:?}", self.tm);
+        self.tm = self.tlm;
+    }
+
+    pub fn td_capital(&mut self, tx: f32, ty: f32) {
+        self.leading = -ty;
+        eprintln!("Starting TD------------");
+        self.td(tx, ty);
+    }
+
+    pub fn tm(&mut self, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) {
+        let m = Matrix3x3::from_components(a, b, c, d, e, f);
+        self.tm = m;
+        eprintln!("TM: {:?}", self.tm);
+        self.tlm = m;
+    }
+
+    pub fn t_star(&mut self) {
+        eprintln!("Starting T*------------");
+        self.td(0.0, -self.leading);
+    }
+
+    pub fn cm(&mut self, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) {
+        self.ctm = Matrix3x3::from_components(a, b, c, d, e, f);
+        eprintln!("cm: {:?}", self.ctm);
+    }
+
+    pub fn current_position(&self) -> (f32, f32) {
+        let combined = self.ctm.multiply(&self.tm);
+        let f = combined.apply_to_origin();
+        eprintln!("final: {:?}", f);
+        f
+    }
 }
 
 /// convert `pdf` into markdown
@@ -496,7 +597,7 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut page_nm = 0;
     for id in doc.page_iter() {
         let page = doc.get_page_content(id)?;
-        let fonts = doc.get_page_fonts(id)?;
+        let fonts = doc.get_page_fonts(id).unwrap_or_default();
         page_nm += 1;
         result.push_str(&format!("\n# Page {}\n\n", page_nm));
         let encodings: BTreeMap<Vec<u8>, Encoding> = fonts
@@ -510,9 +611,8 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         let mut current_encoding = None;
         let mut styled_text = StyledText::new();
         let mut text_list: Vec<StyledText> = Vec::new();
-        let mut cm = None;
-        let mut tm = None;
-        let mut td = None;
+        let mut text_state = TextState::new();
+        let mut state_stack = Vec::new();
         let operations = lopdf::content::Content::decode(&page)?;
         for op in operations.operations {
             match op.operator.as_ref() {
@@ -520,35 +620,85 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     let encoding =
                         current_encoding.expect("text didn't contain font encoding. Invalid pdf");
                     let text = extract_text_from_objs(&op.operands, encoding);
+                    eprintln!("TJ: {}", text);
                     styled_text.text = Some(text);
-                    let (x, y) = compute_pdf_position(take(&mut cm), take(&mut tm), take(&mut td));
+                    let (x, y) = text_state.current_position();
                     styled_text.x = x;
                     styled_text.y = y;
                     text_list.push(styled_text.clone());
                     styled_text = StyledText::new();
                 }
-                "BT" => {} //start of text
-                "ET" => {} //end of text
+                "'" => {
+                    //same as T* and right after TJ, contains string
+                    text_state.t_star();
+                    let encoding =
+                        current_encoding.expect("text didn't contain font encoding. Invalid pdf");
+                    let text = extract_text_from_objs(&op.operands, encoding);
+                    eprintln!("': {}", text);
+                    styled_text.text = Some(text);
+                    let (x, y) = text_state.current_position();
+                    styled_text.x = x;
+                    styled_text.y = y;
+                    text_list.push(styled_text.clone());
+                    styled_text = StyledText::new();
+                }
+                "\"" => {
+                    text_state.t_star();
+                    let encoding =
+                        current_encoding.expect("text didn't contain font encoding. Invalid pdf");
+                    let obj = op.operands.get(2).unwrap();
+                    let text = extract_text_from_obj(&obj, encoding);
+                    eprintln!("\": {}", text);
+                    styled_text.text = Some(text);
+                    let (x, y) = text_state.current_position();
+                    styled_text.x = x;
+                    styled_text.y = y;
+                    text_list.push(styled_text.clone());
+                    styled_text = StyledText::new();
+                    // same as the above just aw ac string in the operands
+                }
+                "Do" => {
+                    let obj = op.operands.get(0).unwrap();
+                    let res = doc.get_page_resources(id).unwrap();
+                    let dict = res.0.unwrap().get(b"XObject").unwrap().as_dict().unwrap();
+                    let id = dict
+                        .get(obj.as_name().unwrap())
+                        .unwrap()
+                        .as_reference()
+                        .unwrap();
+                    let obj = doc.get_object(id).unwrap().as_stream().unwrap();
+                    eprintln!("Do :{:?}", obj);
+                    // if its a steam it can be lit everything else at once.. need to make things
+                    // way more modular / slick so we can reuse parts, current impl will just
+                    // require re doing everything here.
+                }
+                "BT" => {
+                    text_state.bt();
+                } //start of text
+                "ET" => {
+                    text_state.et();
+                } //end of text
                 "Tf" => {
                     // when it says symbol. likely a list item (worth looking out for)
-                    let font_alias = op
-                        .operands
-                        .first()
-                        .expect("Syntax Error: Couldn't get font id")
-                        .as_name()?;
-                    current_encoding = encodings.get(font_alias);
-                    let font_info = fonts[font_alias];
-                    let font_desc = font_info.get(b"FontDescriptor")?;
-                    let font_desc_id = extract_ref_from_obj(font_desc)?;
-                    let font_desc_obj = doc.get_object(*font_desc_id)?;
-                    styled_text.font_descriptor = Some(font_desc_obj.to_owned());
+                    if let Some(font_alias) = op.operands.first().and_then(|f| f.as_name().ok()) {
+                        current_encoding = encodings.get(font_alias);
+                        let font_info = fonts[font_alias];
+                        styled_text.font_descriptor = get_font_descriptor(&doc, font_info);
+                    }
                 }
                 "Tm" => {
                     let items = op
                         .operands
                         .get(..6)
                         .ok_or("failed to position for text in pdf")?;
-                    tm = Some(items.iter().map(|f| f.as_float().unwrap()).collect());
+                    text_state.tm(
+                        items[0].as_float().unwrap(),
+                        items[1].as_float().unwrap(),
+                        items[2].as_float().unwrap(),
+                        items[3].as_float().unwrap(),
+                        items[4].as_float().unwrap(),
+                        items[5].as_float().unwrap(),
+                    );
                     styled_text.italic = items[1].as_float()? != 0.0 || items[2].as_float()? != 0.0
                 }
                 "Td" => {
@@ -556,25 +706,51 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                         .operands
                         .get(..2)
                         .ok_or("failed to position for text in pdf")?;
-                    td = Some(items.iter().map(|f| f.as_float().unwrap()).collect());
+                    text_state.td(items[0].as_float().unwrap(), items[1].as_float().unwrap());
                 }
                 "cm" => {
                     let items = op
                         .operands
                         .get(..6)
                         .ok_or("failed to position for text in pdf")?;
-                    cm = Some(items.iter().map(|f| f.as_float().unwrap()).collect());
+                    text_state.cm(
+                        items[0].as_float().unwrap(),
+                        items[1].as_float().unwrap(),
+                        items[2].as_float().unwrap(),
+                        items[3].as_float().unwrap(),
+                        items[4].as_float().unwrap(),
+                        items[5].as_float().unwrap(),
+                    );
                 }
                 "l" => {
                     let items = op
                         .operands
                         .get(..2)
                         .ok_or("failed to get position for lines in pdf")?;
+                    eprintln!("L: ---------");
                     styled_text.x = items[0].as_float()?;
                     styled_text.y = items[1].as_float()?;
                     styled_text.is_line = true;
                     text_list.push(styled_text.clone());
                     styled_text = StyledText::new();
+                }
+                "TL" => {
+                    let item = op
+                        .operands
+                        .get(0)
+                        .ok_or("failed it get leading op in pdf")?;
+                    text_state.tl(item.as_float().unwrap());
+                }
+                "TD" => {
+                    let items = op
+                        .operands
+                        .get(..2)
+                        .ok_or("failed to position for text in pdf")?;
+                    text_state
+                        .td_capital(items[0].as_float().unwrap(), items[1].as_float().unwrap());
+                }
+                "T*" => {
+                    text_state.t_star();
                 }
                 "sc" | "rg" => {
                     if let Some(items) = op.operands.get(..3) {
@@ -596,9 +772,21 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                         last.underlined = true;
                     }
                 }
-                "h" | "re" | "cs" | "f*" | "S" | "w" | "W" | "n" | "Tc" | "W*" | "J" | "j"
-                | "m" | "Do" | "q" | "Q" => {} //colors, and shapes, spacing not imp
-                _ => {}
+                "q" => {
+                    state_stack.push(text_state.clone());
+                    eprintln!("q: pushing state------------");
+                }
+                "Q" => {
+                    if let Some(saved) = state_stack.pop() {
+                        text_state = saved;
+                    }
+                    eprintln!("Q: poping state-------------");
+                }
+                // "h" | "re" | "cs" | "f*" | "S" | "w" | "W" | "n" | "Tc" | "W*" | "J" | "j"
+                // | "m" | "Do" | "Tw" | "i" | "f" => {} // irrelevant
+                _ => {
+                    eprintln!("didn't handle: {}, op: {:?}", op.operator, op.operands);
+                }
             };
         }
         let matrix = StyledText::normalize(&text_list);
@@ -613,25 +801,19 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     Ok(result)
 }
 
+fn get_font_descriptor(doc: &Document, font_info: &Dictionary) -> Option<Object> {
+    let font_desc = font_info.get(b"FontDescriptor").ok()?;
+    let font_desc_id = font_desc.as_reference().ok()?;
+    let font_desc_obj = doc.get_object(font_desc_id).ok()?;
+
+    Some(font_desc_obj.to_owned())
+}
+
 fn rgb_to_hex(r: f32, g: f32, b: f32) -> String {
     let r = (r * 255.0).round() as u8;
     let g = (g * 255.0).round() as u8;
     let b = (b * 255.0).round() as u8;
     format!("#{:02X}{:02X}{:02X}", r, g, b)
-}
-
-fn extract_ref_from_obj(obj: &Object) -> Result<&(u32, u16), &str> {
-    match obj {
-        Object::Reference(id) => Ok(id),
-        _ => Err("failed parsing ref from obj in pdf"),
-    }
-}
-
-fn extract_dict_from_obj(obj: &Object) -> Result<&Dictionary, &str> {
-    match obj {
-        Object::Dictionary(dict) => Ok(dict),
-        _ => Err("failed parsing dict from obj in pdf"),
-    }
 }
 
 fn extract_text_from_objs(objs: &[Object], encoding: &Encoding) -> String {
