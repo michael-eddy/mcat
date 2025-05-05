@@ -2219,6 +2219,7 @@ version = "0.1.1"
 dependencies = [
  "calamine",
  "csv",
+ "pdfr",
  "quick-xml 0.37.4",
  "tempfile",
  "zip 2.6.1",
