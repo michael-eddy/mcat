@@ -5,8 +5,17 @@ use std::io::Write;
 /// should work with all formats Iterm, which include but not limited to GIF,PNG,JPEG..
 /// # example:
 /// ```
+/// use std::path::Path;
+/// use rasteroid::InlineEncoder;
+/// use rasteroid::inline_an_image;
+/// use rasteroid::iterm_encoder::encode_image;
+/// use std::io::Write;
+///
 /// let path = Path::new("image.png");
-/// let bytes = std::fs::read(path).unwrap();
+/// let bytes = match std::fs::read(path) {
+///     Ok(bytes) => bytes,
+///     Err(e) => return,
+/// };
 /// let mut stdout = std::io::stdout();
 /// encode_image(&bytes, &stdout, None).unwrap();
 /// stdout.flush().unwrap();
@@ -34,6 +43,8 @@ pub fn encode_image(
 /// checks if the current terminal supports Iterm graphic protocol
 /// # example:
 /// ```
+///  use rasteroid::iterm_encoder::is_iterm_capable;
+///
 /// let env = rasteroid::term_misc::EnvIdentifiers::new();
 /// let is_capable = is_iterm_capable(&env);
 /// println!("Iterm: {}", is_capable);

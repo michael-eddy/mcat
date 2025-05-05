@@ -1,9 +1,9 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
-use base64::{Engine, engine::general_purpose};
-use flate2::{Compression, write::ZlibEncoder};
+use base64::{engine::general_purpose, Engine};
+use flate2::{write::ZlibEncoder, Compression};
 
-use crate::term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal};
+use crate::term_misc::{self, image_to_base64, offset_to_terminal, EnvIdentifiers};
 
 fn chunk_base64(
     base64: &str,
@@ -66,8 +66,15 @@ fn chunk_base64(
 /// you can use crates like `image` to convert images into png
 /// # example:
 /// ```
+/// use std::path::Path;
+/// use rasteroid::kitty_encoder::encode_image;
+/// use std::io::Write;
+///
 /// let path = Path::new("image.png");
-/// let bytes = std::fs::read(path).unwrap();
+/// let bytes = match std::fs::read(path) {
+///     Ok(bytes) => bytes,
+///     Err(e) => return,
+/// };
 /// let mut stdout = std::io::stdout();
 /// encode_image(&bytes, &stdout, None).unwrap();
 /// stdout.flush().unwrap();
@@ -125,7 +132,13 @@ pub trait Frame {
 /// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
 /// ```
 /// use ffmpeg_sidecar::command::FfmpegCommand;
+/// use rasteroid::kitty_encoder::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
+/// use rasteroid::kitty_encoder::encode_frames;
+/// use rasteroid::kitty_encoder::is_kitty_capable;
+/// use rasteroid::image_extended::calc_fit;
+/// use ffmpeg_sidecar::event::FfmpegEvent;
+///
 /// pub struct KittyFrames(pub OutputVideoFrame);
 /// impl Frame for KittyFrames {
 ///     fn width(&self) -> u16 {
@@ -141,19 +154,28 @@ pub trait Frame {
 ///         &self.0.data
 ///     }
 /// }
-/// ```
-/// next get the frames (taken from ffmpeg-sidecar)
-/// ```
+/// // next get the frames (taken from ffmpeg-sidecar)
+///
 /// let mut out = std::io::stdout();
-/// let iter = FfmpegCommand::new() // <- Builder API like `std::process::Command`
+/// let iter = match FfmpegCommand::new() // <- Builder API like `std::process::Command`
 ///   .testsrc()  // <- Discoverable aliases for FFmpeg args
 ///   .rawvideo() // <- Convenient argument presets
-///   .spawn()?   // <- Ordinary `std::process::Child`
-///   .iter()?;   // <- Blocking iterator over logs and output
+///   .spawn()    // <- Ordinary `std::process::Child`
+///    {
+///        Ok(res) => res,
+///        Err(e) => return,
+/// }.iter().unwrap();   // <- Blocking iterator over logs and output
 /// // now convert to compatible frames
-/// let mut kitty_frames = frames.map(KittyFrames);
+/// let mut kitty_frames = iter
+///         .filter_map(|event| {
+///             if let FfmpegEvent::OutputFrame(frame) = event {
+///                 Some(KittyFrames(frame))
+///             } else {
+///                 None
+///             }
+///         });
 /// let id = rand::random::<u32>();
-/// encode_frames(&mut kitty_frames, out, id, True)?;
+/// encode_frames(&mut kitty_frames, &mut out, id, true);
 /// ```
 pub fn encode_frames(
     frames: &mut dyn Iterator<Item = impl Frame>,
@@ -232,6 +254,8 @@ pub fn encode_frames(
 /// checks if the current terminal supports Kitty's graphic protocol
 /// # example:
 /// ```
+///  use rasteroid::kitty_encoder::is_kitty_capable;
+///
 /// let env = rasteroid::term_misc::EnvIdentifiers::new();
 /// let is_capable = is_kitty_capable(&env);
 /// println!("Kitty: {}", is_capable);

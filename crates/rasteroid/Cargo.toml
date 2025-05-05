@@ -22,3 +22,7 @@ base64 = "0.22.1"
 fast_image_resize = { version = "5.1.2", features = ["image"] }
 flate2 = "1.1.0"
 signal-hook = "0.3.17"
+
+[dev-dependencies]
+ffmpeg-sidecar = "2.0.5"
+rand = "0.9.1"

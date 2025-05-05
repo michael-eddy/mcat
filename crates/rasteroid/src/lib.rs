@@ -12,11 +12,19 @@ extern crate lazy_static;
 /// encode an image bytes into inline image using the given encoder
 /// # example:
 /// ```
+/// use std::path::Path;
+/// use rasteroid::InlineEncoder;
+/// use rasteroid::inline_an_image;
+/// use std::io::Write;
+///
 /// let path = Path::new("image.png");
-/// let bytes = std::fs::read(path).unwrap();
+/// let bytes = match std::fs::read(path) {
+///     Ok(bytes) => bytes,
+///     Err(e) => return,
+/// };
 /// let mut stdout = std::io::stdout();
 /// let encoder = InlineEncoder::auto_detect(true, false, false); // force kitty as fallback
-/// inline_an_image(&bytes, &stdout, None, encoder).unwrap();
+/// inline_an_image(&bytes, &stdout, None, &encoder).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// MENTION: it should work for Iterm Gifs too.

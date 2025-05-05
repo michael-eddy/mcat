@@ -1,10 +1,10 @@
 use std::{
     collections::HashMap,
     env, f32,
-    sync::{Arc, OnceLock, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc, OnceLock},
 };
 
-use base64::{Engine, engine::general_purpose};
+use base64::{engine::general_purpose, Engine};
 use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
@@ -37,7 +37,7 @@ lazy_static! {
 pub struct Size {
     pub width: u16,
     pub height: u16,
-    force: bool,
+    pub force: bool,
 }
 
 impl Winsize {
@@ -80,9 +80,12 @@ impl Winsize {
 }
 
 /// setting a fallback for when fails to query spx and sc.
-/// scale is for scaling while maintaing center. (scale the box not the image)
+/// scale is for scaling while maintaining center. (scale the box not the image)
 /// # example:
 /// ```
+/// use rasteroid::term_misc::init_winsize;
+/// use rasteroid::term_misc::Size;
+///
 /// let spx = Size {
 ///     width: 1920,  // width in pixels
 ///     height: 1080, // height in pixels
@@ -178,7 +181,7 @@ pub fn dim_to_px(dim: &str, direction: SizeDirection) -> Result<u32, String> {
 #[cfg(windows)]
 fn get_size_windows() -> Option<(u16, u16)> {
     use windows::Win32::UI::WindowsAndMessaging::{
-        AdjustWindowRect, GWL_STYLE, GetWindowLongW, WINDOW_STYLE,
+        AdjustWindowRect, GetWindowLongW, GWL_STYLE, WINDOW_STYLE,
     };
     use windows::Win32::{
         Foundation::{HWND, RECT},
@@ -275,7 +278,7 @@ pub fn break_size_string(s: &str) -> Result<Size, Box<dyn std::error::Error>> {
     })
 }
 
-/// get a handle to when the program is killed (will overide so kill the program shortly after)
+/// get a handle to when the program is killed (will override so kill the program shortly after)
 pub fn setup_signal_handler() -> Arc<AtomicBool> {
     let shutdown = Arc::new(AtomicBool::new(false));
 

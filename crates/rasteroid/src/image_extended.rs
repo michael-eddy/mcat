@@ -1,8 +1,8 @@
 use std::{error, io::Cursor};
 
-use fast_image_resize::{IntoImageView, Resizer, images::Image};
+use fast_image_resize::{images::Image, IntoImageView, Resizer};
 use image::{
-    DynamicImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder, imageops::crop_imm,
+    codecs::png::PngEncoder, imageops::crop_imm, DynamicImage, GenericImageView, ImageEncoder,
 };
 
 use super::term_misc::{self, dim_to_px};
@@ -11,9 +11,15 @@ pub trait InlineImage {
     /// fast image resizer, that takes logic units.
     /// # example:
     /// ```
+    /// use std::path::Path;
+    /// use rasteroid::image_extended::InlineImage;
+    ///
     /// let path = Path::new("image.png");
-    /// let buf = std::fs::read(path).unwrap();
-    /// let dyn_img = image::load_from_memory(&image).unwrap();
+    /// let buf = match std::fs::read(path) {
+    ///     Ok(buf) => buf,
+    ///     Err(e) => return,
+    /// };
+    /// let dyn_img = image::load_from_memory(&buf).unwrap();
     /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c")).unwrap();
     /// ```
     /// * the offset is for centering the image
@@ -26,10 +32,16 @@ pub trait InlineImage {
     /// zoom into the image, and move around
     /// # example:
     /// ```
+    /// use std::path::Path;
+    /// use rasteroid::image_extended::InlineImage;
+    ///
     /// let path = Path::new("image.png");
-    /// let buf = std::fs::read(path).unwrap();
-    /// let dyn_img = image::load_from_memory(&image).unwrap();
-    /// let dyn_img = dyn_img.zoom_pan(Some(5), Some(3), Some(2))
+    /// let buf = match std::fs::read(path) {
+    ///     Ok(buf) => buf,
+    ///     Err(e) => return,
+    /// };
+    /// let dyn_img = image::load_from_memory(&buf).unwrap();
+    /// let dyn_img = dyn_img.zoom_pan(Some(5), Some(3), Some(2));
     /// ```
     /// the above zooms 50%, moves right 15% and down 10%
     fn zoom_pan(self, zoom: Option<usize>, x: Option<i32>, y: Option<i32>) -> Self;
@@ -114,6 +126,8 @@ impl InlineImage for DynamicImage {
 /// calculates the dimensions of an image into fit bounding box
 /// # example:
 /// ```
+/// use rasteroid::image_extended::calc_fit;
+///
 /// let (new_width, new_height) = calc_fit(1920, 1080, 800, 400);
 /// ```
 /// the above will return dimensions close to 800x400 that maintain the aspect ratio of 1920x1080
