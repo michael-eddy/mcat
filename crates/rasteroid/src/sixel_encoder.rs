@@ -1,4 +1,4 @@
-use crate::term_misc::{EnvIdentifiers, offset_to_terminal};
+use crate::term_misc::{offset_to_terminal, EnvIdentifiers};
 use color_quant::NeuQuant;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -12,8 +12,15 @@ const SIXEL_MIN: u8 = 0x3f; // '?'
 /// works with all the formats that the image crate supports
 /// # example:
 /// ```
+/// use std::path::Path;
+/// use std::io::Write;
+/// use rasteroid::sixel_encoder::encode_image;
+///
 /// let path = Path::new("image.png");
-/// let bytes = std::fs::read(path).unwrap();
+/// let bytes = match std::fs::read(path) {
+///     Ok(bytes) => bytes,
+///     Err(e) => return,
+/// };
 /// let mut stdout = std::io::stdout();
 /// encode_image(&bytes, &stdout, None).unwrap();
 /// stdout.flush().unwrap();
@@ -38,6 +45,8 @@ pub fn encode_image(
 /// checks if the current terminal supports Sixel's graphic protocol
 /// # example:
 /// ```
+/// use rasteroid::sixel_encoder::is_sixel_capable;
+///
 /// let env = rasteroid::term_misc::EnvIdentifiers::new();
 /// let is_capable = is_sixel_capable(&env);
 /// println!("Sixel: {}", is_capable);

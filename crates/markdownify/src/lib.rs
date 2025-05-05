@@ -15,18 +15,28 @@ use zip::ZipArchive;
 /// convert `any` document into markdown
 /// # example:
 /// ```
+/// use std::path::Path;
+/// use markdownify::convert;
+///
 /// let path = Path::new("path/to/file.docx");
-/// let md = convert(&path, None).unwrap();
-/// println!("{}", md);
+/// match convert(&path, None) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 ///
 /// # with name:
 ///
 /// ```
+/// use std::path::Path;
+/// use markdownify::convert;
+///
 /// let path = Path::new("path/to/file.docx");
-/// let name = "file.docx".to_string()
-/// let md = convert(&path, Some(&name)).unwrap();
-/// println!("{}", md);
+/// let name = "file.docx".to_string();
+/// match convert(&path, Some(&name)) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 pub fn convert(
     path: &Path,
@@ -69,11 +79,16 @@ pub fn convert(
 }
 
 /// convert `zip` into markdown
-/// # usuage:
+/// # usage:
 /// ```
+/// use std::path::Path;
+/// use markdownify::zip_convert;
+///
 /// let path = Path::new("path/to/archive.zip");
-/// let md = zip_convert(&path).unwrap();
-/// println!("{}", md);
+/// match zip_convert(&path) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 pub fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let file = File::open(path)?;

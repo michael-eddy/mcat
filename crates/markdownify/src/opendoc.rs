@@ -7,11 +7,16 @@ use zip::ZipArchive;
 use super::sheets;
 
 /// convert `odt` and `odp` files into markdown
-/// # usuage:
+/// # usage:
 /// ```
+/// use std::path::Path;
+/// use markdownify::opendoc::opendoc_convert;
+///
 /// let path = Path::new("path/to/file.odt");
-/// let md = opendoc_convert(&path).unwrap();
-/// println!("{}", md);
+/// match opendoc_convert(&path) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 pub fn opendoc_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let data = std::fs::read(path)?;

@@ -2997,9 +2997,11 @@ dependencies = [
  "color_quant",
  "crossterm 0.29.0",
  "fast_image_resize",
+ "ffmpeg-sidecar",
  "flate2",
  "image",
  "lazy_static",
+ "rand 0.9.1",
  "signal-hook",
  "windows",
 ]

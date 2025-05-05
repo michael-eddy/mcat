@@ -17,10 +17,12 @@ fn detect_delimiter(line: &str) -> u8 {
 }
 
 /// creates a markdown table
-/// # usuage:
+/// # usage:
 /// ```
+/// use markdownify::sheets::to_markdown_table;
+///
 /// let headers = vec!["Names".to_string(), "Salary".to_string()];
-/// let row = vec![
+/// let rows = vec![
 ///     vec!["Sarah".to_string(), "100".to_string()],
 ///     vec!["Jeff".to_string(), "200".to_string()],
 /// ];
@@ -40,11 +42,16 @@ pub fn to_markdown_table(headers: &[String], rows: &[Vec<String>]) -> String {
 }
 
 /// convert `xlsx` | `xls` | `xlsm` | `xlsb` | `xla` | `xlam` | `ods` files into markdown
-/// # usuage:
+/// # usage:
 /// ```
+/// use std::path::Path;
+/// use markdownify::sheets::sheets_convert;
+///
 /// let path = Path::new("path/to/file.xlsx");
-/// let md = sheets_convert(&path).unwrap();
-/// println!("{}", md);
+/// match sheets_convert(&path) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 pub fn sheets_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut workbook = calamine::open_workbook_auto(path)?;
@@ -77,11 +84,16 @@ pub fn sheets_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>>
 }
 
 /// convert `csv` into markdown
-/// # usuage:
+/// # usage:
 /// ```
+/// use std::path::Path;
+/// use markdownify::sheets::csv_converter;
+///
 /// let path = Path::new("path/to/file.csv");
-/// let md = csv_converter(&path).unwrap();
-/// println!("{}", md);
+/// match csv_converter(&path) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 pub fn csv_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut file = File::open(path)?;
