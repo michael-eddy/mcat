@@ -396,7 +396,7 @@ impl StyledText {
 
         let items = StyledText::extract_tables(items);
         let mut rows: Vec<Vec<&StyledText>> = Vec::new();
-        // for figuring out a fair gap (so we can have better seperated paragraphs)
+        // for figuring out a fair gap (so we can have better separated paragraphs)
         let mut heights: Vec<f32> = Vec::new();
 
         //grouping into rows of within +-3 y
@@ -478,11 +478,16 @@ fn compute_pdf_position(
 }
 
 /// convert `pdf` into markdown
-/// # usuage:
+/// # usage:
 /// ```
+/// use std::path::Path;
+/// use markdownify::pdf::pdf_convert;
+///
 /// let path = Path::new("path/to/file.pdf");
-/// let md = pdf_convert(&path).unwrap();
-/// println!("{}", md);
+/// match pdf_convert(&path) {
+///     Ok(md) => println!("{}", md),
+///     Err(e) => eprintln!("Error: {}", e)
+/// }
 /// ```
 pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let doc = lopdf::Document::load(path)?;
