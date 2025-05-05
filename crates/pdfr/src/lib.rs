@@ -1,6 +1,7 @@
 use std::{error::Error, path::Path};
 
 use lopdf::Document;
+use pdf_element::{PdfElement, PdfUnit};
 use pdf_page::PdfPage;
 
 pub mod pdf_element;
@@ -23,5 +24,14 @@ impl Pdf {
         self.doc
             .page_iter()
             .map(|id| PdfPage::from_object_id(&self.doc, id))
+    }
+
+    pub fn pdf_units_to_elements(units: Vec<PdfUnit>) -> Vec<Vec<PdfElement>> {
+        let elements = pdf_element::units_to_elements(units);
+        let mut matrix = pdf_element::elements_into_matrix(elements);
+        for row in matrix.iter_mut() {
+            pdf_element::sort_transform_elements(row);
+        }
+        matrix
     }
 }

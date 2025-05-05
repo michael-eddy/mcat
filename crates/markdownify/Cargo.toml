@@ -13,6 +13,7 @@ readme = "README.md"
 edition = "2024"
 
 [dependencies]
+pdfr = { path = "../pdfr" }
 tempfile = "3.19.1"
 csv = "1.3.1"
 zip = "2.6.1"
