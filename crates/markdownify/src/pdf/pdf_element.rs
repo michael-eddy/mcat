@@ -41,23 +41,6 @@ pub struct PdfTable {
     x: f32, // just the center of it
 }
 
-impl PdfLine {
-    fn sorted_x(&self) -> (f32, f32) {
-        if self.to.0 > self.from.0 {
-            return (self.from.0, self.to.0);
-        } else {
-            return (self.to.0, self.from.0);
-        }
-    }
-    fn sorted_y(&self) -> (f32, f32) {
-        if self.to.1 > self.from.1 {
-            return (self.from.1, self.to.1);
-        } else {
-            return (self.to.1, self.from.1);
-        }
-    }
-}
-
 impl PdfElement {
     pub fn get_y(&self) -> f32 {
         match self {
@@ -71,14 +54,6 @@ impl PdfElement {
             PdfElement::Table(pdf_table) => pdf_table.x,
         }
     }
-}
-
-fn is_same_bottom_left(cell1: &TableBoundary, cell2: &TableBoundary, threshold: f32) -> bool {
-    let bl1 = (cell1.minx, cell1.miny);
-    let bl2 = (cell2.minx, cell2.miny);
-
-    let distance = distance(bl1, bl2);
-    distance <= threshold
 }
 
 fn distance(pt1: (f32, f32), pt2: (f32, f32)) -> f32 {
@@ -250,42 +225,70 @@ fn lines_to_intersections(lines: Vec<PdfLine>) -> Vec<(f32, f32)> {
     cluster_points(&intersections, epsilon)
 }
 
-// currently doesn't work. fails to actually cluster (and does't gurantee to make actual clusters
-// because lacks sorting)
 fn cluster_lines(lines: Vec<PdfLine>) -> Vec<Vec<PdfLine>> {
-    let mut clusters = Vec::new();
     let epsilon = 10.0;
 
-    // clustering h lines
-    for line in lines {
-        if clusters.is_empty() {
-            clusters.push(vec![line]);
-            continue;
+    fn fixed_lines_close(line: &PdfLine, other: &PdfLine, epsilon: f32) -> bool {
+        distance(line.from, other.to) < epsilon
+            || distance(line.from, other.from) < epsilon
+            || distance(line.to, other.to) < epsilon
+            || distance(line.to, other.from) < epsilon
+    }
+
+    // Create a disjoint-set (union-find) data structure for tracking clusters
+    let mut parents: Vec<usize> = (0..lines.len()).collect();
+    let mut sizes: Vec<usize> = vec![1; lines.len()];
+
+    // Find function with path compression
+    fn find(parents: &mut Vec<usize>, x: usize) -> usize {
+        if parents[x] != x {
+            parents[x] = find(parents, parents[x]);
+        }
+        parents[x]
+    }
+
+    // Union function with rank (size) heuristic
+    fn union(parents: &mut Vec<usize>, sizes: &mut Vec<usize>, x: usize, y: usize) {
+        let root_x = find(parents, x);
+        let root_y = find(parents, y);
+
+        if root_x == root_y {
+            return;
         }
 
-        let mut found_cluster = false;
-        for cluster in clusters.iter_mut() {
-            if found_cluster {
-                break;
-            }
-            for alt_line in cluster.iter() {
-                if distance(line.to, alt_line.from) < epsilon
-                    || distance(line.from, line.to) < epsilon
-                    || distance(line.from, line.from) < epsilon
-                    || distance(line.to, line.to) < epsilon
-                {
-                    found_cluster = true;
-                    cluster.push(line.clone());
-                    break;
-                }
-            }
-        }
-        if !found_cluster {
-            clusters.push(vec![line]);
+        // Attach smaller tree under root of larger tree
+        if sizes[root_x] < sizes[root_y] {
+            parents[root_x] = root_y;
+            sizes[root_y] += sizes[root_x];
+        } else {
+            parents[root_y] = root_x;
+            sizes[root_x] += sizes[root_y];
         }
     }
 
-    clusters
+    // Build connections between lines using union-find
+    for i in 0..lines.len() {
+        for j in (i + 1)..lines.len() {
+            if fixed_lines_close(&lines[i], &lines[j], epsilon) {
+                union(&mut parents, &mut sizes, i, j);
+            }
+        }
+    }
+
+    // Collect lines into their respective clusters
+    let mut cluster_map: std::collections::HashMap<usize, Vec<PdfLine>> =
+        std::collections::HashMap::new();
+
+    for i in 0..lines.len() {
+        let root = find(&mut parents, i);
+        cluster_map
+            .entry(root)
+            .or_insert_with(Vec::new)
+            .push(lines[i].clone());
+    }
+
+    // Convert the hashmap into a Vec<Vec<PdfLine>>
+    cluster_map.into_values().collect()
 }
 
 impl PdfTable {
@@ -295,22 +298,13 @@ impl PdfTable {
 
         let mut pdf_tables = Vec::new();
         for lines in line_clusters {
-            eprintln!("Starting Cluster-------------------------");
             let intersections = lines_to_intersections(lines);
-            for pt in intersections.iter() {
-                eprintln!("point {:?}", pt);
-            }
-            eprintln!("Ended Cluster-------------------------");
             if intersections.is_empty() {
                 continue;
             }
 
             let pdf_table = intersections_to_table(intersections);
             pdf_tables.push(pdf_table);
-        }
-
-        for table in pdf_tables.iter() {
-            // eprintln!("table\n{:?}", table);
         }
 
         pdf_tables

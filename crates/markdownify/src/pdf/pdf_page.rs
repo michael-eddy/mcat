@@ -390,5 +390,8 @@ fn extract_text_from_obj(obj: &Object, encoding: &Encoding) -> String {
     if let Ok(s) = Document::decode_text(encoding, &bytes) {
         return s;
     }
+    if let Ok(str) = String::from_utf8(bytes) {
+        return str;
+    }
     return "".to_owned();
 }
