@@ -24,17 +24,6 @@ impl Matrix3x3 {
         Self { a, b, c, d, e, f }
     }
 
-    pub fn translate(&self, tx: f32, ty: f32) -> Self {
-        self.multiply(&Matrix3x3 {
-            a: 1.0,
-            b: 0.0,
-            c: 0.0,
-            d: 1.0,
-            e: tx,
-            f: ty,
-        })
-    }
-
     pub fn multiply(&self, other: &Self) -> Self {
         Self {
             a: self.a * other.a + self.c * other.b,
@@ -132,6 +121,12 @@ impl PdfState {
 
     pub fn l(&self, to: (f32, f32)) -> ((f32, f32), (f32, f32)) {
         let from = self.ctm.apply_to_point(self.m.0, self.m.1);
+        let to = self.ctm.apply_to_point(to.0, to.1);
+        (from, to)
+    }
+
+    pub fn re(&self, from: (f32, f32), to: (f32, f32)) -> ((f32, f32), (f32, f32)) {
+        let from = self.ctm.apply_to_point(from.0, from.1);
         let to = self.ctm.apply_to_point(to.0, to.1);
         (from, to)
     }

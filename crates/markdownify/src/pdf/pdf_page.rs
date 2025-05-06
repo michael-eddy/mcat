@@ -1,16 +1,12 @@
 use std::{collections::BTreeMap, error::Error, mem::take};
 
-use lopdf::{Dictionary, Document, Encoding, Object, ObjectId, Stream, xobject};
+use lopdf::{Dictionary, Document, Encoding, Object, ObjectId};
 
-use crate::{
+use super::{
     pdf_element::{PdfLine, PdfText, PdfUnit},
     pdf_state::PdfState,
 };
 
-struct ChildFontsEncodings<'a> {
-    pub fonts: BTreeMap<Vec<u8>, &'a Dictionary>,
-    pub encodings: BTreeMap<Vec<u8>, Encoding<'a>>,
-}
 pub struct PdfPage<'a> {
     pub stream: Vec<u8>,
     id: ObjectId,
@@ -20,7 +16,8 @@ pub struct PdfPage<'a> {
     current_font_alias: Vec<u8>,
     state: PdfState,
     state_stack: Vec<PdfState>,
-    child_state: Option<ChildFontsEncodings<'a>>,
+    pub child_fonts: Option<BTreeMap<Vec<u8>, &'a Dictionary>>,
+    pub child_encodings: Option<BTreeMap<Vec<u8>, Encoding<'a>>>,
 }
 
 impl<'a> PdfPage<'a> {
@@ -45,7 +42,8 @@ impl<'a> PdfPage<'a> {
             current_font_alias: Vec::new(),
             state: PdfState::new(),
             state_stack: Vec::new(),
-            child_state: None,
+            child_fonts: None,
+            child_encodings: None,
         })
     }
 
@@ -66,9 +64,11 @@ impl<'a> PdfPage<'a> {
                         if r == "'" || r == "\"" {
                             self.state.t_star();
                         }
-                        let text =
-                            extract_text_from_objs(&op.operands, self.get_current_encoding());
-                        eprintln!("TJ: {}", text);
+                        let text = extract_text_from_objs(
+                            &op.operands,
+                            self.get_current_encoding()
+                                .ok_or("failed to find encoding before text")?,
+                        );
                         let (x, y) = self.state.current_position();
                         current_element.text = text;
                         current_element.x = x;
@@ -77,8 +77,7 @@ impl<'a> PdfPage<'a> {
                         Ok(())
                     }
                     "Do" => {
-                        // may be alot of things, for now just check if steam and if so handle it
-                        eprintln!("Starting Do----------------------------------");
+                        // image or form.
                         let obj = op
                             .operands
                             .get(0)
@@ -95,16 +94,38 @@ impl<'a> PdfPage<'a> {
 
                         let dict = page_dict.get(b"XObject")?.as_dict()?;
                         let id = dict.get(obj.as_name()?)?.as_reference()?;
-
                         let stream = self.document.get_object(id)?.as_stream()?;
                         let raw = stream.decompressed_content()?;
 
+                        let mut child_fonts: BTreeMap<Vec<u8>, &Dictionary> = BTreeMap::new();
+                        if let Ok(dict) = stream.dict.get(b"Resources").and_then(Object::as_dict) {
+                            if let Ok(fonts) = dict.get(b"Font").and_then(Object::as_dict) {
+                                for (k, v) in fonts.iter() {
+                                    if let Some(font_dict) = v
+                                        .as_reference()
+                                        .ok()
+                                        .and_then(|id| self.document.get_object(id).ok())
+                                        .and_then(|obj| obj.as_dict().ok())
+                                    {
+                                        child_fonts.insert(k.clone(), font_dict);
+                                    }
+                                }
+                            }
+                        }
+                        let child_encodings: BTreeMap<Vec<u8>, Encoding> = child_fonts
+                            .iter()
+                            .filter_map(|(name, font)| {
+                                match font.get_font_encoding(&self.document) {
+                                    Ok(enc) => Some((name.clone(), enc)),
+                                    Err(_) => None,
+                                }
+                            })
+                            .collect();
+                        self.child_fonts = Some(child_fonts);
+                        self.child_encodings = Some(child_encodings);
+
                         let units = self.handle_stream(raw)?;
                         elements.extend(units);
-                        eprintln!(
-                            "Ended Do---------------------------------- {}",
-                            stream.content.len()
-                        );
                         Ok(())
                     }
                     "BT" => {
@@ -135,7 +156,6 @@ impl<'a> PdfPage<'a> {
                             .ok_or("failed to query current font in the pdf")?
                             .as_name()?;
                         self.current_font_alias = font_alias.to_owned();
-                        eprintln!("setted tf with: {:?}", self.current_font_alias);
 
                         // styles realted to fonts~
                         let font_info = self
@@ -173,6 +193,7 @@ impl<'a> PdfPage<'a> {
                             .iter()
                             .map(|f| f.as_float().unwrap())
                             .collect();
+                        current_element.italic = items[1] != 0.0 || items[2] != 0.0;
                         self.state
                             .tm(items[0], items[1], items[2], items[3], items[4], items[5]);
                         Ok(())
@@ -262,18 +283,65 @@ impl<'a> PdfPage<'a> {
                         elements.push(PdfUnit::Line(line));
                         Ok(())
                     }
-                    // look for more styles, include things like line spacing, et..
-                    _ => Ok(()),
+                    "re" => {
+                        let items: Vec<f32> = op
+                            .operands
+                            .get(..4)
+                            .ok_or("failed to get position for line in pdf")?
+                            .iter()
+                            .map(|f| f.as_float().unwrap())
+                            .collect();
+
+                        let x = items[0];
+                        let y = items[1];
+                        let width = items[2];
+                        let height = items[3];
+
+                        let point1 = (x, y); // bottom-left corner
+                        let point2 = (x + width, y); // bottom-right corner
+                        let point3 = (x + width, y + height); // top-right corner
+                        let point4 = (x, y + height); // top-left corner
+
+                        let lines = vec![
+                            self.state.re(point1, point2), // Line 1: bottom-left to bottom-right
+                            self.state.re(point3, point3), // Line 2: bottom-right to top-right
+                            self.state.re(point3, point4), // Line 3: top-right to top-left
+                            self.state.re(point4, point1), // Line 4: top-left to bottom-left
+                        ];
+                        let lines: Vec<PdfUnit> = lines
+                            .iter()
+                            .map(|line| {
+                                PdfUnit::Line(PdfLine {
+                                    from: line.0,
+                                    to: line.1,
+                                })
+                            })
+                            .collect();
+                        elements.extend(lines);
+
+                        Ok(())
+                    }
+                    _ => {
+                        // eprintln!("didnt handle: {}, with: {:?}", op.operator, op.operands);
+                        Ok(())
+                    }
                 }
             })
             .collect();
         Ok(elements)
     }
 
-    fn get_current_encoding(&self) -> &Encoding<'_> {
-        self.encodings
-            .get(&self.current_font_alias)
-            .expect("couldn't get current encoding")
+    fn get_current_encoding(&self) -> Option<&Encoding<'_>> {
+        match self.encodings.get(&self.current_font_alias) {
+            Some(en) => Some(en),
+            None => {
+                if let Some(enc) = &self.child_encodings {
+                    let encoding = enc.get(&self.current_font_alias)?;
+                    return Some(encoding);
+                }
+                None
+            }
+        }
     }
 }
 
