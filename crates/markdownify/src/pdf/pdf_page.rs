@@ -360,21 +360,35 @@ fn extract_text_from_objs(objs: &[Object], encoding: &Encoding) -> String {
     text
 }
 
-fn extract_text_from_obj(obj: &Object, encoding: &Encoding) -> String {
-    let mut text = String::new();
-    if obj.as_str().unwrap_or_default() == &[0xB7] {
-        return "*".to_string();
-    }
+fn extract_bytes_from_obj(obj: &Object) -> Vec<u8> {
+    let mut text = Vec::new();
+
     match obj {
         Object::String(bytes, _) | Object::Name(bytes) => {
-            if let Ok(s) = Document::decode_text(encoding, bytes) {
-                text.push_str(&s);
-            }
+            text.extend_from_slice(&bytes);
         }
         Object::Array(nested) => {
-            text.push_str(&extract_text_from_objs(nested, encoding));
+            let bytes = extract_bytes_from_objs(nested);
+            text.extend_from_slice(&bytes);
         }
         _ => {}
     }
+
     text
+}
+
+fn extract_bytes_from_objs(objs: &[Object]) -> Vec<u8> {
+    let mut text = Vec::new();
+    for obj in objs {
+        text.extend_from_slice(&extract_bytes_from_obj(obj));
+    }
+    text
+}
+
+fn extract_text_from_obj(obj: &Object, encoding: &Encoding) -> String {
+    let bytes = extract_bytes_from_obj(obj);
+    if let Ok(s) = Document::decode_text(encoding, &bytes) {
+        return s;
+    }
+    return "".to_owned();
 }

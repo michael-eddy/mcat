@@ -8,13 +8,13 @@ pub enum PdfUnit {
     Line(PdfLine),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PdfLine {
     pub from: (f32, f32),
     pub to: (f32, f32),
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct PdfText {
     pub text: String,
     pub italic: bool,
@@ -26,7 +26,7 @@ pub struct PdfText {
     pub color: Option<String>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 struct TableBoundary {
     minx: f32,
     maxx: f32,
@@ -34,11 +34,28 @@ struct TableBoundary {
     maxy: f32,
     elements: Vec<PdfText>,
 }
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct PdfTable {
     boundaries: Vec<TableBoundary>,
     y: f32, // just the center of it
     x: f32, // just the center of it
+}
+
+impl PdfLine {
+    fn sorted_x(&self) -> (f32, f32) {
+        if self.to.0 > self.from.0 {
+            return (self.from.0, self.to.0);
+        } else {
+            return (self.to.0, self.from.0);
+        }
+    }
+    fn sorted_y(&self) -> (f32, f32) {
+        if self.to.1 > self.from.1 {
+            return (self.from.1, self.to.1);
+        } else {
+            return (self.to.1, self.from.1);
+        }
+    }
 }
 
 impl PdfElement {
@@ -55,118 +72,248 @@ impl PdfElement {
         }
     }
 }
+
+fn is_same_bottom_left(cell1: &TableBoundary, cell2: &TableBoundary, threshold: f32) -> bool {
+    let bl1 = (cell1.minx, cell1.miny);
+    let bl2 = (cell2.minx, cell2.miny);
+
+    let distance = distance(bl1, bl2);
+    distance <= threshold
+}
+
+fn distance(pt1: (f32, f32), pt2: (f32, f32)) -> f32 {
+    ((pt1.0 - pt2.0).powi(2) + (pt1.1 - pt2.1).powi(2)).sqrt()
+}
+
+fn cluster_points(points: &[(f32, f32)], radius: f32) -> Vec<(f32, f32)> {
+    let mut clustered = vec![];
+    let mut visited = vec![false; points.len()];
+
+    for (i, &(x1, y1)) in points.iter().enumerate() {
+        if visited[i] {
+            continue;
+        }
+
+        let mut cluster = vec![(x1, y1)];
+        visited[i] = true;
+
+        for (j, &(x2, y2)) in points.iter().enumerate().skip(i + 1) {
+            if !visited[j] {
+                let dx = x2 - x1;
+                let dy = y2 - y1;
+                if (dx * dx + dy * dy).sqrt() <= radius {
+                    cluster.push((x2, y2));
+                    visited[j] = true;
+                }
+            }
+        }
+
+        // Compute centroid of the cluster
+        let len = cluster.len() as f32;
+        let sum = cluster
+            .iter()
+            .fold((0.0, 0.0), |acc, &(x, y)| (acc.0 + x, acc.1 + y));
+        clustered.push((sum.0 / len, sum.1 / len));
+    }
+
+    clustered
+}
+
+fn intersections_to_table(mut intersections: Vec<(f32, f32)>) -> PdfTable {
+    // sort top-left to bottom-right
+    let epsilon = 3.0;
+    intersections.sort_by(|a, b| {
+        if (a.1 - b.1).abs() > epsilon {
+            a.1.partial_cmp(&b.1).unwrap()
+        } else {
+            a.0.partial_cmp(&b.0).unwrap()
+        }
+    });
+
+    let mut rows: Vec<Vec<(f32, f32)>> = Vec::new();
+    let mut current_row: Vec<(f32, f32)> = Vec::new();
+
+    // into a matrix
+    for pt in intersections {
+        if current_row.is_empty() {
+            current_row.push(pt);
+        } else {
+            let last_y = current_row[0].1;
+            if (pt.1 - last_y).abs() <= epsilon {
+                current_row.push(pt);
+            } else {
+                rows.push(current_row);
+                current_row = vec![pt];
+            }
+        }
+    }
+    if !current_row.is_empty() {
+        rows.push(current_row);
+    }
+
+    // sort the rows left to right
+    for row in rows.iter_mut() {
+        row.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    }
+
+    let mut boundaries = Vec::new();
+    for y in 0..rows.len().saturating_sub(1) {
+        let row = &rows[y];
+        let next_row = &rows[y + 1];
+
+        let cols = row.len().min(next_row.len());
+        for x in 0..cols - 1 {
+            let top_left = row[x];
+            let bottom_right = next_row[x + 1];
+
+            boundaries.push(TableBoundary {
+                minx: top_left.0,
+                maxx: bottom_right.0,
+                miny: top_left.1,
+                maxy: bottom_right.1,
+                elements: vec![],
+            });
+        }
+    }
+
+    // Estimate table center
+    let top_left = rows
+        .first()
+        .and_then(|r| r.first())
+        .copied()
+        .unwrap_or((0.0, 0.0));
+    let bottom_right = rows
+        .last()
+        .and_then(|r| r.last())
+        .copied()
+        .unwrap_or((0.0, 0.0));
+
+    let x = (top_left.0 + bottom_right.0) / 2.0;
+    let y = (top_left.1 + bottom_right.1) / 2.0;
+
+    PdfTable { boundaries, x, y }
+}
+
+fn lines_to_intersections(lines: Vec<PdfLine>) -> Vec<(f32, f32)> {
+    // First, separate horizontal and vertical lines
+    let mut horizontal_lines: Vec<&PdfLine> = Vec::new();
+    let mut vertical_lines: Vec<&PdfLine> = Vec::new();
+    for line in &lines {
+        let (x1, y1) = line.from;
+        let (x2, y2) = line.to;
+
+        let epsilon = 2.0;
+
+        if (y1 - y2).abs() < epsilon {
+            horizontal_lines.push(line);
+        } else if (x1 - x2).abs() < epsilon {
+            vertical_lines.push(line);
+        }
+    }
+    // If we don't have both horizontal and vertical lines, we can't form a table
+    if horizontal_lines.is_empty() || vertical_lines.is_empty() {
+        return Vec::new();
+    }
+
+    // Find intersections between horizontal and vertical lines
+    let mut intersections: Vec<(f32, f32)> = Vec::new();
+    let epsilon = 10.0;
+
+    for h_line in &horizontal_lines {
+        let h_y = h_line.from.1; // Y-coordinate is the same for horizontal lines
+        let h_min_x = h_line.from.0.min(h_line.to.0);
+        let h_max_x = h_line.from.0.max(h_line.to.0);
+
+        for v_line in &vertical_lines {
+            let v_x = v_line.from.0; // X-coordinate is the same for vertical lines
+            let v_min_y = v_line.from.1.min(v_line.to.1);
+            let v_max_y = v_line.from.1.max(v_line.to.1);
+
+            // Check if lines intersect
+            if (v_x - h_min_x).abs() <= epsilon
+                || (v_x - h_max_x).abs() <= epsilon
+                || (v_x >= h_min_x && v_x <= h_max_x)
+            {
+                if (h_y - v_min_y).abs() <= epsilon
+                    || (h_y - v_max_y).abs() <= epsilon
+                    || (h_y >= v_min_y && h_y <= v_max_y)
+                {
+                    // Calculate potential intersection point
+                    let new_point = (v_x, h_y);
+
+                    intersections.push(new_point);
+                }
+            }
+        }
+    }
+
+    cluster_points(&intersections, epsilon)
+}
+
+// currently doesn't work. fails to actually cluster (and does't gurantee to make actual clusters
+// because lacks sorting)
+fn cluster_lines(lines: Vec<PdfLine>) -> Vec<Vec<PdfLine>> {
+    let mut clusters = Vec::new();
+    let epsilon = 10.0;
+
+    // clustering h lines
+    for line in lines {
+        if clusters.is_empty() {
+            clusters.push(vec![line]);
+            continue;
+        }
+
+        let mut found_cluster = false;
+        for cluster in clusters.iter_mut() {
+            if found_cluster {
+                break;
+            }
+            for alt_line in cluster.iter() {
+                if distance(line.to, alt_line.from) < epsilon
+                    || distance(line.from, line.to) < epsilon
+                    || distance(line.from, line.from) < epsilon
+                    || distance(line.to, line.to) < epsilon
+                {
+                    found_cluster = true;
+                    cluster.push(line.clone());
+                    break;
+                }
+            }
+        }
+        if !found_cluster {
+            clusters.push(vec![line]);
+        }
+    }
+
+    clusters
+}
+
 impl PdfTable {
-    fn lines_touch(a: &PdfLine, b: &PdfLine) -> bool {
-        const LINE_PROXIMITY: f32 = 0.3;
-        fn point_dist(p1: (f32, f32), p2: (f32, f32)) -> f32 {
-            ((p1.0 - p2.0).powi(2) + (p1.1 - p2.1).powi(2)).sqrt()
-        }
-
-        [a.from, a.to].iter().any(|&p1| {
-            [b.from, b.to]
-                .iter()
-                .any(|&p2| point_dist(p1, p2) < LINE_PROXIMITY)
-        })
-    }
-
-    fn cluster_lines(lines: &[PdfLine]) -> Vec<Vec<PdfLine>> {
-        let mut visited = vec![false; lines.len()];
-        let mut clusters = vec![];
-
-        for i in 0..lines.len() {
-            if visited[i] {
-                continue;
-            }
-
-            let mut stack = vec![i];
-            let mut cluster = vec![];
-
-            while let Some(idx) = stack.pop() {
-                if visited[idx] {
-                    continue;
-                }
-
-                visited[idx] = true;
-                cluster.push(lines[idx].clone());
-
-                for j in 0..lines.len() {
-                    if !visited[j] && PdfTable::lines_touch(&lines[idx], &lines[j]) {
-                        stack.push(j);
-                    }
-                }
-            }
-
-            if cluster.len() >= 4 {
-                clusters.push(cluster);
-            }
-        }
-
-        clusters
-    }
-
     pub fn from_lines(lines: Vec<PdfLine>) -> Vec<PdfTable> {
-        let clusters = PdfTable::cluster_lines(&lines);
+        // seperate them into vertical and horizontal lines
+        let line_clusters = cluster_lines(lines);
 
-        let mut tables = vec![];
-
-        for cluster in clusters {
-            let mut hlines = vec![];
-            let mut vlines = vec![];
-
-            for line in &cluster {
-                if (line.from.1 - line.to.1).abs() < 1.0 {
-                    hlines.push(line.clone());
-                } else if (line.from.0 - line.to.0).abs() < 1.0 {
-                    vlines.push(line.clone());
-                }
+        let mut pdf_tables = Vec::new();
+        for lines in line_clusters {
+            eprintln!("Starting Cluster-------------------------");
+            let intersections = lines_to_intersections(lines);
+            for pt in intersections.iter() {
+                eprintln!("point {:?}", pt);
             }
-
-            if hlines.len() < 2 || vlines.len() < 2 {
-                continue; // not enough to form a table
-            }
-
-            hlines.sort_by(|a, b| a.from.1.partial_cmp(&b.from.1).unwrap());
-            vlines.sort_by(|a, b| a.from.0.partial_cmp(&b.from.0).unwrap());
-
-            let mut boundaries = vec![];
-
-            for y_pair in hlines.windows(2) {
-                for x_pair in vlines.windows(2) {
-                    let top = y_pair[0].from.1;
-                    let bottom = y_pair[1].from.1;
-                    let left = x_pair[0].from.0;
-                    let right = x_pair[1].from.0;
-
-                    if top != bottom && left != right {
-                        boundaries.push(TableBoundary {
-                            minx: left.min(right),
-                            maxx: left.max(right),
-                            miny: bottom.min(top),
-                            maxy: bottom.max(top),
-                            elements: vec![],
-                        });
-                    }
-                }
-            }
-
-            if boundaries.is_empty() {
+            eprintln!("Ended Cluster-------------------------");
+            if intersections.is_empty() {
                 continue;
             }
 
-            let (sum_x, sum_y, count) = boundaries.iter().fold((0.0, 0.0, 0), |(sx, sy, c), b| {
-                let cx = (b.minx + b.maxx) / 2.0;
-                let cy = (b.miny + b.maxy) / 2.0;
-                (sx + cx, sy + cy, c + 1)
-            });
-
-            tables.push(PdfTable {
-                boundaries,
-                x: sum_x / count as f32,
-                y: sum_y / count as f32,
-            });
+            let pdf_table = intersections_to_table(intersections);
+            pdf_tables.push(pdf_table);
         }
 
-        tables
+        for table in pdf_tables.iter() {
+            // eprintln!("table\n{:?}", table);
+        }
+
+        pdf_tables
     }
 
     pub fn assign(&mut self, element: &PdfText) -> bool {
