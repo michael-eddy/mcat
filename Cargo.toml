@@ -2,7 +2,7 @@
 members = [
     "crates/core",
     "crates/markdownify",
-    "crates/rasteroid"
+    "crates/rasteroid",
 ]
 resolver = "3"
 
