@@ -64,6 +64,8 @@ impl<'a> PdfPage<'a> {
                         if r == "'" || r == "\"" {
                             self.state.t_star();
                         }
+                        // currently ignores spacing in between chars. may include joined words
+                        // because of weird pdfs design.
                         let text = extract_text_from_objs(
                             &op.operands,
                             self.get_current_encoding()
@@ -321,10 +323,7 @@ impl<'a> PdfPage<'a> {
 
                         Ok(())
                     }
-                    _ => {
-                        // eprintln!("didnt handle: {}, with: {:?}", op.operator, op.operands);
-                        Ok(())
-                    }
+                    _ => Ok(()),
                 }
             })
             .collect();

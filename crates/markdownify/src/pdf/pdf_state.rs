@@ -50,7 +50,6 @@ impl Matrix3x3 {
 pub struct PdfState {
     ctm: Matrix3x3,
     tm: Matrix3x3,
-    tlm: Matrix3x3,
     leading: f32,
     pub m: (f32, f32),
 }
@@ -64,7 +63,6 @@ impl PdfState {
     pub fn new() -> Self {
         Self {
             tm: Matrix3x3::identity(),
-            tlm: Matrix3x3::identity(),
             ctm: Matrix3x3::identity(),
             leading: 0.0,
             m: (0.0, 0.0),
@@ -73,7 +71,6 @@ impl PdfState {
 
     pub fn bt(&mut self) {
         self.tm = Matrix3x3::identity();
-        self.tlm = Matrix3x3::identity();
     }
 
     pub fn et(&mut self) {
@@ -86,8 +83,7 @@ impl PdfState {
 
     pub fn td(&mut self, tx: f32, ty: f32) {
         let translation = Matrix3x3::from_components(1.0, 0.0, 0.0, 1.0, tx, ty);
-        self.tlm = translation.multiply(&self.tlm);
-        self.tm = self.tlm;
+        self.tm = self.tm.multiply(&translation);
     }
 
     pub fn td_capital(&mut self, tx: f32, ty: f32) {
@@ -98,7 +94,6 @@ impl PdfState {
     pub fn tm(&mut self, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) {
         let m = Matrix3x3::from_components(a, b, c, d, e, f);
         self.tm = m;
-        self.tlm = m;
     }
 
     pub fn t_star(&mut self) {
@@ -114,6 +109,7 @@ impl PdfState {
     }
 
     pub fn current_position(&self) -> (f32, f32) {
+        // can be wrong. but i think we apply the tm on the ctm and not the other way around
         let combined = self.ctm.multiply(&self.tm);
         let f = combined.apply_to_origin();
         f

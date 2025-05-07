@@ -61,40 +61,76 @@ fn distance(pt1: (f32, f32), pt2: (f32, f32)) -> f32 {
 }
 
 fn cluster_points(points: &[(f32, f32)], radius: f32) -> Vec<(f32, f32)> {
-    let mut clustered = vec![];
-    let mut visited = vec![false; points.len()];
+    let n = points.len();
 
-    for (i, &(x1, y1)) in points.iter().enumerate() {
-        if visited[i] {
-            continue;
+    // Initialize Union-Find structure
+    let mut parents: Vec<usize> = (0..n).collect();
+    let mut sizes: Vec<usize> = vec![1; n];
+
+    // Find function with path compression
+    fn find(parents: &mut Vec<usize>, x: usize) -> usize {
+        if parents[x] != x {
+            parents[x] = find(parents, parents[x]);
         }
-
-        let mut cluster = vec![(x1, y1)];
-        visited[i] = true;
-
-        for (j, &(x2, y2)) in points.iter().enumerate().skip(i + 1) {
-            if !visited[j] {
-                let dx = x2 - x1;
-                let dy = y2 - y1;
-                if (dx * dx + dy * dy).sqrt() <= radius {
-                    cluster.push((x2, y2));
-                    visited[j] = true;
-                }
-            }
-        }
-
-        // Compute centroid of the cluster
-        let len = cluster.len() as f32;
-        let sum = cluster
-            .iter()
-            .fold((0.0, 0.0), |acc, &(x, y)| (acc.0 + x, acc.1 + y));
-        clustered.push((sum.0 / len, sum.1 / len));
+        parents[x]
     }
 
-    clustered
+    // Union function with rank optimization
+    fn union(parents: &mut Vec<usize>, sizes: &mut Vec<usize>, x: usize, y: usize) {
+        let root_x = find(parents, x);
+        let root_y = find(parents, y);
+
+        if root_x == root_y {
+            return;
+        }
+
+        if sizes[root_x] < sizes[root_y] {
+            parents[root_x] = root_y;
+            sizes[root_y] += sizes[root_x];
+        } else {
+            parents[root_y] = root_x;
+            sizes[root_x] += sizes[root_y];
+        }
+    }
+
+    // Connect points within radius
+    for i in 0..n {
+        let (x1, y1) = points[i];
+        for j in (i + 1)..n {
+            let (x2, y2) = points[j];
+            let dx = x2 - x1;
+            let dy = y2 - y1;
+            if (dx * dx + dy * dy).sqrt() <= radius {
+                union(&mut parents, &mut sizes, i, j);
+            }
+        }
+    }
+
+    // Create map of root -> points in cluster
+    let mut clusters: std::collections::HashMap<usize, Vec<(f32, f32)>> =
+        std::collections::HashMap::new();
+    for i in 0..n {
+        let root = find(&mut parents, i);
+        clusters
+            .entry(root)
+            .or_insert_with(Vec::new)
+            .push(points[i]);
+    }
+
+    // Calculate centroids
+    let mut centroids = Vec::new();
+    for points in clusters.values() {
+        let len = points.len() as f32;
+        let sum = points
+            .iter()
+            .fold((0.0, 0.0), |acc, &(x, y)| (acc.0 + x, acc.1 + y));
+        centroids.push((sum.0 / len, sum.1 / len));
+    }
+
+    centroids
 }
 
-fn intersections_to_table(mut intersections: Vec<(f32, f32)>) -> PdfTable {
+fn intersections_to_table(mut intersections: Vec<(f32, f32)>) -> Option<PdfTable> {
     // sort top-left to bottom-right
     let epsilon = 3.0;
     intersections.sort_by(|a, b| {
@@ -166,7 +202,10 @@ fn intersections_to_table(mut intersections: Vec<(f32, f32)>) -> PdfTable {
     let x = (top_left.0 + bottom_right.0) / 2.0;
     let y = (top_left.1 + bottom_right.1) / 2.0;
 
-    PdfTable { boundaries, x, y }
+    if boundaries.len() <= 1 {
+        return None;
+    }
+    Some(PdfTable { boundaries, x, y })
 }
 
 fn lines_to_intersections(lines: Vec<PdfLine>) -> Vec<(f32, f32)> {
@@ -291,8 +330,30 @@ fn cluster_lines(lines: Vec<PdfLine>) -> Vec<Vec<PdfLine>> {
     cluster_map.into_values().collect()
 }
 
+fn deduplicate_lines(lines: Vec<PdfLine>) -> Vec<PdfLine> {
+    let mut unique: Vec<PdfLine> = Vec::new();
+    let epsilon = 5.0;
+
+    for line in lines.iter() {
+        let mut found = false;
+        for u in unique.iter() {
+            if distance(line.from, u.from) < epsilon && distance(u.to, line.to) < epsilon {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            unique.push(line.clone());
+        }
+    }
+
+    unique
+}
+
 impl PdfTable {
     pub fn from_lines(lines: Vec<PdfLine>) -> Vec<PdfTable> {
+        // deduplicate_lines
+        let lines = deduplicate_lines(lines);
         // seperate them into vertical and horizontal lines
         let line_clusters = cluster_lines(lines);
 
@@ -303,8 +364,9 @@ impl PdfTable {
                 continue;
             }
 
-            let pdf_table = intersections_to_table(intersections);
-            pdf_tables.push(pdf_table);
+            if let Some(pdf_table) = intersections_to_table(intersections) {
+                pdf_tables.push(pdf_table);
+            }
         }
 
         pdf_tables
@@ -484,10 +546,17 @@ pub fn elements_into_matrix(mut elements: Vec<PdfElement>) -> Vec<Vec<PdfElement
         gaps.push(gap);
     }
 
+    if gaps.is_empty() {
+        return result;
+    }
+
     // Insert spacer *after* row[i+1] if gap[i+1] > gap[i] * 1.2
     let mut final_result = Vec::new();
     for i in 0..result.len() {
         final_result.push(result[i].clone());
+        if i == 0 && gaps[0] > 20.0 {
+            final_result.push(Vec::new());
+        }
 
         if i > 0 && i < gaps.len() {
             let prev_gap = gaps[i - 1];

@@ -57,10 +57,12 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                             })
                             .collect();
 
-                        let headers = elements[0].to_vec();
-                        let rows = elements[1..].to_vec();
-                        let md = sheets::to_markdown_table(&headers, &rows);
-                        result.push_str(&md);
+                        let headers = elements.get(0);
+                        let rows = elements.get(1..);
+                        if rows.is_some() && headers.is_some() {
+                            let md = sheets::to_markdown_table(&headers.unwrap(), &rows.unwrap());
+                            result.push_str(&md);
+                        }
                     }
                 }
             }
