@@ -1,4 +1,7 @@
 ## V0.2.1
+* fixing issues with markdownify PDF parser, along with improving it.
+
+## V0.2.1
 * fixed an issue in the interactive dir selector, where branches with the same name will be confused
 * fixed an issue with the sixel encoder failing if the image isn't a png in some cases
 
