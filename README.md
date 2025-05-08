@@ -1,6 +1,6 @@
 <div align="center">
   
-<img src="https://i.imgur.com/qSSM6Iy.png" width="256"/>
+<img src="https://i.imgur.com/qSSM6Iy.png" width="128"/>
 
 
 # Mcat
@@ -39,7 +39,7 @@ or ~
 ```sh
 git clone https://github.com/Skardyy/mcat
 cd mcat
-cargo install --path ./mcat
+cargo install --path ./crates/core
 ```
 or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/latest)
 
