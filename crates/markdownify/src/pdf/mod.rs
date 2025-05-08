@@ -30,7 +30,6 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     for page in pdf.iter_pages() {
         i += 1;
         result.push_str(&format!("\n# Page {}\n\n", i));
-        eprintln!("page {}\n\n\n\n\n", i);
         let mut page = page?;
         let units = page.handle_stream(page.stream.clone())?;
         let elements = Pdf::pdf_units_to_elements(units);

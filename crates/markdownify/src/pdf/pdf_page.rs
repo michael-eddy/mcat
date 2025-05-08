@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, error::Error, mem::take};
+use std::{collections::BTreeMap, error::Error, mem::take, str::from_utf8};
 
 use lopdf::{Dictionary, Document, Encoding, Object, ObjectId};
 
@@ -29,10 +29,7 @@ impl<'a> PdfPage<'a> {
             .into_iter()
             .filter_map(|(name, font)| match font.get_font_encoding(&doc) {
                 Ok(it) => Some((name, it)),
-                Err(e) => {
-                    eprintln!("failed to find encoding for: {:?}, {}", name, e);
-                    None
-                }
+                Err(_) => None,
             })
             .collect();
 
@@ -95,9 +92,14 @@ impl<'a> PdfPage<'a> {
                             .get(0)
                             .ok_or("failed to query xobject from 'Do' operator")?;
 
+                        let obj_name = obj.as_name()?;
+                        if from_utf8(obj_name).unwrap_or_default().contains("Im") {
+                            return Ok(());
+                        }
+
                         let resource = self.resource.ok_or("failed to query resource from pdf")?;
                         let dict = resource.get(b"XObject")?.as_dict()?;
-                        let id = dict.get(obj.as_name()?)?.as_reference()?;
+                        let id = dict.get(obj_name)?.as_reference()?;
                         let stream = self.document.get_object(id)?.as_stream()?;
                         let raw = stream.decompressed_content()?;
 
@@ -400,12 +402,6 @@ impl<'a> PdfPage<'a> {
         {
             return s;
         }
-        // eprintln!(
-        //     "failed font encoding with font: {:?}, encoding: {:?}, {:?}",
-        //     self.current_font_alias,
-        //     self.get_current_encoding(),
-        //     self.encodings
-        // );
 
         // if utf16
         if bytes.len() >= 2 {
