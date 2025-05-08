@@ -1,5 +1,5 @@
-## V0.2.1
-* fixing issues with markdownify PDF parser, along with improving it.
+## V0.2.3
+* fixing issues with the PDF parser, along with improving it.
 
 ## V0.2.1
 * fixed an issue in the interactive dir selector, where branches with the same name will be confused
