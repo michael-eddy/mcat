@@ -130,14 +130,24 @@ fn cluster_points(points: &[(f32, f32)], radius: f32) -> Vec<(f32, f32)> {
     centroids
 }
 
+fn quantize(value: f32, epsilon: f32) -> i32 {
+    (value / epsilon).round() as i32
+}
+
 fn intersections_to_table(mut intersections: Vec<(f32, f32)>) -> Option<PdfTable> {
     // sort top-left to bottom-right
     let epsilon = 3.0;
-    intersections.sort_by(|a, b| {
-        if (a.1 - b.1).abs() > epsilon {
-            a.1.partial_cmp(&b.1).unwrap()
-        } else {
-            a.0.partial_cmp(&b.0).unwrap()
+    intersections.sort_by(|&(ax, ay), &(bx, by)| {
+        let ayq = quantize(ay, epsilon);
+        let byq = quantize(by, epsilon);
+
+        match ayq.cmp(&byq) {
+            std::cmp::Ordering::Equal => {
+                let axq = quantize(ax, epsilon);
+                let bxq = quantize(bx, epsilon);
+                axq.cmp(&bxq)
+            }
+            ord => ord,
         }
     });
 
@@ -164,7 +174,7 @@ fn intersections_to_table(mut intersections: Vec<(f32, f32)>) -> Option<PdfTable
 
     // sort the rows left to right
     for row in rows.iter_mut() {
-        row.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        row.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     }
 
     let mut boundaries = Vec::new();
@@ -383,10 +393,11 @@ impl PdfTable {
 
     pub fn get_sorted_elements(&mut self) -> Vec<Vec<Vec<PdfText>>> {
         self.boundaries.sort_by(|a, b| {
-            b.miny
-                .partial_cmp(&a.miny)
-                .unwrap()
-                .then(a.minx.partial_cmp(&b.minx).unwrap())
+            b.miny.partial_cmp(&a.miny).unwrap().then(
+                a.minx
+                    .partial_cmp(&b.minx)
+                    .unwrap_or(std::cmp::Ordering::Equal),
+            )
         });
         const Y_THRESHOLD: f32 = 1.0;
 
@@ -407,7 +418,11 @@ impl PdfTable {
         }
 
         for row in &mut rows {
-            row.sort_by(|a, b| a.minx.partial_cmp(&b.minx).unwrap());
+            row.sort_by(|a, b| {
+                a.minx
+                    .partial_cmp(&b.minx)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
         }
 
         let result: Vec<Vec<Vec<PdfText>>> = rows

@@ -9,10 +9,10 @@ use super::{
 
 pub struct PdfPage<'a> {
     pub stream: Vec<u8>,
-    id: ObjectId,
     document: &'a Document,
     fonts: BTreeMap<Vec<u8>, &'a Dictionary>,
     encodings: BTreeMap<Vec<u8>, Encoding<'a>>,
+    resource: Option<&'a Dictionary>,
     current_font_alias: Vec<u8>,
     state: PdfState,
     state_stack: Vec<PdfState>,
@@ -29,14 +29,28 @@ impl<'a> PdfPage<'a> {
             .into_iter()
             .filter_map(|(name, font)| match font.get_font_encoding(&doc) {
                 Ok(it) => Some((name, it)),
-                Err(_) => None,
+                Err(e) => {
+                    eprintln!("failed to find encoding for: {:?}, {}", name, e);
+                    None
+                }
             })
             .collect();
+
+        let resource = doc.get_page_resources(id).ok().and_then(|r| {
+            let res = match r.0 {
+                Some(v) => Some(v),
+                None => r.1.iter().find_map(|obj_id| {
+                    let obj = doc.get_object(*obj_id).ok()?;
+                    obj.as_dict().ok()
+                }),
+            };
+            res
+        });
 
         Ok(PdfPage {
             stream,
             fonts,
-            id,
+            resource,
             document: doc,
             encodings,
             current_font_alias: Vec::new(),
@@ -66,11 +80,7 @@ impl<'a> PdfPage<'a> {
                         }
                         // currently ignores spacing in between chars. may include joined words
                         // because of weird pdfs design.
-                        let text = extract_text_from_objs(
-                            &op.operands,
-                            self.get_current_encoding()
-                                .ok_or("failed to find encoding before text")?,
-                        );
+                        let text = self.extract_text_from_objs(&op.operands);
                         let (x, y) = self.state.current_position();
                         current_element.text = text;
                         current_element.x = x;
@@ -84,17 +94,9 @@ impl<'a> PdfPage<'a> {
                             .operands
                             .get(0)
                             .ok_or("failed to query xobject from 'Do' operator")?;
-                        let resource = self.document.get_page_resources(self.id)?;
-                        let page_dict = match resource.0 {
-                            Some(v) => Some(v),
-                            None => resource.1.iter().find_map(|obj_id| {
-                                let obj = self.document.get_object(*obj_id).ok()?;
-                                obj.as_dict().ok()
-                            }),
-                        }
-                        .ok_or("failed to query resource from pdf")?;
 
-                        let dict = page_dict.get(b"XObject")?.as_dict()?;
+                        let resource = self.resource.ok_or("failed to query resource from pdf")?;
+                        let dict = resource.get(b"XObject")?.as_dict()?;
                         let id = dict.get(obj.as_name()?)?.as_reference()?;
                         let stream = self.document.get_object(id)?.as_stream()?;
                         let raw = stream.decompressed_content()?;
@@ -167,8 +169,8 @@ impl<'a> PdfPage<'a> {
                         let font_ref = font_info.get(b"FontDescriptor")?.as_reference()?;
                         let font_desc = self.document.get_object(font_ref)?.to_owned();
                         let fd = font_desc.as_dict()?;
-                        let font_name = fd.get(b"FontName")?.as_name()?;
-                        current_element.font_name = String::from_utf8(font_name.to_vec()).ok();
+                        let font_name = fd.get(b"FontName")?;
+                        current_element.font_name = Some(self.extract_text_from_obj(font_name));
                         let italic_angle = fd.get(b"ItalicAngle")?;
                         current_element.italic_angle = italic_angle.as_float().ok();
                         Ok(())
@@ -323,7 +325,28 @@ impl<'a> PdfPage<'a> {
 
                         Ok(())
                     }
-                    _ => Ok(()),
+                    "BDC" => {
+                        // tag with text content / stream
+                        //BDC: [/Span, <</ActualText (��T)>>]
+                        //rest i don't thik we should care
+                        match &op.operands[1] {
+                            Object::Dictionary(dictionary) => {
+                                let obj = dictionary.get(b"ActualText")?;
+                                let text = self.extract_text_from_obj(obj);
+                                let (x, y) = self.state.current_position();
+                                current_element.text = text;
+                                current_element.x = x;
+                                current_element.y = y;
+                                elements.push(PdfUnit::Text(take(&mut current_element)));
+                            }
+                            _ => {}
+                        }
+                        Ok(())
+                    }
+                    _ => {
+                        // eprintln!("didnt hanlde {} with {:?}", op.operator, op.operands);
+                        Ok(())
+                    }
                 }
             })
             .collect();
@@ -342,6 +365,78 @@ impl<'a> PdfPage<'a> {
             }
         }
     }
+
+    fn extract_text_from_objs(&self, objs: &[Object]) -> String {
+        let mut text = String::new();
+        for obj in objs {
+            text.push_str(&self.extract_text_from_obj(obj));
+        }
+        text
+    }
+
+    fn extract_bytes_from_obj(obj: &Object) -> Vec<u8> {
+        match obj {
+            Object::String(bytes, _) | Object::Name(bytes) => bytes.clone(),
+            Object::Array(nested) => PdfPage::extract_bytes_from_objs(nested),
+            _ => Vec::new(),
+        }
+    }
+
+    fn extract_bytes_from_objs(objs: &[Object]) -> Vec<u8> {
+        let mut text = Vec::new();
+        for obj in objs {
+            text.extend_from_slice(&PdfPage::extract_bytes_from_obj(obj));
+        }
+        text
+    }
+
+    fn extract_text_from_obj(&self, obj: &Object) -> String {
+        let bytes = PdfPage::extract_bytes_from_obj(obj);
+
+        // encoding from font
+        if let Some(s) = self
+            .get_current_encoding()
+            .and_then(|encoding| Document::decode_text(encoding, &bytes).ok())
+        {
+            return s;
+        }
+        // eprintln!(
+        //     "failed font encoding with font: {:?}, encoding: {:?}, {:?}",
+        //     self.current_font_alias,
+        //     self.get_current_encoding(),
+        //     self.encodings
+        // );
+
+        // if utf16
+        if bytes.len() >= 2 {
+            match (bytes[0], bytes[1]) {
+                (0xFE, 0xFF) => {
+                    // UTF-16BE
+                    let u16s: Vec<u16> = bytes[2..]
+                        .chunks(2)
+                        .filter_map(|chunk| {
+                            chunk.get(1).map(|&b1| u16::from_be_bytes([chunk[0], b1]))
+                        })
+                        .collect();
+                    return String::from_utf16_lossy(&u16s);
+                }
+                (0xFF, 0xFE) => {
+                    // UTF-16LE
+                    let u16s: Vec<u16> = bytes[2..]
+                        .chunks(2)
+                        .filter_map(|chunk| {
+                            chunk.get(1).map(|&b1| u16::from_le_bytes([chunk[0], b1]))
+                        })
+                        .collect();
+                    return String::from_utf16_lossy(&u16s);
+                }
+                _ => {}
+            }
+        }
+
+        // fallback to utf8
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
 }
 
 fn rgb_to_hex(r: f32, g: f32, b: f32) -> String {
@@ -349,48 +444,4 @@ fn rgb_to_hex(r: f32, g: f32, b: f32) -> String {
     let g = (g * 255.0).round() as u8;
     let b = (b * 255.0).round() as u8;
     format!("#{:02X}{:02X}{:02X}", r, g, b)
-}
-
-fn extract_text_from_objs(objs: &[Object], encoding: &Encoding) -> String {
-    let mut text = String::new();
-    for obj in objs {
-        text.push_str(&extract_text_from_obj(obj, encoding));
-    }
-    text
-}
-
-fn extract_bytes_from_obj(obj: &Object) -> Vec<u8> {
-    let mut text = Vec::new();
-
-    match obj {
-        Object::String(bytes, _) | Object::Name(bytes) => {
-            text.extend_from_slice(&bytes);
-        }
-        Object::Array(nested) => {
-            let bytes = extract_bytes_from_objs(nested);
-            text.extend_from_slice(&bytes);
-        }
-        _ => {}
-    }
-
-    text
-}
-
-fn extract_bytes_from_objs(objs: &[Object]) -> Vec<u8> {
-    let mut text = Vec::new();
-    for obj in objs {
-        text.extend_from_slice(&extract_bytes_from_obj(obj));
-    }
-    text
-}
-
-fn extract_text_from_obj(obj: &Object, encoding: &Encoding) -> String {
-    let bytes = extract_bytes_from_obj(obj);
-    if let Ok(s) = Document::decode_text(encoding, &bytes) {
-        return s;
-    }
-    if let Ok(str) = String::from_utf8(bytes) {
-        return str;
-    }
-    return "".to_owned();
 }
