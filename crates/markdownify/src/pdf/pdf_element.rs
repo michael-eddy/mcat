@@ -19,7 +19,7 @@ pub struct PdfText {
     pub text: String,
     pub italic: bool,
     pub font_name: Option<String>,
-    pub italic_angle: Option<f32>,
+    pub font_size: Option<f32>,
     pub x: f32,
     pub y: f32,
     pub underlined: bool,

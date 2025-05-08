@@ -49,7 +49,7 @@ impl Matrix3x3 {
 #[derive(Debug, Clone)]
 pub struct PdfState {
     ctm: Matrix3x3,
-    tm: Matrix3x3,
+    pub tm: Matrix3x3,
     leading: f32,
     pub m: (f32, f32),
 }

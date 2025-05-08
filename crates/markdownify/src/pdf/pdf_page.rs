@@ -14,6 +14,8 @@ pub struct PdfPage<'a> {
     encodings: BTreeMap<Vec<u8>, Encoding<'a>>,
     resource: Option<&'a Dictionary>,
     current_font_alias: Vec<u8>,
+    current_font_name: Option<String>,
+    current_font_size: Option<f32>,
     state: PdfState,
     state_stack: Vec<PdfState>,
     pub child_fonts: Option<BTreeMap<Vec<u8>, &'a Dictionary>>,
@@ -53,6 +55,8 @@ impl<'a> PdfPage<'a> {
             current_font_alias: Vec::new(),
             state: PdfState::new(),
             state_stack: Vec::new(),
+            current_font_name: None,
+            current_font_size: None,
             child_fonts: None,
             child_encodings: None,
         })
@@ -82,6 +86,10 @@ impl<'a> PdfPage<'a> {
                         current_element.text = text;
                         current_element.x = x;
                         current_element.y = y;
+                        current_element.italic = self.state.tm.c != 0.0;
+                        current_element.font_name = self.current_font_name.clone();
+                        current_element.font_size =
+                            self.current_font_size.map(|s| s * self.state.tm.a);
                         elements.push(PdfUnit::Text(take(&mut current_element)));
                         Ok(())
                     }
@@ -156,25 +164,19 @@ impl<'a> PdfPage<'a> {
                     }
                     "Tf" => {
                         // font info
-                        let font_alias = op
-                            .operands
-                            .first()
-                            .ok_or("failed to query current font in the pdf")?
-                            .as_name()?;
+                        let items = op.operands.get(..2).ok_or("failed to query font info")?;
+                        let font_alias = items[0].as_name()?;
                         self.current_font_alias = font_alias.to_owned();
 
                         // styles realted to fonts~
+                        self.current_font_size = items[1].as_float().ok();
                         let font_info = self
                             .fonts
                             .get(font_alias)
                             .ok_or("failed to get fonts for page")?;
-                        let font_ref = font_info.get(b"FontDescriptor")?.as_reference()?;
-                        let font_desc = self.document.get_object(font_ref)?.to_owned();
-                        let fd = font_desc.as_dict()?;
-                        let font_name = fd.get(b"FontName")?;
-                        current_element.font_name = Some(self.extract_text_from_obj(font_name));
-                        let italic_angle = fd.get(b"ItalicAngle")?;
-                        current_element.italic_angle = italic_angle.as_float().ok();
+                        let font_name = font_info.get(b"BaseFont")?;
+                        self.current_font_name =
+                            String::from_utf8(font_name.as_name()?.to_vec()).ok();
                         Ok(())
                     }
                     "cm" => {
@@ -199,7 +201,6 @@ impl<'a> PdfPage<'a> {
                             .iter()
                             .map(|f| f.as_float().unwrap())
                             .collect();
-                        current_element.italic = items[1] != 0.0 || items[2] != 0.0;
                         self.state
                             .tm(items[0], items[1], items[2], items[3], items[4], items[5]);
                         Ok(())

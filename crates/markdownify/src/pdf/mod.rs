@@ -29,17 +29,37 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
     for page in pdf.iter_pages() {
         i += 1;
-        result.push_str(&format!("\n# Page {}\n\n", i));
+        result.push_str(&format!("\n\n<!-- Page number: {} -->\n", i));
         let mut page = page?;
         let units = page.handle_stream(page.stream.clone())?;
+        let font_sizes: Vec<f32> = units
+            .iter()
+            .filter_map(|u| match u {
+                PdfUnit::Text(pdf_text) => pdf_text.font_size,
+                PdfUnit::Line(_) => None,
+            })
+            .collect();
+        let median_font_size = median(font_sizes);
         let elements = Pdf::pdf_units_to_elements(units);
+        let mut pre_header_level = "";
 
         for row in elements {
+            let mut current_header_level = "";
             for e in row {
                 match e {
                     pdf_element::PdfElement::Text(pdf_text) => {
-                        let text = pdftext_to_md(pdf_text);
-                        result.push_str(&format!("{} ", text))
+                        let (mut text, header_level) = pdftext_to_md(pdf_text, median_font_size);
+                        current_header_level = header_level;
+                        // connected headres
+                        if current_header_level != "" && pre_header_level == current_header_level {
+                            result.push_str("<br>");
+                            text = text.replace(header_level, "");
+                        }
+                        // used to be header, now different
+                        if pre_header_level != "" && current_header_level != pre_header_level {
+                            result.push_str("\n");
+                        }
+                        result.push_str(&format!("{} ", text));
                     }
                     pdf_element::PdfElement::Table(mut pdf_table) => {
                         let elements = pdf_table.get_sorted_elements();
@@ -49,7 +69,8 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                                 row.iter()
                                     .map(|cell| {
                                         cell.iter()
-                                            .map(|item| pdftext_to_md(item.clone()))
+                                            // never header
+                                            .map(|item| pdftext_to_md(item.clone(), Some(1000.0)).0)
                                             .collect::<Vec<String>>()
                                             .join(" ")
                                     })
@@ -66,14 +87,17 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                     }
                 }
             }
-            result.push_str("\n");
+            if current_header_level == "" {
+                result.push_str("\n");
+            }
+            pre_header_level = current_header_level;
         }
     }
 
     Ok(result)
 }
 
-fn pdftext_to_md(mut unit: PdfText) -> String {
+fn pdftext_to_md(mut unit: PdfText, median_size: Option<f32>) -> (String, &'static str) {
     let mut text = unit.text;
 
     if let Some(color) = unit.color {
@@ -90,14 +114,32 @@ fn pdftext_to_md(mut unit: PdfText) -> String {
             unit.italic = true;
         }
     }
-    if unit.italic || unit.italic_angle.unwrap_or_default() != 0.0 {
+    if unit.italic {
         text = format!("*{}* ", text.trim());
     }
     if unit.underlined {
         text = format!("<u>{}</u> ", text.trim());
     }
 
-    return text;
+    let mut is_header = "";
+    if let Some(header) = font_size_to_header(unit.font_size.unwrap_or_default(), median_size) {
+        text = format!("{header} {} ", text.trim());
+        is_header = header;
+    }
+
+    return (text, is_header);
+}
+
+fn font_size_to_header(font_size: f32, median_size: Option<f32>) -> Option<&'static str> {
+    let base_size = median_size.unwrap_or(12.0);
+    let size_ratio = font_size / base_size;
+
+    match size_ratio {
+        ratio if ratio >= 3.0 => Some("#"), // 50%+ larger (H1)
+        ratio if ratio >= 2.5 && ratio < 3.0 => Some("##"), // 30-50% larger (H2)
+        ratio if ratio >= 2.0 && ratio < 2.5 => Some("###"), // 20-30% larger (H3)
+        _ => None,                          // Equal to or smaller than base size is regular text
+    }
 }
 
 struct Pdf {
@@ -126,4 +168,19 @@ impl Pdf {
         }
         matrix
     }
+}
+
+fn median(mut values: Vec<f32>) -> Option<f32> {
+    let len = values.len();
+    if len == 0 {
+        return None;
+    }
+
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    Some(if len % 2 == 1 {
+        values[len / 2]
+    } else {
+        (values[len / 2 - 1] + values[len / 2]) / 2.0
+    })
 }

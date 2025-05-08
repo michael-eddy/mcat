@@ -1,3 +1,7 @@
+## V0.2.4
+* more fixes to the PDF parser, along with attempts to context headers
+* improving the -p --pretty flag
+
 ## V0.2.3
 * fixing issues with the PDF parser, along with improving it.
 
