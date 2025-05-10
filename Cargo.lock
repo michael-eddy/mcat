@@ -2215,7 +2215,7 @@ checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
 
 [[package]]
 name = "markdownify"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "calamine",
  "csv",
@@ -2262,7 +2262,7 @@ dependencies = [
 
 [[package]]
 name = "mcat"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "chromiumoxide",
  "clap",

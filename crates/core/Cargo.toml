@@ -1,6 +1,6 @@
 [package]
 name = "mcat"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["Meron Bossin"]
 description = "a powerfull extended cat command, to cat all the things you couldn't before"
 keywords = ["cat", "inline", "markitdown", "terminal", "file-converter"]
@@ -18,14 +18,14 @@ readme = "../../README.md"
 edition = "2024"
 
 [dependencies]
-markdownify = { version = "0.1.4", path = "../markdownify" }
+markdownify = { version = "0.1.5", path = "../markdownify" }
 rasteroid = { version = "0.1.1", path = "../rasteroid" }
+inquire = "0.7.5"
+ignore = "0.4.23"
 clap = "4.5.36"
 comrak = "0.38.0"
 crossterm = "0.29.0"
-ignore = "0.4.23"
 image = "0.25.6"
-inquire = "0.7.5"
 lazy_static = "1.5.0"
 tempfile = "3.19.1"
 ffmpeg-sidecar = "2.0.5"
@@ -34,7 +34,6 @@ syntect = "5.2.0"
 resvg = "0.45.1"
 fontdb = "0.23.0"
 urlencoding = "2.1.3"
-# chromiumoxide = { git = "https://github.com/mattsse/chromiumoxide", features = ["tokio-runtime", "_fetcher-rusttls-tokio"], default-features = false, rev = "6f2392f"}
 chromiumoxide = { version = "0.7.0", features = ["tokio-runtime", "_fetcher-rusttls-tokio"], default-features = false}
 tokio = "1.44.2"
 futures = "0.3.31"

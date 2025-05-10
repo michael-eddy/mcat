@@ -3,7 +3,7 @@ use inquire::MultiSelect;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-pub fn prompt_for_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
+pub fn prompt_for_files(dir: &Path) -> Result<Vec<(PathBuf, Option<String>)>, String> {
     let mut all_paths = collect_gitignored_paths(dir)?;
     all_paths.sort(); // Ensures folders come before contents
 
@@ -36,14 +36,14 @@ pub fn prompt_for_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
                 .iter()
                 .any(|other| other.is_dir() && path.starts_with(other));
             if !covered {
-                final_files.insert(path.clone());
+                final_files.insert((path.clone(), None));
             }
         } else if path.is_dir() {
             for file in all_paths
                 .iter()
                 .filter(|p| p.is_file() && p.starts_with(path))
             {
-                final_files.insert(file.clone());
+                final_files.insert((file.clone(), None));
             }
         }
     }
@@ -53,11 +53,8 @@ pub fn prompt_for_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
 
 fn collect_gitignored_paths(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let walker = WalkBuilder::new(dir)
+        .standard_filters(true)
         .follow_links(true)
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
         .max_depth(None)
         .build();
 

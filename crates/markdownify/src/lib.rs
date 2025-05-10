@@ -64,15 +64,17 @@ pub fn convert(
         "odp" => opendoc::opendoc_convert(path)?,
         "md" | "html" => {
             let res = fs::read_to_string(path)?;
-            match name_header {
-                Some(name) => format!("# {}\n\n{}\n\n", name, res),
-                None => format!("{}\n\n", res),
-            }
+            format!("{}\n\n", res)
         }
         _ => {
             let content = fs::read_to_string(path)?;
-            markitdown_fallback(&content, name_header, &ext)
+            markitdown_fallback(&content, &ext)
         }
+    };
+
+    let result = match name_header {
+        Some(name) => format!("<!-- from: {name} -->\n{result}\n---"),
+        None => result,
     };
 
     Ok(result)
@@ -124,11 +126,6 @@ pub fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     Ok(output)
 }
 
-fn markitdown_fallback(content: &String, name: Option<&String>, ext: &String) -> String {
-    let md = format!("```{}\n{}\n```", ext, content);
-
-    match name {
-        Some(name) => format!("# `{}`\n\n{}", name, md),
-        None => md,
-    }
+fn markitdown_fallback(content: &String, ext: &String) -> String {
+    format!("```{}\n{}\n```", ext, content)
 }

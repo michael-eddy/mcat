@@ -1,3 +1,8 @@
+## V0.2.5
+* now expands ~
+* naming files better when concatenating
+* adding more filters to the recursive walk of dirs
+
 ## V0.2.4
 * more fixes to the PDF parser, along with attempts to context headers
 * improving the -p --pretty flag

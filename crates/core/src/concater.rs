@@ -25,12 +25,12 @@ pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
 }
 
 pub fn concat_images(
-    image_paths: Vec<PathBuf>,
+    image_paths: Vec<(PathBuf, Option<String>)>,
     horizontal: bool,
 ) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
     // Load all images
     let mut images = Vec::new();
-    for path in &image_paths {
+    for (path, _) in &image_paths {
         if path.extension().is_some_and(|e| e == "svg") {
             let file = File::open(path)?;
             let dyn_img = converter::svg_to_image(file, None, None)?;
@@ -78,11 +78,11 @@ pub fn concat_images(
 }
 
 pub fn concat_video(
-    paths: &Vec<PathBuf>,
+    paths: &Vec<(PathBuf, Option<String>)>,
 ) -> Result<(TempDir, PathBuf), Box<dyn std::error::Error>> {
     let mut concat_list_file = NamedTempFile::new()?;
 
-    for path in paths {
+    for (path, _) in paths {
         let path_dis = path
             .canonicalize()?
             .to_string_lossy()
@@ -91,7 +91,7 @@ pub fn concat_video(
         writeln!(concat_list_file, "file '{}'", path_dis)?;
     }
 
-    let first_path = &paths[0];
+    let first_path = &paths[0].0;
     let suffix = first_path
         .extension()
         .unwrap_or_default()
@@ -134,14 +134,14 @@ pub fn concat_video(
     }
 }
 
-pub fn check_unified_format(paths: &[PathBuf]) -> &'static str {
+pub fn check_unified_format(paths: &[(PathBuf, Option<String>)]) -> &'static str {
     if paths.is_empty() {
         return "text"; // Default if no files
     }
 
     let mut detected_format: Option<&'static str> = None;
 
-    for path in paths {
+    for (path, _) in paths {
         if let Some(extension) = path.extension() {
             if let Some(ext_str) = extension.to_str() {
                 let ext = ext_str.to_lowercase();
@@ -180,34 +180,21 @@ pub fn check_unified_format(paths: &[PathBuf]) -> &'static str {
 }
 
 pub fn assign_names<'a>(
-    paths: &'a [PathBuf],
-    base_dir: Option<&'a String>,
+    paths: &'a [(PathBuf, Option<String>)],
 ) -> Vec<(&'a PathBuf, Option<String>)> {
-    let is_one_element = paths.len() == 1;
-    let result: Vec<(&PathBuf, Option<String>)> = paths
-        .iter()
-        .map(|path| {
-            let name = if is_one_element {
-                None
-            } else {
-                match base_dir {
-                    Some(base) => {
-                        let rel_path = path.strip_prefix(base).unwrap_or(path);
-                        Some(rel_path.to_string_lossy().into_owned())
-                    }
-                    None => {
-                        let name = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .into_owned();
-                        Some(name)
-                    }
-                }
-            };
-            (path, name)
-        })
-        .collect();
+    if paths.len() == 1 {
+        return vec![(&paths[0].0, None)];
+    }
 
-    result
+    paths
+        .iter()
+        .map(|(path, name)| {
+            if name.is_some() {
+                (path, name.clone())
+            } else {
+                let path_str = path.to_string_lossy().to_string();
+                (path, Some(path_str))
+            }
+        })
+        .collect()
 }

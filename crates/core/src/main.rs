@@ -18,6 +18,7 @@ use clap::{
     builder::{Styles, styling::AnsiColor},
 };
 use crossterm::tty::IsTty;
+use dirs::home_dir;
 use rasteroid::term_misc;
 
 fn main() {
@@ -201,7 +202,6 @@ fn main() {
 
     let mut tmp_files = Vec::new(); //for lifetime
     let mut path_bufs = Vec::new();
-    let mut base_dir = None;
     // if stdin is streamed into
     if stdin_steamed {
         let mut buffer = Vec::new();
@@ -211,10 +211,10 @@ fn main() {
         match inter {
             inspector::InspectedBytes::File(named_temp_file) => {
                 let path = named_temp_file.path().to_path_buf();
-                path_bufs.push(path);
+                path_bufs.push((path, Some("stdin input".to_string())));
                 tmp_files.push(named_temp_file);
             }
-            inspector::InspectedBytes::Path(path_buf) => path_bufs.push(path_buf),
+            inspector::InspectedBytes::Path(path_buf) => path_bufs.push((path_buf, None)),
         };
     }
     for i in input {
@@ -222,11 +222,12 @@ fn main() {
             if let Ok(tmp) = scrapy::scrape_biggest_media(&i) {
                 let path = tmp.path().to_path_buf();
                 tmp_files.push(tmp);
-                path_bufs.push(path);
+                path_bufs.push((path, Some(i)));
             } else {
                 eprintln!("{} didn't contain any supported media", i);
             }
         } else {
+            let i = expand_tilde(&i);
             let path = Path::new(&i);
             if !path.exists() {
                 eprintln!("{} doesn't exists", path.display());
@@ -234,13 +235,12 @@ fn main() {
             }
             if path.is_dir() {
                 path_bufs.clear();
-                let mut selected_files = prompter::prompt_for_files(path).unwrap_or_default();
+                let mut selected_files = prompter::prompt_for_files(path).unwrap_or_exit();
                 selected_files.sort();
                 path_bufs.extend_from_slice(&selected_files);
-                base_dir = Some(path.to_string_lossy().into_owned());
                 break;
             } else {
-                path_bufs.push(path.to_path_buf());
+                path_bufs.push((path.to_path_buf(), None));
             }
         }
     }
@@ -250,13 +250,13 @@ fn main() {
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
-            let path_bufs = concater::assign_names(&path_bufs, base_dir.as_ref());
+            let path_bufs = concater::assign_names(&path_bufs);
             let tmp = concater::concat_text(path_bufs);
             catter::cat(tmp.path(), &mut out, Some(opts)).unwrap_or_exit();
         }
         "video" => {
             if path_bufs.len() == 1 {
-                catter::cat(&path_bufs[0], &mut out, Some(opts)).unwrap_or_exit();
+                catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
             } else {
                 #[allow(unused_variables)] //for lifetime
                 let (dir, path) = concater::concat_video(&path_bufs).unwrap_or_exit();
@@ -265,7 +265,7 @@ fn main() {
         }
         "image" => {
             if path_bufs.len() == 1 {
-                catter::cat(&path_bufs[0], &mut out, Some(opts)).unwrap_or_exit();
+                catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
             } else {
                 let img = concater::concat_images(path_bufs, hori).unwrap_or_exit();
                 catter::cat(img.path(), &mut out, Some(opts)).unwrap_or_exit();
@@ -358,4 +358,13 @@ impl<T, E: std::fmt::Display> UnwrapOrExit<T> for Result<T, E> {
             }
         }
     }
+}
+
+fn expand_tilde(path: &str) -> String {
+    if path.starts_with("~") {
+        if let Some(home) = home_dir() {
+            return path.replace("~", &home.to_string_lossy().into_owned());
+        }
+    }
+    path.to_string()
 }
