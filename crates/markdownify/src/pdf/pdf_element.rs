@@ -472,11 +472,15 @@ pub fn units_to_elements(units: Vec<PdfUnit>) -> Vec<PdfElement> {
     // assign to the tables
     let texts = if !tables.is_empty() {
         let mut new_texts = Vec::new();
+        let mut assigned = false;
         for text in texts.iter() {
             for table in tables.iter_mut() {
-                if !table.assign(text) {
-                    new_texts.push(text.clone());
+                if table.assign(text) {
+                    assigned = true;
                 }
+            }
+            if !assigned {
+                new_texts.push(text.clone());
             }
         }
         new_texts

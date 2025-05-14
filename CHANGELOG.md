@@ -3,6 +3,7 @@
 * sixel terminals can now use the ascii encoder to view videos too!
 * kitty video encoding should take less cpu and less size now.
 * kitty video frames should now be resized using the --inline-options specified logic units.
+* fixed a bug in markdownify pdf parser where certain text would appear twice 1 after the other
 
 ## V0.2.5
 * now expands ~
