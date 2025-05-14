@@ -68,7 +68,7 @@ impl InlineImage for DynamicImage {
         };
         let height = match height {
             Some(h) => match resize_for_ascii {
-                true => dim_to_cells(h, term_misc::SizeDirection::Height)?,
+                true => dim_to_cells(h, term_misc::SizeDirection::Height)? * 2,
                 false => dim_to_px(h, term_misc::SizeDirection::Height)?,
             },
             None => src_height,
