@@ -22,7 +22,7 @@ pub trait InlineImage {
     ///     Err(e) => return,
     /// };
     /// let dyn_img = image::load_from_memory(&buf).unwrap();
-    /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c", false)).unwrap();
+    /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c"), false).unwrap();
     /// ```
     /// * the offset is for centering the image
     /// * it accepts either `%` (percentage) / `c` (cells) / just a number

@@ -260,7 +260,12 @@ pub fn inline_a_video(
             Ok(())
         }
         rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
-        rasteroid::InlineEncoder::Ascii => todo!(),
+        rasteroid::InlineEncoder::Ascii => {
+            let frames = video_to_frames(input)?;
+            let mut kitty_frames = frames.map(KittyFrames);
+            rasteroid::ascii_encoder::encode_frames(&mut kitty_frames, out, center)?;
+            Ok(())
+        }
     }
 }
 

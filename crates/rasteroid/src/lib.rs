@@ -24,7 +24,7 @@ extern crate lazy_static;
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// let encoder = InlineEncoder::auto_detect(true, false, false); // force kitty as fallback
+/// let encoder = InlineEncoder::auto_detect(true, false, false, false); // force kitty as fallback
 /// inline_an_image(&bytes, &stdout, None, &encoder).unwrap();
 /// stdout.flush().unwrap();
 /// ```
@@ -39,7 +39,7 @@ pub fn inline_an_image(
         InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset),
         InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset),
         InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset),
-        InlineEncoder::Ascii => ascii_encoder::encode_image_ascii(img, out, offset),
+        InlineEncoder::Ascii => ascii_encoder::encode_image(img, out, offset),
     }
 }
 
