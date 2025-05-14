@@ -3,7 +3,10 @@ use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic:
 use base64::{Engine, engine::general_purpose};
 use flate2::{Compression, write::ZlibEncoder};
 
-use crate::term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal};
+use crate::{
+    Frame,
+    term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal},
+};
 
 fn chunk_base64(
     base64: &str,
@@ -119,23 +122,15 @@ fn process_frame(
     Ok(())
 }
 
-pub trait Frame {
-    fn width(&self) -> u16;
-    fn height(&self) -> u16;
-    fn timestamp(&self) -> f32;
-    fn data(&self) -> &[u8];
-}
-
 /// encode a video into inline video.
 /// recommended to use in conjunction with video parsing library
 /// # example:
 /// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
 /// ```
 /// use ffmpeg_sidecar::command::FfmpegCommand;
-/// use rasteroid::kitty_encoder::Frame;
+/// use rasteroid::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
 /// use rasteroid::kitty_encoder::encode_frames;
-/// use rasteroid::kitty_encoder::is_kitty_capable;
 /// use rasteroid::image_extended::calc_fit;
 /// use ffmpeg_sidecar::event::FfmpegEvent;
 ///

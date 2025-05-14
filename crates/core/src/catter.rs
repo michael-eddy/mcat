@@ -104,7 +104,14 @@ pub fn cat(
             out.write_all(&content)?;
             return Ok(CatType::Video);
         }
-        converter::inline_a_video(path.to_string_lossy(), out, inline_encoder, opts.center)?;
+        converter::inline_a_video(
+            path.to_string_lossy(),
+            out,
+            inline_encoder,
+            opts.width,
+            opts.height,
+            opts.center,
+        )?;
         return Ok(CatType::InlineVideo);
     }
     //svg

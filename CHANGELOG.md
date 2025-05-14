@@ -1,3 +1,7 @@
+## V0.2.6
+* adding ascii encoder for images and videos!
+* sixel terminals can now use the ascii encoder to view videos too!
+
 ## V0.2.5
 * now expands ~
 * naming files better when concatenating

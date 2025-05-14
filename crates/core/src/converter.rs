@@ -2,7 +2,7 @@ use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOption
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
 use image::{DynamicImage, ImageBuffer, Rgba};
-use rasteroid::kitty_encoder::Frame;
+use rasteroid::{Frame, image_extended::InlineImage};
 use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
@@ -232,10 +232,33 @@ impl Frame for KittyFrames {
     }
 }
 
+pub struct AsciiFrames {
+    frame: OutputVideoFrame,
+    img: Vec<u8>,
+}
+impl Frame for AsciiFrames {
+    fn width(&self) -> u16 {
+        self.frame.width as u16
+    }
+    fn height(&self) -> u16 {
+        self.frame.height as u16
+    }
+    fn timestamp(&self) -> f32 {
+        self.frame.timestamp
+    }
+    // needs to be not rgb here.
+    fn data(&self) -> &[u8] {
+        &self.img
+    }
+}
+
+///width and height only needed for ascii videos atm
 pub fn inline_a_video(
     input: impl AsRef<str>,
     out: &mut impl Write,
     inline_encoder: &rasteroid::InlineEncoder,
+    width: Option<&str>,
+    height: Option<&str>,
     center: bool,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
@@ -259,11 +282,16 @@ pub fn inline_a_video(
             rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
             Ok(())
         }
-        rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
-        rasteroid::InlineEncoder::Ascii => {
+        rasteroid::InlineEncoder::Ascii | rasteroid::InlineEncoder::Sixel => {
             let frames = video_to_frames(input)?;
-            let mut kitty_frames = frames.map(KittyFrames);
-            rasteroid::ascii_encoder::encode_frames(&mut kitty_frames, out, center)?;
+            let mut ascii_frames = frames.map(|f| {
+                let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
+                    .unwrap_or_default();
+                let img = image::DynamicImage::ImageRgb8(rgb_image);
+                let (img, _) = img.resize_plus(width, height, true).unwrap_or_default();
+                AsciiFrames { frame: f, img }
+            });
+            rasteroid::ascii_encoder::encode_frames(&mut ascii_frames, out, center, true)?;
             Ok(())
         }
     }
