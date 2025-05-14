@@ -218,12 +218,6 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
 
 pub struct KittyFrames(pub OutputVideoFrame);
 impl Frame for KittyFrames {
-    fn width(&self) -> u16 {
-        self.0.width as u16
-    }
-    fn height(&self) -> u16 {
-        self.0.height as u16
-    }
     fn timestamp(&self) -> f32 {
         self.0.timestamp
     }
@@ -237,12 +231,6 @@ pub struct AsciiFrames {
     img: Vec<u8>,
 }
 impl Frame for AsciiFrames {
-    fn width(&self) -> u16 {
-        self.frame.width as u16
-    }
-    fn height(&self) -> u16 {
-        self.frame.height as u16
-    }
     fn timestamp(&self) -> f32 {
         self.frame.timestamp
     }
@@ -264,7 +252,13 @@ pub fn inline_a_video(
     match inline_encoder {
         rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
-            let mut kitty_frames = frames.map(KittyFrames);
+            let mut kitty_frames = frames.map(|f| {
+                let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
+                    .unwrap_or_default();
+                let img = image::DynamicImage::ImageRgb8(rgb_image);
+                let (img, _) = img.resize_plus(width, height, false).unwrap_or_default();
+                AsciiFrames { img, frame: f }
+            });
             let id = rand::random::<u32>();
             rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, id, center)?;
             Ok(())

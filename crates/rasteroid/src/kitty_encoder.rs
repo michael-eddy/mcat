@@ -1,7 +1,6 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
 use base64::{Engine, engine::general_purpose};
-use flate2::{Compression, write::ZlibEncoder};
 
 use crate::{
     Frame,
@@ -112,11 +111,7 @@ fn process_frame(
     first_opts: HashMap<String, String>,
     sub_opts: HashMap<String, String>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
-    encoder.write_all(data)?;
-    let compressed = encoder.finish()?;
-
-    let base64 = general_purpose::STANDARD.encode(compressed);
+    let base64 = general_purpose::STANDARD.encode(data);
     chunk_base64(&base64, out, 4096, first_opts, sub_opts)?;
 
     Ok(())
@@ -133,20 +128,19 @@ fn process_frame(
 /// use rasteroid::kitty_encoder::encode_frames;
 /// use rasteroid::image_extended::calc_fit;
 /// use ffmpeg_sidecar::event::FfmpegEvent;
+/// use rasteroid::image_extended::InlineImage;
 ///
-/// pub struct KittyFrames(pub OutputVideoFrame);
+/// pub struct KittyFrames {
+///     frame: OutputVideoFrame,
+///     img: Vec<u8>,
+/// }
 /// impl Frame for KittyFrames {
-///     fn width(&self) -> u16 {
-///         self.0.width as u16
-///     }
-///     fn height(&self) -> u16 {
-///         self.0.height as u16
-///     }
 ///     fn timestamp(&self) -> f32 {
-///         self.0.timestamp
+///         self.frame.timestamp
 ///     }
+///     // needs to be something image crate can load.
 ///     fn data(&self) -> &[u8] {
-///         &self.0.data
+///         &self.img
 ///     }
 /// }
 /// // next get the frames (taken from ffmpeg-sidecar)
@@ -161,16 +155,22 @@ fn process_frame(
 ///        Err(e) => return,
 /// }.iter().unwrap();   // <- Blocking iterator over logs and output
 /// // now convert to compatible frames
-/// let mut kitty_frames = iter
-///         .filter_map(|event| {
-///             if let FfmpegEvent::OutputFrame(frame) = event {
-///                 Some(KittyFrames(frame))
-///             } else {
-///                 None
-///             }
-///         });
+/// let width = Some("80%");
+/// let height = Some("80%");
+/// let center = true;
+/// let mut kitty_frames = iter.filter_map(|event| {
+///     if let FfmpegEvent::OutputFrame(f) = event {
+///        let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
+///            .unwrap_or_default();
+///        let img = image::DynamicImage::ImageRgb8(rgb_image);
+///        let (img, _) = img.resize_plus(width, height, false).unwrap_or_default();
+///        Some(KittyFrames { img, frame: f })
+///     } else {
+///        None
+///     }
+/// });
 /// let id = rand::random::<u32>();
-/// encode_frames(&mut kitty_frames, &mut out, id, true);
+/// encode_frames(&mut kitty_frames, &mut out, id, center);
 /// ```
 pub fn encode_frames(
     frames: &mut dyn Iterator<Item = impl Frame>,
@@ -178,59 +178,60 @@ pub fn encode_frames(
     id: u32,
     center: bool,
 ) -> Result<(), Box<dyn Error>> {
-    // getting the first frame
-    let first = frames.next().ok_or("video doesn't contain any frames")?;
-    let offset = term_misc::center_image(first.width() as u16, false);
-    if center {
-        let center = offset_to_terminal(Some(offset));
-        out.write_all(center.as_bytes())?;
-    }
-    let mut pre_timestamp = 0.0;
-
-    // adding the root image
-    let i = id.to_string();
-    let s = first.width().to_string();
-    let v = first.height().to_string();
-    let f = "24".to_string();
-    let o = "z".to_string();
-    let q = "2".to_string();
-    process_frame(
-        &first.data(),
-        out,
-        HashMap::from([
-            ("a".to_string(), "T".to_string()),
-            ("f".to_string(), f),
-            ("o".to_string(), o),
-            ("I".to_string(), i),
-            ("s".to_string(), s),
-            ("v".to_string(), v),
-            ("q".to_string(), q),
-        ]),
-        HashMap::new(),
-    )?;
-
-    // starting the animation
-    let z = 100;
-    write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
-
     let shutdown = term_misc::setup_signal_handler();
+    let mut pre_timestamp = 0.0;
+    let z = 100;
 
     for (c, frame) in frames.enumerate() {
+        if c == 0 {
+            let data = frame.data();
+            let img = image::load_from_memory(data)?;
+            let offset = term_misc::center_image(img.width() as u16, false);
+            if center {
+                let center = offset_to_terminal(Some(offset));
+                out.write_all(center.as_bytes())?;
+            }
+
+            // adding the root image
+            let i = id.to_string();
+            let s = img.width().to_string();
+            let v = img.height().to_string();
+            let f = "100".to_string();
+            let q = "2".to_string();
+            process_frame(
+                data,
+                out,
+                HashMap::from([
+                    ("a".to_string(), "T".to_string()),
+                    ("f".to_string(), f),
+                    ("I".to_string(), i),
+                    ("s".to_string(), s),
+                    ("v".to_string(), v),
+                    ("q".to_string(), q),
+                ]),
+                HashMap::new(),
+            )?;
+
+            // starting the animation
+            write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
+            continue;
+        }
+
+        let data = frame.data();
+        let img = image::load_from_memory(data)?;
         if shutdown.load(Ordering::SeqCst) {
             break; // clean exit
         }
-        let s = frame.width().to_string();
-        let v = frame.height().to_string();
+        let s = img.width().to_string();
+        let v = img.height().to_string();
         let i = id.to_string();
-        let f = "24".to_string();
-        let o = "z".to_string();
+        let f = "100".to_string();
         let z = ((frame.timestamp() - pre_timestamp) * 1000.0) as u32;
         pre_timestamp = frame.timestamp();
 
         let first_opts = HashMap::from([
             ("a".to_string(), "f".to_string()),
             ("f".to_string(), f),
-            ("o".to_string(), o),
             ("I".to_string(), i),
             ("c".to_string(), c.to_string()),
             ("s".to_string(), s),
@@ -239,7 +240,7 @@ pub fn encode_frames(
         ]);
         let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
 
-        process_frame(&frame.data(), out, first_opts, sub_opts)?;
+        process_frame(data, out, first_opts, sub_opts)?;
     }
 
     write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;

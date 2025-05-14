@@ -142,6 +142,7 @@ fn visual_weight(r: u8, g: u8, b: u8, a: u8) -> f32 {
 ///
 /// # Notes
 /// Each frame is expected to contain encoded image bytes (e.g., PNG, JPEG).
+/// This should include any kind of img that the image crate supports.
 /// This function decodes the image using the `image` crate before rendering.
 ///
 /// # Example
@@ -160,16 +161,10 @@ fn visual_weight(r: u8, g: u8, b: u8, a: u8) -> f32 {
 ///     img: Vec<u8>,
 /// }
 /// impl Frame for AsciiFrames {
-///     fn width(&self) -> u16 {
-///         self.frame.width as u16
-///     }
-///     fn height(&self) -> u16 {
-///         self.frame.height as u16
-///     }
 ///     fn timestamp(&self) -> f32 {
 ///         self.frame.timestamp
 ///     }
-///     // needs to be not rgb here.
+///     // needs to be something image crate can load.
 ///     fn data(&self) -> &[u8] {
 ///         &self.img
 ///     }

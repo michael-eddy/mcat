@@ -1,6 +1,7 @@
 ## V0.2.6
 * adding ascii encoder for images and videos!
 * sixel terminals can now use the ascii encoder to view videos too!
+* kitty video encoding should take less cpu and less size now.
 
 ## V0.2.5
 * now expands ~

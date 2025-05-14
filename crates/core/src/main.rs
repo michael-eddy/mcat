@@ -254,7 +254,7 @@ fn main() {
     }
 
     let stdout = std::io::stdout();
-    let mut out = BufWriter::new(stdout.lock());
+    let mut out = BufWriter::new(stdout);
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
