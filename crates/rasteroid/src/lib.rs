@@ -1,5 +1,6 @@
 use std::io::Write;
 
+pub mod ascii_encoder;
 pub mod image_extended;
 pub mod iterm_encoder;
 pub mod kitty_encoder;
@@ -38,6 +39,7 @@ pub fn inline_an_image(
         InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset),
         InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset),
         InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset),
+        InlineEncoder::Ascii => ascii_encoder::encode_image_ascii(img, out, offset),
     }
 }
 
@@ -45,11 +47,17 @@ pub enum InlineEncoder {
     Kitty,
     Iterm,
     Sixel,
+    Ascii,
 }
 impl InlineEncoder {
     /// auto detect which Encoder works for the current terminal
     /// allows forcing certain encoders (sort of a fallback).
-    pub fn auto_detect(force_kitty: bool, force_iterm: bool, force_sixel: bool) -> Self {
+    pub fn auto_detect(
+        force_kitty: bool,
+        force_iterm: bool,
+        force_sixel: bool,
+        force_ascii: bool,
+    ) -> Self {
         if force_kitty {
             return Self::Kitty;
         }
@@ -58,6 +66,9 @@ impl InlineEncoder {
         }
         if force_sixel {
             return Self::Sixel;
+        }
+        if force_ascii {
+            return Self::Ascii;
         }
 
         let env = term_misc::EnvIdentifiers::new();
@@ -71,6 +82,6 @@ impl InlineEncoder {
             return Self::Sixel;
         }
 
-        Self::Iterm
+        Self::Ascii
     }
 }

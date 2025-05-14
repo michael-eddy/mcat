@@ -250,13 +250,17 @@ pub fn inline_a_video(
             let gif = video_to_gif(input)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
             let offset = match center {
-                true => Some(rasteroid::term_misc::center_image(dyn_img.width() as u16)),
+                true => Some(rasteroid::term_misc::center_image(
+                    dyn_img.width() as u16,
+                    false,
+                )),
                 false => None,
             };
             rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
             Ok(())
         }
         rasteroid::InlineEncoder::Sixel => Err("Cannot view videos in sixel".into()),
+        rasteroid::InlineEncoder::Ascii => todo!(),
     }
 }
 

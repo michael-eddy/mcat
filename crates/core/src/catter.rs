@@ -25,6 +25,7 @@ pub struct EncoderForce {
     pub kitty: bool,
     pub iterm: bool,
     pub sixel: bool,
+    pub ascii: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -74,9 +75,18 @@ pub fn cat(
         kitty: false,
         iterm: false,
         sixel: false,
+        ascii: false,
     });
-    let inline_encoder =
-        &rasteroid::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
+    let inline_encoder = &rasteroid::InlineEncoder::auto_detect(
+        encoder.kitty,
+        encoder.iterm,
+        encoder.sixel,
+        encoder.ascii,
+    );
+    let resize_for_braile = match inline_encoder {
+        rasteroid::InlineEncoder::Ascii => true,
+        _ => false,
+    };
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -155,7 +165,7 @@ pub fn cat(
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
+            let (img, center) = dyn_img.resize_plus(opts.width, opts.height, resize_for_braile)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
@@ -168,7 +178,7 @@ pub fn cat(
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
+            let (img, center) = dyn_img.resize_plus(opts.width, opts.height, resize_for_braile)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
@@ -190,7 +200,7 @@ pub fn cat(
         ("image", _) => {
             // default for image
             let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center) = image_result.resize_plus(opts.width, opts.height)?;
+            let (img, center) = image_result.resize_plus(opts.width, opts.height, resize_for_braile)?;
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },

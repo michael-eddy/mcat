@@ -1,10 +1,10 @@
 use std::{
     collections::HashMap,
     env, f32,
-    sync::{atomic::AtomicBool, Arc, OnceLock},
+    sync::{Arc, OnceLock, atomic::AtomicBool},
 };
 
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
@@ -128,13 +128,19 @@ pub fn get_winsize() -> &'static Winsize {
     })
 }
 
-/// returns a the offset needed to center the image inside the terminal
-pub fn center_image(image_width: u16) -> u16 {
+/// Returns the horizontal offset (in cells) needed to center the image in the terminal.
+/// If `is_ascii` is true, `image_width` is already in cells. Otherwise, it's in pixels.
+pub fn center_image(image_width: u16, is_ascii: bool) -> u16 {
     let winsize = get_winsize();
-    let offset_x = (winsize.spx_width as f32 - image_width as f32) / 2.0;
-    let offset_x = offset_x / (winsize.spx_width as f32 / winsize.sc_width as f32);
 
-    offset_x.round() as u16
+    let offset = if is_ascii {
+        (winsize.sc_width as f32 - image_width as f32) / 2.0
+    } else {
+        let offset_x = (winsize.spx_width as f32 - image_width as f32) / 2.0;
+        offset_x / (winsize.spx_width as f32 / winsize.sc_width as f32)
+    };
+
+    offset.round() as u16
 }
 
 /// convert any format of width / height into pixels.
@@ -177,11 +183,53 @@ pub fn dim_to_px(dim: &str, direction: SizeDirection) -> Result<u32, String> {
     Err(format!("Invalid dimension format: {}", dim))
 }
 
+/// Convert any format of width / height into cells.
+/// Accepted formats: % (percent), px (pixels), c (cells), or just a number (assumed cells).
+pub fn dim_to_cells(dim: &str, direction: SizeDirection) -> Result<u32, String> {
+    if let Ok(num) = dim.parse::<u32>() {
+        return Ok(num);
+    }
+
+    // only call it if needed
+    let needs_calc = dim.ends_with("px") || dim.ends_with("%");
+    let (spx, sc) = if needs_calc {
+        let winsize = get_winsize();
+        match direction {
+            SizeDirection::Width => (winsize.spx_width, winsize.sc_width),
+            SizeDirection::Height => (winsize.spx_height, winsize.sc_height),
+        }
+    } else {
+        (1, 1) // dummy values, won’t be used
+    };
+
+    if dim.ends_with("c") {
+        if let Ok(num) = dim.trim_end_matches("c").parse::<u32>() {
+            return Ok(num);
+        }
+    } else if dim.ends_with("px") {
+        if let Ok(px) = dim.trim_end_matches("px").parse::<u32>() {
+            if sc == 0 || spx == 0 {
+                return Err("Invalid screen size for px to cell conversion".into());
+            }
+            let value = (px as f32 / (spx as f32 / sc as f32)).round() as u32;
+            return Ok(value);
+        }
+    } else if dim.ends_with("%") {
+        if let Ok(percent) = dim.trim_end_matches("%").parse::<f32>() {
+            let normalized = percent / 100.0;
+            let value = (sc as f32 * normalized).round() as u32;
+            return Ok(value);
+        }
+    }
+
+    Err(format!("Invalid dimension format: {}", dim))
+}
+
 // gross estimation winsize for windows..
 #[cfg(windows)]
 fn get_size_windows() -> Option<(u16, u16)> {
     use windows::Win32::UI::WindowsAndMessaging::{
-        AdjustWindowRect, GetWindowLongW, GWL_STYLE, WINDOW_STYLE,
+        AdjustWindowRect, GWL_STYLE, GetWindowLongW, WINDOW_STYLE,
     };
     use windows::Win32::{
         Foundation::{HWND, RECT},

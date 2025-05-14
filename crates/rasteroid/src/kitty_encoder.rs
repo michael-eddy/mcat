@@ -1,9 +1,9 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
-use base64::{engine::general_purpose, Engine};
-use flate2::{write::ZlibEncoder, Compression};
+use base64::{Engine, engine::general_purpose};
+use flate2::{Compression, write::ZlibEncoder};
 
-use crate::term_misc::{self, image_to_base64, offset_to_terminal, EnvIdentifiers};
+use crate::term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal};
 
 fn chunk_base64(
     base64: &str,
@@ -185,7 +185,7 @@ pub fn encode_frames(
 ) -> Result<(), Box<dyn Error>> {
     // getting the first frame
     let first = frames.next().ok_or("video doesn't contain any frames")?;
-    let offset = term_misc::center_image(first.width() as u16);
+    let offset = term_misc::center_image(first.width() as u16, false);
     if center {
         let center = offset_to_terminal(Some(offset));
         out.write_all(center.as_bytes())?;

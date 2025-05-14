@@ -82,6 +82,12 @@ fn main() {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("ascii")
+                .long("ascii")
+                .help("makes the inline image encoded to ascii")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("inline")
                 .short('i')
                 .help("shortcut for putting --output inline")
@@ -181,10 +187,12 @@ fn main() {
     let kitty = opts.get_flag("kitty");
     let iterm = opts.get_flag("iterm");
     let sixel = opts.get_flag("sixel");
+    let ascii = opts.get_flag("ascii");
     let encoder = EncoderForce {
         kitty,
         iterm,
         sixel,
+        ascii,
     };
 
     let opts = CatOpts {
