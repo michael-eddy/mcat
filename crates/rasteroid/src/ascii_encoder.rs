@@ -213,6 +213,7 @@ pub fn encode_frames(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut last_timestamp = None;
     let mut frame_outputs = Vec::new();
+    let mut start = true;
 
     for frame in frames {
         let data = frame.data();
@@ -229,14 +230,20 @@ pub fn encode_frames(
         last_timestamp = Some(frame.timestamp());
 
         let mut buffer = Vec::new();
-        // Clear terminal and move cursor to top-left
-        write!(buffer, "\x1b[2J\x1b[H")?;
+
+        let n = img.height();
+        if !start {
+            clear_pre_frame(&mut out, n)?;
+        } else {
+            start = false;
+        }
+
         encode_image(data, &mut buffer, if center { Some(offset) } else { None })?;
 
         out.write_all(&buffer)?;
         out.flush()?;
 
-        frame_outputs.push((buffer, target_delay));
+        frame_outputs.push((buffer, target_delay, n));
         std::thread::sleep(target_delay);
     }
 
@@ -246,7 +253,8 @@ pub fn encode_frames(
 
     if cycle {
         loop {
-            for (output, delay) in &frame_outputs {
+            for (output, delay, n) in &frame_outputs {
+                clear_pre_frame(&mut out, *n)?;
                 out.write_all(output)?;
                 out.flush()?;
                 std::thread::sleep(*delay);
@@ -255,4 +263,17 @@ pub fn encode_frames(
     } else {
         return Ok(());
     }
+}
+
+fn clear_pre_frame(mut out: impl Write, height: u32) -> Result<(), Box<dyn std::error::Error>> {
+    write!(out, "\x1B[{}A", height)?;
+    // Clear each line (from cursor to end)
+    for _ in 0..height {
+        write!(out, "\x1B[2K")?; // Clear line
+        write!(out, "\x1B[1B")?; // Move down (optional: if not overwriting)
+    }
+    // Move cursor back up to start position
+    write!(out, "\x1B[{}A", height)?;
+
+    Ok(())
 }

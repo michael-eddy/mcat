@@ -3,6 +3,8 @@
 * sixel terminals can now use the ascii encoder to view videos too!
 * fixed a bug in markdownify pdf parser where certain text would appear twice 1 after the other
 * added the --report flag to query info
+* added loading bars for long operations
+* added --silent flag to remove the loading bars
 
 ## V0.2.5
 * now expands ~

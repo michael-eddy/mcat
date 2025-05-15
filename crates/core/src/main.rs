@@ -123,6 +123,12 @@ fn main() {
                 .help("reports image / video dimensions when drawing images. along with reporting more info when not drawing images")
         )
         .arg(
+            Arg::new("silent")
+                .long("silent")
+                .action(clap::ArgAction::SetTrue)
+                .help("removes loading bars")
+        )
+        .arg(
             Arg::new("fetch-chromium")
                 .long("fetch-chromium")
                 .help("download and prepare chromium")
@@ -155,6 +161,7 @@ fn main() {
         return;
     }
     let report = opts.get_flag("report");
+    let silent = opts.get_flag("silent");
 
     // main
     let input: Vec<String> = opts
@@ -224,6 +231,7 @@ fn main() {
         style: Some(style),
         style_html,
         report,
+        silent,
     };
 
     let mut tmp_files = Vec::new(); //for lifetime
@@ -245,7 +253,7 @@ fn main() {
     }
     for i in input {
         if i.starts_with("https://") {
-            if let Ok(tmp) = scrapy::scrape_biggest_media(&i) {
+            if let Ok(tmp) = scrapy::scrape_biggest_media(&i, silent) {
                 let path = tmp.path().to_path_buf();
                 tmp_files.push(tmp);
                 path_bufs.push((path, Some(i)));

@@ -41,6 +41,7 @@ pub struct CatOpts<'a> {
     pub style_html: bool,
     pub center: bool,
     pub report: bool,
+    pub silent: bool,
 }
 impl CatOpts<'_> {
     pub fn default() -> Self {
@@ -56,6 +57,7 @@ impl CatOpts<'_> {
             style_html: false,
             center: false,
             report: false,
+            silent: false,
         }
     }
 }
@@ -113,6 +115,7 @@ pub fn cat(
             opts.width,
             opts.height,
             opts.center,
+            opts.silent,
         )?;
         return Ok(CatType::InlineVideo);
     }

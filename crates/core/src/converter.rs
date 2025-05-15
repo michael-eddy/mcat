@@ -2,14 +2,16 @@ use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOption
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
 use image::{DynamicImage, ImageBuffer, Rgba};
+use indicatif::{ProgressBar, ProgressStyle};
 use rasteroid::{Frame, image_extended::InlineImage};
+use regex::Regex;
 use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
 use std::{
     error, fs,
-    io::Read,
+    io::{BufRead, Read},
     path::Path,
     sync::{Arc, atomic::Ordering},
 };
@@ -245,6 +247,7 @@ pub fn inline_a_video(
     width: Option<&str>,
     height: Option<&str>,
     center: bool,
+    silent: bool,
 ) -> Result<(), Box<dyn error::Error>> {
     match inline_encoder {
         rasteroid::InlineEncoder::Kitty => {
@@ -260,7 +263,7 @@ pub fn inline_a_video(
             Ok(())
         }
         rasteroid::InlineEncoder::Iterm => {
-            let gif = video_to_gif(input)?;
+            let gif = video_to_gif(input, silent)?;
             let dyn_img = image::load_from_memory_with_format(&gif, image::ImageFormat::Gif)?;
             let offset = match center {
                 true => Some(rasteroid::term_misc::center_image(
@@ -292,13 +295,26 @@ pub fn inline_a_video(
     }
 }
 
-fn video_to_gif(input: impl AsRef<str>) -> Result<Vec<u8>, Box<dyn error::Error>> {
+fn video_to_gif(input: impl AsRef<str>, silent: bool) -> Result<Vec<u8>, Box<dyn error::Error>> {
     let input = input.as_ref();
     if input.ends_with(".gif") {
         let path = Path::new(input);
         let bytes = fs::read(path)?;
         return Ok(bytes);
     }
+
+    // Create indeterminate progress bar since we don't know total frames
+    let pb = if !silent {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{bar:50.blue/white}] {pos}/{len} frames ({percent}%)")?
+                .progress_chars("█▓▒░"),
+        );
+        Some(pb)
+    } else {
+        None
+    };
 
     let mut command =
         match fetch_manager::get_ffmpeg() {
@@ -308,21 +324,73 @@ fn video_to_gif(input: impl AsRef<str>) -> Result<Vec<u8>, Box<dyn error::Error>
                     .into(),
             ),
         };
+
     command
         .hwaccel("auto")
         .input(input)
         .format("gif")
+        .args(&["-progress", "pipe:2"]) // Request progress output
         .output("-");
 
     let mut child = command.spawn()?;
     let mut stdout = child
         .take_stdout()
         .ok_or("failed to get stdout for ffmpeg")?;
+    let stderr = child
+        .take_stderr()
+        .ok_or("failed to get stderr for ffmpeg")?;
 
-    let mut output_bytes = Vec::new();
-    stdout.read_to_end(&mut output_bytes)?;
+    // Read stdout in a separate thread
+    let output_thread = std::thread::spawn(move || {
+        let mut output_bytes = Vec::new();
+        stdout.read_to_end(&mut output_bytes).unwrap();
+        output_bytes
+    });
 
-    child.wait()?; // ensure process finishes cleanly
+    // Process stderr for progress updates
+    let duration_re = Regex::new(r"Duration: (\d+):(\d+):([\d.]+)")?;
+    let fps_re = Regex::new(r"(\d+(?:\.\d+)?) fps")?;
+    let frame_re = Regex::new(r"frame=\s*(\d+)")?;
+
+    let mut total_frames = None;
+    let mut fps = None;
+    let mut duration_secs = None;
+    for line in std::io::BufReader::new(stderr).lines() {
+        let line = line?;
+        if let Some(cap) = duration_re.captures(&line) {
+            let hours: f64 = cap[1].parse().unwrap_or(0.0);
+            let minutes: f64 = cap[2].parse().unwrap_or(0.0);
+            let seconds: f64 = cap[3].parse().unwrap_or(0.0);
+            duration_secs = Some(hours * 3600.0 + minutes * 60.0 + seconds);
+        }
+        if fps.is_none() {
+            if let Some(cap) = fps_re.captures(&line) {
+                fps = Some(cap[1].parse::<f64>().unwrap_or(0.0));
+            }
+        }
+        if total_frames.is_none() {
+            if let (Some(dur), Some(f)) = (duration_secs, fps) {
+                let frames = (dur * f).round();
+                total_frames = Some(frames);
+                if !silent {
+                    pb.as_ref().unwrap().set_length(frames as u64);
+                }
+            }
+        }
+
+        // Parse frame count from progress output
+        if let Some(cap) = frame_re.captures(&line) {
+            let current_frame: usize = cap[1].parse().unwrap_or(0);
+            if !silent {
+                pb.as_ref().unwrap().set_position(current_frame as u64);
+            }
+        }
+    }
+
+    let output_bytes = output_thread
+        .join()
+        .map_err(|_| "failed to capture output")?;
+    child.wait()?;
 
     Ok(output_bytes)
 }
