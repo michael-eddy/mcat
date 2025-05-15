@@ -1,9 +1,12 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
-use base64::{engine::general_purpose, Engine};
-use flate2::{write::ZlibEncoder, Compression};
+use base64::{Engine, engine::general_purpose};
+use flate2::{Compression, write::ZlibEncoder};
 
-use crate::term_misc::{self, image_to_base64, offset_to_terminal, EnvIdentifiers};
+use crate::{
+    Frame,
+    term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal},
+};
 
 fn chunk_base64(
     base64: &str,
@@ -119,20 +122,13 @@ fn process_frame(
     Ok(())
 }
 
-pub trait Frame {
-    fn width(&self) -> u16;
-    fn height(&self) -> u16;
-    fn timestamp(&self) -> f32;
-    fn data(&self) -> &[u8];
-}
-
 /// encode a video into inline video.
 /// recommended to use in conjunction with video parsing library
 /// # example:
 /// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
-/// ```
+/// ```rust,no_run
 /// use ffmpeg_sidecar::command::FfmpegCommand;
-/// use rasteroid::kitty_encoder::Frame;
+/// use rasteroid::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
 /// use rasteroid::kitty_encoder::encode_frames;
 /// use rasteroid::kitty_encoder::is_kitty_capable;
@@ -150,6 +146,7 @@ pub trait Frame {
 ///     fn timestamp(&self) -> f32 {
 ///         self.0.timestamp
 ///     }
+///     // must be rgb8!
 ///     fn data(&self) -> &[u8] {
 ///         &self.0.data
 ///     }
@@ -185,7 +182,7 @@ pub fn encode_frames(
 ) -> Result<(), Box<dyn Error>> {
     // getting the first frame
     let first = frames.next().ok_or("video doesn't contain any frames")?;
-    let offset = term_misc::center_image(first.width() as u16);
+    let offset = term_misc::center_image(first.width() as u16, false);
     if center {
         let center = offset_to_terminal(Some(offset));
         out.write_all(center.as_bytes())?;

@@ -75,7 +75,7 @@ mcat project.docx -o html
 mcat readme.md -i
 
 # Show a document as an image inline with a dark theme
-mcat presentation.pptx -im
+mcat presentation.pptx -id
 
 # Show a document as an image in the terminal with your own css
 mcat document.pdf -it "path/to/your/file.css"
@@ -134,21 +134,22 @@ Mcat tries to have as little dependencies as possible.
 ## 🆘 Help
 ```txt
 mcat --help
-Usage: mcat.exe [OPTIONS] [input]...
+Usage: mcat [OPTIONS] [input]...
 
 Arguments:
   [input]...  file / dir / url
 
 Options:
   -o <output>                            the format to output [possible values: html, md, pretty, image, video, inline]
-  -t <theme>                             alternative css file for images, valid options: [default, makurai, <local file>] [default: default]
+  -t <theme>                             alternative css file for images, valid options: [light, dark, <local file>] [default: light]
   -s                                     add style to html too (when html is the output)
       --kitty                            makes the inline image encoded to kitty
       --iterm                            makes the inline image encoded to iterm
       --sixel                            makes the inline image encoded to sixel
+      --ascii                            makes the inline image encoded to ascii
   -i                                     shortcut for putting --output inline
   -p                                     shortcut for putting --output pretty
-  -m                                     shortcut for putting --theme makurai
+  -d                                     shortcut for putting --theme dark
       --hori                             concat images horizontal instead of vertical
       --inline-options <inline-options>  options for the --output inline
                                          *  center=<bool>
@@ -161,6 +162,8 @@ Options:
                                          *  x=<int> [only for images]
                                          *  y=<int> [only for images]
                                          *  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
+      --report                           reports image / video dimensions when drawing images. along with reporting more info when not drawing images
+      --silent                           removes loading bars
       --fetch-chromium                   download and prepare chromium
       --fetch-ffmpeg                     download and prepare ffmpeg
       --fetch-clean                      Clean up the local binaries

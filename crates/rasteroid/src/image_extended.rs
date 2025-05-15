@@ -1,9 +1,11 @@
 use std::{error, io::Cursor};
 
-use fast_image_resize::{images::Image, IntoImageView, Resizer};
+use fast_image_resize::{IntoImageView, Resizer, images::Image};
 use image::{
-    codecs::png::PngEncoder, imageops::crop_imm, DynamicImage, GenericImageView, ImageEncoder,
+    DynamicImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder, imageops::crop_imm,
 };
+
+use crate::term_misc::dim_to_cells;
 
 use super::term_misc::{self, dim_to_px};
 
@@ -20,14 +22,16 @@ pub trait InlineImage {
     ///     Err(e) => return,
     /// };
     /// let dyn_img = image::load_from_memory(&buf).unwrap();
-    /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c")).unwrap();
+    /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c"), false).unwrap();
     /// ```
     /// * the offset is for centering the image
     /// * it accepts either `%` (percentage) / `c` (cells) / just a number
+    /// * when resize for ascii is true it resizes to cells, if not it resizes to pixels
     fn resize_plus(
         &self,
         width: Option<&str>,
         height: Option<&str>,
+        resize_for_ascii: bool,
     ) -> Result<(Vec<u8>, u16), Box<dyn error::Error>>;
     /// zoom into the image, and move around
     /// # example:
@@ -52,19 +56,26 @@ impl InlineImage for DynamicImage {
         &self,
         width: Option<&str>,
         height: Option<&str>,
+        resize_for_ascii: bool,
     ) -> Result<(Vec<u8>, u16), Box<dyn error::Error>> {
         let (src_width, src_height) = self.dimensions();
         let width = match width {
-            Some(w) => dim_to_px(w, term_misc::SizeDirection::Width)?,
+            Some(w) => match resize_for_ascii {
+                true => dim_to_cells(w, term_misc::SizeDirection::Width)?,
+                false => dim_to_px(w, term_misc::SizeDirection::Width)?,
+            },
             None => src_width,
         };
         let height = match height {
-            Some(h) => dim_to_px(h, term_misc::SizeDirection::Height)?,
+            Some(h) => match resize_for_ascii {
+                true => dim_to_cells(h, term_misc::SizeDirection::Height)? * 2,
+                false => dim_to_px(h, term_misc::SizeDirection::Height)?,
+            },
             None => src_height,
         };
 
         let (new_width, new_height) = calc_fit(src_width, src_height, width, height);
-        let center = term_misc::center_image(new_width as u16);
+        let center = term_misc::center_image(new_width as u16, resize_for_ascii);
 
         let mut dst_image = Image::new(
             new_width,

@@ -32,6 +32,7 @@ fn main() {
             "fetch-clean",
             "fetch-chromium",
             "fetch-ffmpeg",
+            "report",
         ]);
     }
     let opts = Command::new("mcat")
@@ -54,8 +55,8 @@ fn main() {
         .arg(
             Arg::new("theme")
                 .short('t')
-                .help("alternative css file for images, valid options: [default, makurai, <local file>]",)
-                .default_value("default")
+                .help("alternative css file for images, valid options: [light, dark, <local file>]",)
+                .default_value("light")
         )
         .arg(
             Arg::new("style-html")
@@ -82,6 +83,12 @@ fn main() {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("ascii")
+                .long("ascii")
+                .help("makes the inline image encoded to ascii")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("inline")
                 .short('i')
                 .help("shortcut for putting --output inline")
@@ -94,9 +101,9 @@ fn main() {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
-            Arg::new("makurai-theme")
-                .short('m')
-                .help("shortcut for putting --theme makurai")
+            Arg::new("dark-theme")
+                .short('d')
+                .help("shortcut for putting --theme dark")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -108,6 +115,18 @@ fn main() {
             Arg::new("inline-options")
                 .long("inline-options")
                 .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+        )
+        .arg(
+            Arg::new("report")
+                .long("report")
+                .action(clap::ArgAction::SetTrue)
+                .help("reports image / video dimensions when drawing images. along with reporting more info when not drawing images")
+        )
+        .arg(
+            Arg::new("silent")
+                .long("silent")
+                .action(clap::ArgAction::SetTrue)
+                .help("removes loading bars")
         )
         .arg(
             Arg::new("fetch-chromium")
@@ -141,6 +160,8 @@ fn main() {
         fetch_manager::clean().unwrap_or_exit();
         return;
     }
+    let report = opts.get_flag("report");
+    let silent = opts.get_flag("silent");
 
     // main
     let input: Vec<String> = opts
@@ -148,10 +169,8 @@ fn main() {
         .unwrap_or_default()
         .cloned()
         .collect();
-    let output = opts.get_one::<String>("output");
-    let style = opts.get_one::<String>("theme").unwrap();
-    let style_html = opts.get_flag("style-html");
-    let hori = *opts.get_one::<bool>("horizontal").unwrap();
+
+    // setting the winsize
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default());
     let _ = term_misc::init_winsize(
@@ -160,9 +179,20 @@ fn main() {
         inline_options.scale,
     );
 
+    // reporting and leaving
+    if report && input.is_empty() {
+        report_and_leave();
+    }
+
+    // rest
+    let output = opts.get_one::<String>("output");
+    let style = opts.get_one::<String>("theme").unwrap();
+    let style_html = opts.get_flag("style-html");
+    let hori = *opts.get_one::<bool>("horizontal").unwrap();
+
     // shortcuts
-    let makurai = opts.get_flag("makurai-theme");
-    let style: &str = if makurai { "makurai" } else { style };
+    let dark = opts.get_flag("dark-theme");
+    let style: &str = if dark { "dark" } else { style };
 
     let inline = opts.get_flag("inline");
     let pretty = opts.get_flag("pretty");
@@ -181,10 +211,12 @@ fn main() {
     let kitty = opts.get_flag("kitty");
     let iterm = opts.get_flag("iterm");
     let sixel = opts.get_flag("sixel");
+    let ascii = opts.get_flag("ascii");
     let encoder = EncoderForce {
         kitty,
         iterm,
         sixel,
+        ascii,
     };
 
     let opts = CatOpts {
@@ -198,6 +230,8 @@ fn main() {
         encoder: Some(encoder),
         style: Some(style),
         style_html,
+        report,
+        silent,
     };
 
     let mut tmp_files = Vec::new(); //for lifetime
@@ -219,7 +253,7 @@ fn main() {
     }
     for i in input {
         if i.starts_with("https://") {
-            if let Ok(tmp) = scrapy::scrape_biggest_media(&i) {
+            if let Ok(tmp) = scrapy::scrape_biggest_media(&i, silent) {
                 let path = tmp.path().to_path_buf();
                 tmp_files.push(tmp);
                 path_bufs.push((path, Some(i)));
@@ -246,7 +280,7 @@ fn main() {
     }
 
     let stdout = std::io::stdout();
-    let mut out = BufWriter::new(stdout.lock());
+    let mut out = BufWriter::new(stdout);
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
@@ -367,4 +401,73 @@ fn expand_tilde(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+fn report_and_leave() {
+    let is_chromium_installed = fetch_manager::is_chromium_installed();
+    let is_ffmpeg_installed = fetch_manager::is_ffmpeg_installed();
+    let env = term_misc::EnvIdentifiers::new();
+    let kitty = rasteroid::kitty_encoder::is_kitty_capable(&env);
+    let iterm = rasteroid::iterm_encoder::is_iterm_capable(&env);
+    let sixel = rasteroid::sixel_encoder::is_sixel_capable(&env);
+    let ascii = true; //not sure what doesn't support it
+    let winsize = term_misc::get_winsize();
+
+    // Print header with fancy box
+    println!("┌────────────────────────────────────────────────────┐");
+    println!("│               SYSTEM CAPABILITIES                  │");
+    println!("├────────────────────────────────────────────────────┤");
+
+    // Color function helpers
+    fn green(text: &str) -> String {
+        format!("\x1b[32m{}\x1b[0m", text)
+    }
+
+    fn red(text: &str) -> String {
+        format!("\x1b[31m{}\x1b[0m", text)
+    }
+
+    fn format_status(status: bool) -> String {
+        if status {
+            green("✓ INSTALLED")
+        } else {
+            red("× MISSING")
+        }
+    }
+    fn format_capability(status: bool) -> String {
+        if status {
+            green("✓ SUPPORTED")
+        } else {
+            red("× UNSUPPORTED")
+        }
+    }
+
+    // Print required dependencies
+    println!("│ Dependencies:                                      │");
+    println!(
+        "│   Chromium: {:<47} │",
+        format_status(is_chromium_installed)
+    );
+    println!("│   FFmpeg:   {:<47} │", format_status(is_ffmpeg_installed));
+
+    // Print terminal capabilities
+    println!("├────────────────────────────────────────────────────┤");
+    println!("│ Terminal Graphics Support:                         │");
+    println!("│   Kitty:    {:<47} │", format_capability(kitty));
+    println!("│   iTerm2:   {:<47} │", format_capability(iterm));
+    println!("│   Sixel:    {:<47} │", format_capability(sixel));
+    println!("│   ASCII:    {:<47} │", format_capability(ascii));
+
+    // Print terminal dimensions
+    println!("├────────────────────────────────────────────────────┤");
+    println!("│ Terminal Dimensions:                               │");
+    println!("│   Width:        {:<34} │", winsize.sc_width);
+    println!("│   Height:       {:<34} │", winsize.sc_height);
+    println!("│   Pixel Width:  {:<34} │", winsize.spx_width);
+    println!("│   Pixel Height: {:<34} │", winsize.spx_height);
+
+    // Print footer
+    println!("└────────────────────────────────────────────────────┘");
+
+    std::process::exit(0);
 }

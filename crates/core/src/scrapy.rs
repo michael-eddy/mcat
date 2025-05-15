@@ -1,7 +1,9 @@
+use futures::StreamExt;
 use reqwest::Client;
 use scraper::Html;
 use tempfile::NamedTempFile;
 use tokio::runtime::Builder;
+    use indicatif::{ProgressBar, ProgressStyle};
 
 use std::io::Write;
 
@@ -119,7 +121,7 @@ fn extension_from_mime(mime: &str) -> Option<&'static str> {
     }
 }
 
-pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
+pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         .build()?;
@@ -127,6 +129,7 @@ pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::err
     let rt = Builder::new_current_thread().enable_all().build()?;
 
     rt.block_on(async {
+        // Initial request to get the page
         let response = client.get(url).send().await?;
 
         if !response.status().is_success() {
@@ -138,17 +141,54 @@ pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::err
             .get("Content-Type")
             .and_then(|h| h.to_str().ok());
 
-        // by mime
+        // Direct file download if mime type is recognized
         if let Some(ct) = content_type {
             if let Some(ext) = extension_from_mime(ct) {
-                let file_bytes = response.bytes().await?;
+                // Get content length for progress bar if available
+                let content_length = response
+                    .headers()
+                    .get("content-length")
+                    .and_then(|cl| cl.to_str().ok())
+                    .and_then(|cl| cl.parse::<u64>().ok());
+                
+                // Setup progress bar if not silent and content length is known
+                let progress_bar = if !silent && content_length.is_some() {
+                    let pb = ProgressBar::new(content_length.unwrap());
+                    pb.set_style(ProgressStyle::default_bar()
+                        .template("{spinner:.green} [{bar:50.blue/white}] {bytes}/{total_bytes} ({percent}%)")?
+                        .progress_chars("█▓▒░"));
+                    Some(pb)
+                } else {
+                    None
+                };
+                
+                // Stream the response body
+                let mut stream = response.bytes_stream();
+                let mut file_data = Vec::new();
+                
+                while let Some(chunk_result) = stream.next().await {
+                    let chunk = chunk_result?;
+                    file_data.extend_from_slice(&chunk);
+                    
+                    // Update progress bar if we have one
+                    if let Some(pb) = &progress_bar {
+                        pb.set_position(file_data.len() as u64);
+                    }
+                }
+                
+                // Finish the progress bar if we have one
+                if let Some(pb) = progress_bar {
+                    pb.finish_and_clear();
+                }
+                
+                // Write to temp file and return
                 let mut tmp_file = NamedTempFile::with_suffix(&format!(".{}", ext))?;
-                tmp_file.write_all(&file_bytes)?;
+                tmp_file.write_all(&file_data)?;
                 return Ok(tmp_file);
             }
         }
 
-        // search for something inside the html.
+        // Process HTML content for embedded media
         let html_content = response.text().await?;
         let html_size = html_content.len();
         let document = Html::parse_document(&html_content);
@@ -200,37 +240,69 @@ pub fn scrape_biggest_media(url: &str) -> Result<NamedTempFile, Box<dyn std::err
         let mut biggest_media: Option<(usize, Vec<u8>, String)> = None;
 
         for (media_url, media_type) in potential_media {
-            if let Ok(resolved_url) =
-                reqwest::Url::parse(url).and_then(|base| base.join(&media_url))
-            {
+            if let Ok(resolved_url) = reqwest::Url::parse(url).and_then(|base| base.join(&media_url)) {
                 if let Ok(media_response) = client.get(resolved_url.as_str()).send().await {
                     if media_response.status().is_success() {
-                        if let Ok(media_bytes) = media_response.bytes().await {
-                            let media_size = media_bytes.len();
-                            if media_size > (html_size as f64 * 0.3) as usize {
-                                let extension = resolved_url
-                                    .path_segments()
-                                    .and_then(|segments| segments.last())
-                                    .and_then(|filename| filename.split('.').last())
-                                    .map(|ext| ext.to_lowercase())
-                                    .unwrap_or_default();
+                        // Get content length for this media
+                        let content_length = media_response
+                            .headers()
+                            .get("content-length")
+                            .and_then(|cl| cl.to_str().ok())
+                            .and_then(|cl| cl.parse::<u64>().ok());
+                        
+                        // Only create progress bar for media that's likely to be significant
+                        let progress_bar = if !silent && content_length.is_some() && content_length.unwrap() > 1_000_000 {
+                            let pb = ProgressBar::new(content_length.unwrap());
+                            pb.set_style(ProgressStyle::default_bar()
+                                .template("{spinner:.green} [{bar:50.cyan/blue}] {bytes}/{total_bytes} ({percent}%)")?
+                                .progress_chars("█▓▒░ "));
+                            Some(pb)
+                        } else {
+                            None
+                        };
+                        
+                        // Stream the response body for this media
+                        let mut stream = media_response.bytes_stream();
+                        let mut media_data = Vec::new();
+                        
+                        while let Some(chunk_result) = stream.next().await {
+                            let chunk = chunk_result?;
+                            media_data.extend_from_slice(&chunk);
+                            
+                            // Update progress bar if we have one
+                            if let Some(pb) = &progress_bar {
+                                pb.set_position(media_data.len() as u64);
+                            }
+                        }
+                        
+                        // Finish the progress bar if we have one
+                        if let Some(pb) = progress_bar {
+                            pb.finish_and_clear();
+                        }
+                        
+                        let media_size = media_data.len();
+                        if media_size > (html_size as f64 * 0.3) as usize {
+                            let extension = resolved_url
+                                .path_segments()
+                                .and_then(|segments| segments.last())
+                                .and_then(|filename| filename.split('.').last())
+                                .map(|ext| ext.to_lowercase())
+                                .unwrap_or_default();
 
-                                let is_valid = match media_type.as_str() {
-                                    "svg" => extension == "svg",
-                                    "video" => catter::is_video(&extension),
-                                    "image" => {
-                                        image::ImageFormat::from_extension(&extension).is_some()
-                                    }
-                                    _ => false,
-                                };
-
-                                if is_valid
-                                    && (biggest_media.is_none()
-                                        || media_size > biggest_media.as_ref().unwrap().0)
-                                {
-                                    biggest_media =
-                                        Some((media_size, media_bytes.to_vec(), extension));
+                            let is_valid = match media_type.as_str() {
+                                "svg" => extension == "svg",
+                                "video" => catter::is_video(&extension),
+                                "image" => {
+                                    image::ImageFormat::from_extension(&extension).is_some()
                                 }
+                                _ => false,
+                            };
+
+                            if is_valid
+                                && (biggest_media.is_none()
+                                    || media_size > biggest_media.as_ref().unwrap().0)
+                            {
+                                biggest_media = Some((media_size, media_data, extension));
                             }
                         }
                     }

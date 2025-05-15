@@ -25,6 +25,7 @@ pub struct EncoderForce {
     pub kitty: bool,
     pub iterm: bool,
     pub sixel: bool,
+    pub ascii: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -39,6 +40,8 @@ pub struct CatOpts<'a> {
     pub y: Option<i32>,
     pub style_html: bool,
     pub center: bool,
+    pub report: bool,
+    pub silent: bool,
 }
 impl CatOpts<'_> {
     pub fn default() -> Self {
@@ -53,6 +56,8 @@ impl CatOpts<'_> {
             style: None,
             style_html: false,
             center: false,
+            report: false,
+            silent: false,
         }
     }
 }
@@ -74,9 +79,18 @@ pub fn cat(
         kitty: false,
         iterm: false,
         sixel: false,
+        ascii: false,
     });
-    let inline_encoder =
-        &rasteroid::InlineEncoder::auto_detect(encoder.kitty, encoder.iterm, encoder.sixel);
+    let inline_encoder = &rasteroid::InlineEncoder::auto_detect(
+        encoder.kitty,
+        encoder.iterm,
+        encoder.sixel,
+        encoder.ascii,
+    );
+    let resize_for_ascii = match inline_encoder {
+        rasteroid::InlineEncoder::Ascii => true,
+        _ => false,
+    };
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -94,7 +108,15 @@ pub fn cat(
             out.write_all(&content)?;
             return Ok(CatType::Video);
         }
-        converter::inline_a_video(path.to_string_lossy(), out, inline_encoder, opts.center)?;
+        converter::inline_a_video(
+            path.to_string_lossy(),
+            out,
+            inline_encoder,
+            opts.width,
+            opts.height,
+            opts.center,
+            opts.silent,
+        )?;
         return Ok(CatType::InlineVideo);
     }
     //svg
@@ -155,7 +177,10 @@ pub fn cat(
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
+            let (img, center) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            if opts.report {
+                rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
+            }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
@@ -168,7 +193,10 @@ pub fn cat(
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center) = dyn_img.resize_plus(opts.width, opts.height)?;
+            let (img, center) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            if opts.report {
+                rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
+            }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
@@ -190,7 +218,10 @@ pub fn cat(
         ("image", _) => {
             // default for image
             let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center) = image_result.resize_plus(opts.width, opts.height)?;
+            let (img, center) = image_result.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            if opts.report {
+                rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
+            }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
