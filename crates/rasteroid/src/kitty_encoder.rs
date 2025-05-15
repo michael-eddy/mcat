@@ -1,6 +1,7 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
 use base64::{Engine, engine::general_purpose};
+use flate2::{Compression, write::ZlibEncoder};
 
 use crate::{
     Frame,
@@ -111,7 +112,11 @@ fn process_frame(
     first_opts: HashMap<String, String>,
     sub_opts: HashMap<String, String>,
 ) -> Result<(), Box<dyn Error>> {
-    let base64 = general_purpose::STANDARD.encode(data);
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data)?;
+    let compressed = encoder.finish()?;
+
+    let base64 = general_purpose::STANDARD.encode(compressed);
     chunk_base64(&base64, out, 4096, first_opts, sub_opts)?;
 
     Ok(())
@@ -184,8 +189,7 @@ pub fn encode_frames(
 
     for (c, frame) in frames.enumerate() {
         if c == 0 {
-            let data = frame.data();
-            let img = image::load_from_memory(data)?;
+            let img = image::load_from_memory(frame.data())?;
             let offset = term_misc::center_image(img.width() as u16, false);
             if center {
                 let center = offset_to_terminal(Some(offset));
@@ -196,14 +200,16 @@ pub fn encode_frames(
             let i = id.to_string();
             let s = img.width().to_string();
             let v = img.height().to_string();
-            let f = "100".to_string();
+            let f = "24".to_string();
+            let o = "z".to_string();
             let q = "2".to_string();
             process_frame(
-                data,
+                &img.to_rgb8(),
                 out,
                 HashMap::from([
                     ("a".to_string(), "T".to_string()),
                     ("f".to_string(), f),
+                    ("o".to_string(), o),
                     ("I".to_string(), i),
                     ("s".to_string(), s),
                     ("v".to_string(), v),
@@ -217,21 +223,22 @@ pub fn encode_frames(
             continue;
         }
 
-        let data = frame.data();
-        let img = image::load_from_memory(data)?;
+        let new_img = image::load_from_memory(frame.data())?;
         if shutdown.load(Ordering::SeqCst) {
             break; // clean exit
         }
-        let s = img.width().to_string();
-        let v = img.height().to_string();
+        let s = new_img.width().to_string();
+        let v = new_img.height().to_string();
         let i = id.to_string();
-        let f = "100".to_string();
+        let f = "24".to_string();
+        let o = "z".to_string();
         let z = ((frame.timestamp() - pre_timestamp) * 1000.0) as u32;
         pre_timestamp = frame.timestamp();
 
         let first_opts = HashMap::from([
             ("a".to_string(), "f".to_string()),
             ("f".to_string(), f),
+            ("o".to_string(), o),
             ("I".to_string(), i),
             ("c".to_string(), c.to_string()),
             ("s".to_string(), s),
@@ -240,7 +247,7 @@ pub fn encode_frames(
         ]);
         let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
 
-        process_frame(data, out, first_opts, sub_opts)?;
+        process_frame(&new_img.to_rgb8(), out, first_opts, sub_opts)?;
     }
 
     write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;
