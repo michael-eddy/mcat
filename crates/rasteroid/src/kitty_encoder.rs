@@ -128,7 +128,7 @@ fn process_frame(
 /// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
 /// ```rust,no_run
 /// use ffmpeg_sidecar::command::FfmpegCommand;
-/// use rasteroid::kitty_encoder::Frame;
+/// use rasteroid::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
 /// use rasteroid::kitty_encoder::encode_frames;
 /// use rasteroid::kitty_encoder::is_kitty_capable;

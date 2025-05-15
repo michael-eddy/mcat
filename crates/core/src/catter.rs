@@ -40,6 +40,7 @@ pub struct CatOpts<'a> {
     pub y: Option<i32>,
     pub style_html: bool,
     pub center: bool,
+    pub report: bool,
 }
 impl CatOpts<'_> {
     pub fn default() -> Self {
@@ -54,6 +55,7 @@ impl CatOpts<'_> {
             style: None,
             style_html: false,
             center: false,
+            report: false,
         }
     }
 }
@@ -173,6 +175,9 @@ pub fn cat(
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            if opts.report {
+                rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
+            }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
@@ -186,6 +191,9 @@ pub fn cat(
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            if opts.report {
+                rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
+            }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },
@@ -208,6 +216,9 @@ pub fn cat(
             // default for image
             let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center) = image_result.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            if opts.report {
+                rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
+            }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, inline_encoder)?;
             Ok(CatType::InlineImage)
         },

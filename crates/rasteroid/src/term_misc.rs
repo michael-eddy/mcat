@@ -225,6 +225,13 @@ pub fn dim_to_cells(dim: &str, direction: SizeDirection) -> Result<u32, String> 
     Err(format!("Invalid dimension format: {}", dim))
 }
 
+// reports the size of the logic units in cells.
+pub fn report_size(width: &str, height: &str) {
+    let w = dim_to_cells(width, SizeDirection::Width).unwrap_or_default();
+    let h = dim_to_cells(height, SizeDirection::Height).unwrap_or_default();
+    eprintln!("|width: {}, height: {}|", w, h);
+}
+
 // gross estimation winsize for windows..
 #[cfg(windows)]
 fn get_size_windows() -> Option<(u16, u16)> {

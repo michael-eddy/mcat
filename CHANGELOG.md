@@ -2,6 +2,7 @@
 * adding ascii encoder for images and videos!
 * sixel terminals can now use the ascii encoder to view videos too!
 * fixed a bug in markdownify pdf parser where certain text would appear twice 1 after the other
+* added the --report flag to query info
 
 ## V0.2.5
 * now expands ~
