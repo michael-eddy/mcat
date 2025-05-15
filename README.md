@@ -126,7 +126,7 @@ mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 Mcat tries to have as little dependencies as possible.
 #### chromium (for rendering HTML to image):
 1. exists on every windows machine through msedge. and other machines that have chrome/msedge/chromium
-2. can be installed by doing `mcat --fetch-chormium`
+2. can be installed by doing `mcat --fetch-chromium`
 #### ffmpeg (for videos)
 1. if your machine has it 🫠.
 2. can be installed by doing `mcat --fetch-ffmpeg`
