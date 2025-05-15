@@ -1,3 +1,6 @@
+## V0.2.7
+- bumping zip version because it was yanked
+
 ## V0.2.6
 * adding ascii encoder for images and videos!
 * sixel terminals can now use the ascii encoder to view videos too!
