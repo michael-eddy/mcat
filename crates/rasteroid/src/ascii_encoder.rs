@@ -147,7 +147,7 @@ fn visual_weight(r: u8, g: u8, b: u8, a: u8) -> f32 {
 ///
 /// # Example
 /// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
-/// ```
+/// ```rust,no_run
 /// use ffmpeg_sidecar::command::FfmpegCommand;
 /// use rasteroid::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
@@ -167,6 +167,14 @@ fn visual_weight(r: u8, g: u8, b: u8, a: u8) -> f32 {
 ///     // needs to be something image crate can load.
 ///     fn data(&self) -> &[u8] {
 ///         &self.img
+///     }
+///     // doesn't matter here
+///     fn width(&self) -> u16 {
+///         0
+///     }
+///     // doesn't matter here
+///     fn height(&self) -> u16 {
+///         0
 ///     }
 /// }
 /// // next get the frames (taken from ffmpeg-sidecar)

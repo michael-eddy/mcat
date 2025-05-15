@@ -189,8 +189,8 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     options.render.full_info_string = true;
 
     let css_content = match css_path {
-        Some("makurai") => Some(include_str!("../styles/makurai.css").to_string()),
-        Some("default") => Some(include_str!("../styles/default.css").to_string()),
+        Some("dark") => Some(include_str!("../styles/dark.css").to_string()),
+        Some("light") => Some(include_str!("../styles/light.css").to_string()),
         Some(path) => std::fs::read_to_string(path).ok(),
         None => None,
     };
@@ -216,27 +216,24 @@ pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
     }
 }
 
-pub struct KittyFrames(pub OutputVideoFrame);
-impl Frame for KittyFrames {
-    fn timestamp(&self) -> f32 {
-        self.0.timestamp
-    }
-    fn data(&self) -> &[u8] {
-        &self.0.data
-    }
-}
-
-pub struct AsciiFrames {
-    frame: OutputVideoFrame,
+pub struct VideoFrames {
+    timestamp: f32,
     img: Vec<u8>,
+    width: u16,
+    height: u16,
 }
-impl Frame for AsciiFrames {
+impl Frame for VideoFrames {
     fn timestamp(&self) -> f32 {
-        self.frame.timestamp
+        self.timestamp
     }
-    // needs to be not rgb here.
     fn data(&self) -> &[u8] {
         &self.img
+    }
+    fn width(&self) -> u16 {
+        self.width as u16
+    }
+    fn height(&self) -> u16 {
+        self.height as u16
     }
 }
 
@@ -252,12 +249,11 @@ pub fn inline_a_video(
     match inline_encoder {
         rasteroid::InlineEncoder::Kitty => {
             let frames = video_to_frames(input)?;
-            let mut kitty_frames = frames.map(|f| {
-                let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
-                    .unwrap_or_default();
-                let img = image::DynamicImage::ImageRgb8(rgb_image);
-                let (img, _) = img.resize_plus(width, height, false).unwrap_or_default();
-                AsciiFrames { img, frame: f }
+            let mut kitty_frames = frames.map(|f| VideoFrames {
+                width: f.width as u16,
+                height: f.height as u16,
+                img: f.data,
+                timestamp: f.timestamp,
             });
             let id = rand::random::<u32>();
             rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, id, center)?;
@@ -283,7 +279,12 @@ pub fn inline_a_video(
                     .unwrap_or_default();
                 let img = image::DynamicImage::ImageRgb8(rgb_image);
                 let (img, _) = img.resize_plus(width, height, true).unwrap_or_default();
-                AsciiFrames { frame: f, img }
+                VideoFrames {
+                    timestamp: f.timestamp,
+                    img,
+                    width: 0,
+                    height: 0,
+                }
             });
             rasteroid::ascii_encoder::encode_frames(&mut ascii_frames, out, center, true)?;
             Ok(())

@@ -54,8 +54,8 @@ fn main() {
         .arg(
             Arg::new("theme")
                 .short('t')
-                .help("alternative css file for images, valid options: [default, makurai, <local file>]",)
-                .default_value("default")
+                .help("alternative css file for images, valid options: [light, dark, <local file>]",)
+                .default_value("light")
         )
         .arg(
             Arg::new("style-html")
@@ -100,9 +100,9 @@ fn main() {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
-            Arg::new("makurai-theme")
-                .short('m')
-                .help("shortcut for putting --theme makurai")
+            Arg::new("dark-theme")
+                .short('d')
+                .help("shortcut for putting --theme dark")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -167,8 +167,8 @@ fn main() {
     );
 
     // shortcuts
-    let makurai = opts.get_flag("makurai-theme");
-    let style: &str = if makurai { "makurai" } else { style };
+    let dark = opts.get_flag("dark-theme");
+    let style: &str = if dark { "dark" } else { style };
 
     let inline = opts.get_flag("inline");
     let pretty = opts.get_flag("pretty");

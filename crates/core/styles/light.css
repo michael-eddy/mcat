@@ -1,6 +1,6 @@
 body {
-  background-color: #FAFAFA;
-  color: #1B1C21;
+  background-color: #f8f8fc;
+  color: #323640;
   font-family: "Segoe UI Emoji", "Noto Color Emoji", "Apple Color Emoji", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
   min-width: 1200px;
   line-height: 1.6;
@@ -13,19 +13,19 @@ h3,
 h4,
 h5,
 h6 {
-  color: #2D3640;
+  color: #323640;
   margin-top: 1.5em;
 }
 
 h1 {
   font-size: 2.2em;
-  border-bottom: 2px solid #D0D7DE;
+  border-bottom: 2px solid #7e8a9e;
   padding-bottom: 0.3em;
 }
 
 h2 {
   font-size: 1.8em;
-  border-bottom: 1px solid #D0D7DE;
+  border-bottom: 1px solid #7e8a9e;
   padding-bottom: 0.2em;
 }
 
@@ -36,11 +36,11 @@ h3 {
 h4,
 h5,
 h6 {
-  color: #6C4BB1;
+  color: #e3438e;
 }
 
 a {
-  color: #0066cc;
+  color: #3D76F3;
   text-decoration: none;
 }
 
@@ -49,18 +49,18 @@ a:hover {
 }
 
 code {
-  background-color: #F0F0F0;
-  color: #8B4F00;
+  background-color: #ececf2;
+  color: #51A150;
   padding: 0.2em 0.4em;
   border-radius: 4px;
 }
 
 pre {
-  background-color: #F0F0F0;
-  color: #000;
+  background-color: #ececf2;
+  color: #323640;
   padding: 1em;
   overflow-x: auto;
-  border: 1px solid #D0D7DE;
+  border: 1px solid #7e8a9e;
   border-radius: 6px;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -79,10 +79,10 @@ pre::-webkit-scrollbar {
 }
 
 blockquote {
-  border-left: 4px solid #3A7BD5;
-  background-color: #F5F5F5;
+  border-left: 4px solid #3D76F3;
+  background-color: #ececf2;
   padding: 0.8em 1em;
-  color: #555;
+  color: #323640;
   margin: 1em 0;
 }
 
@@ -92,7 +92,7 @@ ol {
 }
 
 li::marker {
-  color: #6C4BB1;
+  color: #e3438e;
 }
 
 table {
@@ -103,35 +103,35 @@ table {
 
 th,
 td {
-  border: 1px solid #C4C9D1;
+  border: 1px solid #7e8a9e;
   padding: 0.6em 1em;
 }
 
 th {
-  background-color: #EFEFEF;
-  color: #4B3F1B;
+  background-color: #ececf2;
+  color: #e3438e;
 }
 
 tr:nth-child(even) {
-  background-color: #F9F9F9;
+  background-color: #f0f0f9;
 }
 
 hr {
   border: none;
-  border-top: 1px solid #D0D7DE;
+  border-top: 1px solid #7e8a9e;
   margin: 2em 0;
 }
 
 .keyword,
 .storage.modifier,
 .storage.type {
-  color: #a728a5;
+  color: #E35043;
 }
 
 .entity.name.function,
 .support.function,
 .variable.function {
-  color: #4078f2;
+  color: #3D76F3;
 }
 
 .module,
@@ -139,22 +139,22 @@ hr {
 .enum,
 .generic,
 .path {
-  color: #e45649;
+  color: #AB31A9;
 }
 
 .string,
 .punctuation.string {
-  color: #50a14f;
+  color: #51A150;
 }
 
 .constant,
 .support.type {
-  color: #986800;
+  color: #976700;
 }
 
 .comment,
 .punctuation.comment {
-  color: #a0a1a7;
+  color: #A0A1A7;
   font-style: italic;
 }
 
@@ -162,5 +162,5 @@ hr {
 .operator,
 .punctuation,
 .block {
-  color: #000000;
+  color: #323640;
 }

@@ -89,4 +89,6 @@ impl InlineEncoder {
 pub trait Frame {
     fn timestamp(&self) -> f32;
     fn data(&self) -> &[u8];
+    fn width(&self) -> u16;
+    fn height(&self) -> u16;
 }

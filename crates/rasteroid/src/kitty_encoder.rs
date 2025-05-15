@@ -112,7 +112,7 @@ fn process_frame(
     first_opts: HashMap<String, String>,
     sub_opts: HashMap<String, String>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
     encoder.write_all(data)?;
     let compressed = encoder.finish()?;
 
@@ -126,26 +126,29 @@ fn process_frame(
 /// recommended to use in conjunction with video parsing library
 /// # example:
 /// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
-/// ```
+/// ```rust,no_run
 /// use ffmpeg_sidecar::command::FfmpegCommand;
-/// use rasteroid::Frame;
+/// use rasteroid::kitty_encoder::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
 /// use rasteroid::kitty_encoder::encode_frames;
+/// use rasteroid::kitty_encoder::is_kitty_capable;
 /// use rasteroid::image_extended::calc_fit;
 /// use ffmpeg_sidecar::event::FfmpegEvent;
-/// use rasteroid::image_extended::InlineImage;
 ///
-/// pub struct KittyFrames {
-///     frame: OutputVideoFrame,
-///     img: Vec<u8>,
-/// }
+/// pub struct KittyFrames(pub OutputVideoFrame);
 /// impl Frame for KittyFrames {
-///     fn timestamp(&self) -> f32 {
-///         self.frame.timestamp
+///     fn width(&self) -> u16 {
+///         self.0.width as u16
 ///     }
-///     // needs to be something image crate can load.
+///     fn height(&self) -> u16 {
+///         self.0.height as u16
+///     }
+///     fn timestamp(&self) -> f32 {
+///         self.0.timestamp
+///     }
+///     // must be rgb8!
 ///     fn data(&self) -> &[u8] {
-///         &self.img
+///         &self.0.data
 ///     }
 /// }
 /// // next get the frames (taken from ffmpeg-sidecar)
@@ -160,22 +163,16 @@ fn process_frame(
 ///        Err(e) => return,
 /// }.iter().unwrap();   // <- Blocking iterator over logs and output
 /// // now convert to compatible frames
-/// let width = Some("80%");
-/// let height = Some("80%");
-/// let center = true;
-/// let mut kitty_frames = iter.filter_map(|event| {
-///     if let FfmpegEvent::OutputFrame(f) = event {
-///        let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
-///            .unwrap_or_default();
-///        let img = image::DynamicImage::ImageRgb8(rgb_image);
-///        let (img, _) = img.resize_plus(width, height, false).unwrap_or_default();
-///        Some(KittyFrames { img, frame: f })
-///     } else {
-///        None
-///     }
-/// });
+/// let mut kitty_frames = iter
+///         .filter_map(|event| {
+///             if let FfmpegEvent::OutputFrame(frame) = event {
+///                 Some(KittyFrames(frame))
+///             } else {
+///                 None
+///             }
+///         });
 /// let id = rand::random::<u32>();
-/// encode_frames(&mut kitty_frames, &mut out, id, center);
+/// encode_frames(&mut kitty_frames, &mut out, id, true);
 /// ```
 pub fn encode_frames(
     frames: &mut dyn Iterator<Item = impl Frame>,
@@ -183,52 +180,49 @@ pub fn encode_frames(
     id: u32,
     center: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let shutdown = term_misc::setup_signal_handler();
+    // getting the first frame
+    let first = frames.next().ok_or("video doesn't contain any frames")?;
+    let offset = term_misc::center_image(first.width() as u16, false);
+    if center {
+        let center = offset_to_terminal(Some(offset));
+        out.write_all(center.as_bytes())?;
+    }
     let mut pre_timestamp = 0.0;
+
+    // adding the root image
+    let i = id.to_string();
+    let s = first.width().to_string();
+    let v = first.height().to_string();
+    let f = "24".to_string();
+    let o = "z".to_string();
+    let q = "2".to_string();
+    process_frame(
+        &first.data(),
+        out,
+        HashMap::from([
+            ("a".to_string(), "T".to_string()),
+            ("f".to_string(), f),
+            ("o".to_string(), o),
+            ("I".to_string(), i),
+            ("s".to_string(), s),
+            ("v".to_string(), v),
+            ("q".to_string(), q),
+        ]),
+        HashMap::new(),
+    )?;
+
+    // starting the animation
     let z = 100;
+    write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
+
+    let shutdown = term_misc::setup_signal_handler();
 
     for (c, frame) in frames.enumerate() {
-        if c == 0 {
-            let img = image::load_from_memory(frame.data())?;
-            let offset = term_misc::center_image(img.width() as u16, false);
-            if center {
-                let center = offset_to_terminal(Some(offset));
-                out.write_all(center.as_bytes())?;
-            }
-
-            // adding the root image
-            let i = id.to_string();
-            let s = img.width().to_string();
-            let v = img.height().to_string();
-            let f = "24".to_string();
-            let o = "z".to_string();
-            let q = "2".to_string();
-            process_frame(
-                &img.to_rgb8(),
-                out,
-                HashMap::from([
-                    ("a".to_string(), "T".to_string()),
-                    ("f".to_string(), f),
-                    ("o".to_string(), o),
-                    ("I".to_string(), i),
-                    ("s".to_string(), s),
-                    ("v".to_string(), v),
-                    ("q".to_string(), q),
-                ]),
-                HashMap::new(),
-            )?;
-
-            // starting the animation
-            write!(out, "\x1b_Ga=a,s=2,v=1,r=1,I={},z={}\x1b\\", id, z)?;
-            continue;
-        }
-
-        let new_img = image::load_from_memory(frame.data())?;
         if shutdown.load(Ordering::SeqCst) {
             break; // clean exit
         }
-        let s = new_img.width().to_string();
-        let v = new_img.height().to_string();
+        let s = frame.width().to_string();
+        let v = frame.height().to_string();
         let i = id.to_string();
         let f = "24".to_string();
         let o = "z".to_string();
@@ -247,7 +241,7 @@ pub fn encode_frames(
         ]);
         let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
 
-        process_frame(&new_img.to_rgb8(), out, first_opts, sub_opts)?;
+        process_frame(&frame.data(), out, first_opts, sub_opts)?;
     }
 
     write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;
