@@ -29,6 +29,14 @@ pub fn offset_to_terminal(offset: Option<u16>) -> String {
     }
 }
 
+/// turns offset into terminal escape characters that move the cursor
+pub fn loc_to_terminal(at: Option<(u16, u16)>) -> String {
+    match at {
+        Some((x, y)) => format!("\x1b[{y};{x}H"),
+        None => "".to_string(),
+    }
+}
+
 lazy_static! {
     static ref WINSIZE: OnceLock<Winsize> = OnceLock::new();
 }

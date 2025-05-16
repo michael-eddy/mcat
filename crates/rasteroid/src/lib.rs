@@ -25,7 +25,7 @@ extern crate lazy_static;
 /// };
 /// let mut stdout = std::io::stdout();
 /// let encoder = InlineEncoder::auto_detect(true, false, false, false); // force kitty as fallback
-/// inline_an_image(&bytes, &stdout, None, &encoder).unwrap();
+/// inline_an_image(&bytes, &stdout, None, None, &encoder).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// MENTION: it should work for Iterm Gifs too.
@@ -33,13 +33,14 @@ pub fn inline_an_image(
     img: &[u8],
     out: impl Write,
     offset: Option<u16>,
+    print_at: Option<(u16, u16)>,
     inline_encoder: &InlineEncoder,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match inline_encoder {
-        InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset),
-        InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset),
-        InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset),
-        InlineEncoder::Ascii => ascii_encoder::encode_image(img, out, offset),
+        InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset, print_at),
+        InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset, print_at),
+        InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset, print_at),
+        InlineEncoder::Ascii => ascii_encoder::encode_image(img, out, offset, print_at),
     }
 }
 

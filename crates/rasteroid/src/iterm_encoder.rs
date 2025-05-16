@@ -17,18 +17,22 @@ use std::io::Write;
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// encode_image(&bytes, &stdout, None).unwrap();
+/// encode_image(&bytes, &stdout, None, None).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// the option offset just offsets the image to the right by the amount of cells you specify
+/// the print at is the same just absolute position
 pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
+    print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let base64_encoded = term_misc::image_to_base64(img);
 
     let center = term_misc::offset_to_terminal(offset);
+    let at = term_misc::loc_to_terminal(print_at);
+    out.write_all(at.as_ref())?;
     out.write_all(center.as_ref())?;
 
     out.write_all(b"\x1b]1337;File=inline=1;size=")?;
@@ -54,6 +58,6 @@ pub fn is_iterm_capable(env: &EnvIdentifiers) -> bool {
         || env.term_contains("wezterm")
         || env.term_contains("iterm2")
         || env.term_contains("rio")
-        || env.term_contains("warp")
+        || (env.term_contains("warp") && env.contains("OS", "linux"))
         || env.has_key("KONSOLE_VERSION")
 }

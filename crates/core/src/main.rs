@@ -147,6 +147,8 @@ fn main() {
                 .action(clap::ArgAction::SetTrue))
         .get_matches();
 
+    let stdout = std::io::stdout();
+    let mut out = BufWriter::new(stdout);
     //subcommand
     if opts.get_flag("fetch-chromium") {
         fetch_manager::fetch_chromium().unwrap_or_exit();
@@ -170,14 +172,37 @@ fn main() {
         .cloned()
         .collect();
 
+    // encoders
+    let kitty = opts.get_flag("kitty");
+    let iterm = opts.get_flag("iterm");
+    let sixel = opts.get_flag("sixel");
+    let ascii = opts.get_flag("ascii");
+    let encoder = EncoderForce {
+        kitty,
+        iterm,
+        sixel,
+        ascii,
+    };
+
+    let is_ls = input[0].to_lowercase() == "ls";
+
     // setting the winsize
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
-    let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default());
+    let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default(), !is_ls);
     let _ = term_misc::init_winsize(
         &term_misc::break_size_string(inline_options.spx.unwrap_or_default()).unwrap_or_exit(),
         &term_misc::break_size_string(inline_options.sc.unwrap_or_default()).unwrap_or_exit(),
         inline_options.scale,
     );
+
+    // if ls
+    if input[0].to_lowercase() == "ls" {
+        let inline_encoder = &rasteroid::InlineEncoder::auto_detect(kitty, iterm, sixel, ascii);
+        let d = ".".to_string();
+        let input = input.get(1).unwrap_or(&d);
+        converter::lsix(input, &mut out, inline_encoder).unwrap_or_exit();
+        std::process::exit(0);
+    }
 
     // reporting and leaving
     if report && input.is_empty() {
@@ -205,18 +230,6 @@ fn main() {
             Some(o) => Some(o.as_ref()),
             None => None,
         }
-    };
-
-    // encoders
-    let kitty = opts.get_flag("kitty");
-    let iterm = opts.get_flag("iterm");
-    let sixel = opts.get_flag("sixel");
-    let ascii = opts.get_flag("ascii");
-    let encoder = EncoderForce {
-        kitty,
-        iterm,
-        sixel,
-        ascii,
     };
 
     let opts = CatOpts {
@@ -279,8 +292,6 @@ fn main() {
         }
     }
 
-    let stdout = std::io::stdout();
-    let mut out = BufWriter::new(stdout);
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
@@ -324,10 +335,10 @@ struct InlineOptions<'a> {
 }
 
 impl<'a> InlineOptions<'a> {
-    pub fn from_string(s: &'a str) -> Self {
+    pub fn from_string(s: &'a str, have_defaults: bool) -> Self {
         let mut options = InlineOptions {
-            width: Some("80%"),
-            height: Some("80%"),
+            width: if have_defaults { Some("80%") } else { None },
+            height: if have_defaults { Some("80%") } else { None },
             spx: Some("1920x1080"),
             sc: Some("100x20"),
             scale: None,

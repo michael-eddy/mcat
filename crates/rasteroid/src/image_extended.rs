@@ -22,7 +22,7 @@ pub trait InlineImage {
     ///     Err(e) => return,
     /// };
     /// let dyn_img = image::load_from_memory(&buf).unwrap();
-    /// let (img_data, offset) = dyn_img.resize_plus(Some("80%"),Some("200c"), false).unwrap();
+    /// let (img_data, offset, width, height) = dyn_img.resize_plus(Some("80%"),Some("200c"), false).unwrap();
     /// ```
     /// * the offset is for centering the image
     /// * it accepts either `%` (percentage) / `c` (cells) / just a number
@@ -32,7 +32,7 @@ pub trait InlineImage {
         width: Option<&str>,
         height: Option<&str>,
         resize_for_ascii: bool,
-    ) -> Result<(Vec<u8>, u16), Box<dyn error::Error>>;
+    ) -> Result<(Vec<u8>, u16, u32, u32), Box<dyn error::Error>>;
     /// zoom into the image, and move around
     /// # example:
     /// ```
@@ -57,7 +57,7 @@ impl InlineImage for DynamicImage {
         width: Option<&str>,
         height: Option<&str>,
         resize_for_ascii: bool,
-    ) -> Result<(Vec<u8>, u16), Box<dyn error::Error>> {
+    ) -> Result<(Vec<u8>, u16, u32, u32), Box<dyn error::Error>> {
         let (src_width, src_height) = self.dimensions();
         let width = match width {
             Some(w) => match resize_for_ascii {
@@ -95,7 +95,7 @@ impl InlineImage for DynamicImage {
             self.color().into(),
         )?;
 
-        Ok((buffer, center))
+        Ok((buffer, center, new_width, new_height))
     }
 
     fn zoom_pan(self, zoom: Option<usize>, x: Option<i32>, y: Option<i32>) -> Self {

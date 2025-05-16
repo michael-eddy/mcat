@@ -1,4 +1,4 @@
-use crate::term_misc::{offset_to_terminal, EnvIdentifiers};
+use crate::term_misc::{EnvIdentifiers, loc_to_terminal, offset_to_terminal};
 use color_quant::NeuQuant;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -30,12 +30,15 @@ pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
+    print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let dyn_img = image::load_from_memory(img)?;
     let rgb_img = dyn_img.to_rgb8();
 
     let center = offset_to_terminal(offset);
-    out.write_all(center.as_bytes())?;
+    let print_at_string = loc_to_terminal(print_at);
+    out.write_all(print_at_string.as_ref())?;
+    out.write_all(center.as_ref())?;
 
     encode_sixel(&rgb_img, out)?;
 

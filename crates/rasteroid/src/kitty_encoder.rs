@@ -5,7 +5,7 @@ use flate2::{Compression, write::ZlibEncoder};
 
 use crate::{
     Frame,
-    term_misc::{self, EnvIdentifiers, image_to_base64, offset_to_terminal},
+    term_misc::{self, EnvIdentifiers, image_to_base64, loc_to_terminal, offset_to_terminal},
 };
 
 fn chunk_base64(
@@ -79,19 +79,23 @@ fn chunk_base64(
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// encode_image(&bytes, &stdout, None).unwrap();
+/// encode_image(&bytes, &stdout, None, None).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// the option offset just offsets the image to the right by the amount of cells you specify
+/// the print at is the same just absolute position
 pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
+    print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let center_string = offset_to_terminal(offset);
+    let print_at_string = loc_to_terminal(print_at);
     let base64 = image_to_base64(img);
 
-    out.write_all(center_string.as_bytes())?;
+    out.write_all(print_at_string.as_ref())?;
+    out.write_all(center_string.as_ref())?;
     chunk_base64(
         &base64,
         out,

@@ -12,6 +12,7 @@ use std::{io::Write, time::Duration};
 /// - `img`: Image byte slice (any format supported by `image` crate, e.g., PNG, JPEG)
 /// - `out`: A writer to send output to (e.g., `std::io::stdout`)
 /// - `offset`: Optional horizontal offset in terminal columns (used for centering)
+/// - `print_at`: Optional locaiton the image should be printed at
 ///
 /// # Example
 /// ```
@@ -26,13 +27,14 @@ use std::{io::Write, time::Duration};
 /// };
 ///
 /// let mut stdout = io::stdout();
-/// encode_image(&bytes, &mut stdout, Some(80)).unwrap();
+/// encode_image(&bytes, &mut stdout, Some(80), None).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 pub fn encode_image(
     img: &[u8],
     mut out: impl Write,
     offset: Option<u16>,
+    print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let image = image::load_from_memory(img)?;
     let rgba_image = image.to_rgba8();
@@ -44,7 +46,14 @@ pub fn encode_image(
     // Luminance threshold: tweak this to suppress small sparkles
     const LUM_THRESHOLD: f32 = 35.0;
 
+    let mut last_max_height = 0;
     for y in (0..h_adjusted).step_by(2) {
+        if let Some(at) = print_at {
+            let at = (at.0, at.1 + (y / 2) as u16);
+            last_max_height = y;
+            let loc = term_misc::loc_to_terminal(Some(at));
+            out.write_all(loc.as_ref())?;
+        }
         if let Some(off) = offset {
             let center = term_misc::offset_to_terminal(Some(off));
             out.write_all(center.as_ref())?;
@@ -90,6 +99,12 @@ pub fn encode_image(
     }
 
     if h % 2 == 1 {
+        if let Some(at) = print_at {
+            let add_y = (last_max_height + 2) / 2;
+            let at = (at.0, at.1 + add_y as u16);
+            let loc = term_misc::loc_to_terminal(Some(at));
+            out.write_all(loc.as_ref())?;
+        }
         if let Some(off) = offset {
             let center = term_misc::offset_to_terminal(Some(off));
             out.write_all(center.as_ref())?;
@@ -238,7 +253,12 @@ pub fn encode_frames(
             start = false;
         }
 
-        encode_image(data, &mut buffer, if center { Some(offset) } else { None })?;
+        encode_image(
+            data,
+            &mut buffer,
+            if center { Some(offset) } else { None },
+            None,
+        )?;
 
         out.write_all(&buffer)?;
         out.flush()?;

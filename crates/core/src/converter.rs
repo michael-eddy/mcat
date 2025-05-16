@@ -1,8 +1,10 @@
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
+use crossterm::cursor::{self};
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
-use image::{DynamicImage, ImageBuffer, Rgba};
+use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use indicatif::{ProgressBar, ProgressStyle};
+use itertools::Itertools;
 use rasteroid::{Frame, image_extended::InlineImage};
 use regex::Regex;
 use resvg::{
@@ -10,7 +12,8 @@ use resvg::{
     usvg::{self, Options, Tree},
 };
 use std::{
-    error, fs,
+    error,
+    fs::{self, File},
     io::{BufRead, Read},
     path::Path,
     sync::{Arc, atomic::Ordering},
@@ -239,6 +242,127 @@ impl Frame for VideoFrames {
     }
 }
 
+pub fn lsix(
+    input: impl AsRef<str>,
+    out: &mut impl Write,
+    inline_encoder: &rasteroid::InlineEncoder,
+) -> Result<(), Box<dyn error::Error>> {
+    let dir_path = Path::new(input.as_ref());
+    let entries = fs::read_dir(dir_path).unwrap_or_else(|_| fs::read_dir(".").unwrap());
+    let resize_for_ascii = match inline_encoder {
+        rasteroid::InlineEncoder::Ascii => true,
+        _ => false,
+    };
+    let ts = rasteroid::term_misc::get_winsize();
+    let items_per_row = 5;
+    let spacing = 2;
+    let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - spacing - 1;
+    let width_formatted = format!("{width}c");
+    let height = format!("{}c", ts.sc_height);
+    let images = entries.filter_map(move |entry| {
+        let entry = entry.ok()?;
+        let path = entry.path();
+
+        if !path.is_file() {
+            return None;
+        }
+
+        let filename = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let ext = path
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
+        if ImageFormat::from_extension(&ext).is_some() {
+            let buf = fs::read(path).ok()?;
+            let dyn_img = image::load_from_memory(&buf).ok()?;
+            let (img, _, w, h) = dyn_img
+                .resize_plus(Some(&width_formatted), Some(&height), resize_for_ascii)
+                .ok()?;
+            return Some((img, filename, w, h));
+        }
+        if ext == "svg" {
+            let file = File::open(path).ok()?;
+            let dyn_img = svg_to_image(file, None, Some("10%")).ok()?;
+            let (img, _, w, h) = dyn_img
+                .resize_plus(Some(&width_formatted), Some(&height), resize_for_ascii)
+                .ok()?;
+            return Some((img, filename, w, h));
+        }
+        None
+    });
+
+    let (_, y) = cursor::position()?;
+    let mut current_y = y + 2;
+    for chunk in &images.into_iter().chunks(items_per_row as usize) {
+        let mut current_x = spacing;
+        let mut max_height = 0;
+        let items: Vec<_> = chunk.collect();
+        for (img, _, _, h) in items.iter() {
+            let h = match resize_for_ascii {
+                true => Ok(*h / 2),
+                false => {
+                    let h = format!("{h}px");
+                    rasteroid::term_misc::dim_to_cells(
+                        &h,
+                        rasteroid::term_misc::SizeDirection::Height,
+                    )
+                }
+            }?;
+            if h > max_height {
+                max_height = h;
+            }
+            if current_y + h as u16 >= ts.sc_height {
+                write!(out, "\x1b[{h}S")?;
+                current_y -= h as u16;
+            }
+            match inline_encoder {
+                rasteroid::InlineEncoder::Kitty => {
+                    rasteroid::kitty_encoder::encode_image(
+                        img,
+                        &mut *out,
+                        None,
+                        Some((current_x, current_y)),
+                    )?;
+                }
+                rasteroid::InlineEncoder::Iterm => {
+                    rasteroid::iterm_encoder::encode_image(
+                        img,
+                        &mut *out,
+                        None,
+                        Some((current_x, current_y)),
+                    )?;
+                }
+                rasteroid::InlineEncoder::Sixel => {
+                    rasteroid::sixel_encoder::encode_image(
+                        img,
+                        &mut *out,
+                        None,
+                        Some((current_x, current_y)),
+                    )?;
+                }
+                rasteroid::InlineEncoder::Ascii => {
+                    rasteroid::ascii_encoder::encode_image(
+                        img,
+                        &mut *out,
+                        None,
+                        Some((current_x, current_y)),
+                    )?;
+                }
+            }
+            current_x += width + spacing;
+        }
+        current_y += max_height as u16 + spacing;
+    }
+    write!(out, "\x1b[{spacing}S")?;
+    out.flush()?;
+    Ok(())
+}
+
 ///width and height only needed for ascii videos atm
 pub fn inline_a_video(
     input: impl AsRef<str>,
@@ -272,7 +396,7 @@ pub fn inline_a_video(
                 )),
                 false => None,
             };
-            rasteroid::iterm_encoder::encode_image(&gif, out, offset)?;
+            rasteroid::iterm_encoder::encode_image(&gif, out, offset, None)?;
             Ok(())
         }
         rasteroid::InlineEncoder::Ascii | rasteroid::InlineEncoder::Sixel => {
@@ -281,7 +405,7 @@ pub fn inline_a_video(
                 let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
                     .unwrap_or_default();
                 let img = image::DynamicImage::ImageRgb8(rgb_image);
-                let (img, _) = img.resize_plus(width, height, true).unwrap_or_default();
+                let (img, _, _, _) = img.resize_plus(width, height, true).unwrap_or_default();
                 VideoFrames {
                     timestamp: f.timestamp,
                     img,
@@ -399,6 +523,25 @@ fn video_to_frames(
     input: impl AsRef<str>,
 ) -> Result<Box<dyn Iterator<Item = OutputVideoFrame>>, Box<dyn error::Error>> {
     let input = input.as_ref();
+
+    let mut command =
+        match fetch_manager::get_ffmpeg() {
+            Some(c) => c,
+            None => return Err(
+                "ffmpeg isn't installed. either install it manually, or call `mcat --fetch-ffmpeg`"
+                    .into(),
+            ),
+        };
+    command.hwaccel("auto").input(input).rawvideo();
+
+    let mut child = command.spawn()?;
+    let frames = child.iter()?.filter_frames();
+
+    Ok(Box::new(frames))
+}
+
+fn _thumbnail_video(input: impl AsRef<str>) -> Result<DynamicImage, Box<dyn error::Error>> {
+    let input = input.as_ref();
     if !ffmpeg_sidecar::command::ffmpeg_is_installed() {
         eprintln!("ffmpeg isn't installed, installing.. it may take a little");
         ffmpeg_sidecar::download::auto_download()?;
@@ -415,7 +558,12 @@ fn video_to_frames(
     command.hwaccel("auto").input(input).rawvideo();
 
     let mut child = command.spawn()?;
-    let frames = child.iter()?.filter_frames();
-
-    Ok(Box::new(frames))
+    let first = child
+        .iter()?
+        .filter_frames()
+        .next()
+        .ok_or("video doesn't contain any frames")?;
+    let rgb_img = ImageBuffer::from_raw(first.width, first.height, first.data)
+        .ok_or("failed to load image from video")?;
+    Ok(DynamicImage::ImageRgb8(rgb_img))
 }
