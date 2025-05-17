@@ -232,9 +232,9 @@ pub fn cat(
     }
 }
 
-pub fn is_video(input: &str) -> bool {
+pub fn is_video(ext: &str) -> bool {
     matches!(
-        input,
+        ext,
         "mp4" | "mov" | "avi" | "mkv" | "webm" | "wmv" | "flv" | "m4v" | "ts" | "gif"
     )
 }

@@ -2332,6 +2332,7 @@ dependencies = [
  "markdownify",
  "rand 0.9.1",
  "rasteroid",
+ "rayon",
  "regex",
  "reqwest",
  "resvg",

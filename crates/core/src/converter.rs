@@ -13,8 +13,8 @@ use resvg::{
 };
 use std::{
     error,
-    fs::{self, File},
-    io::{BufRead, Read},
+    fs::{self},
+    io::{BufRead, Cursor, Read},
     path::Path,
     sync::{Arc, atomic::Ordering},
 };
@@ -25,7 +25,7 @@ use comrak::{
 };
 use std::io::Write;
 
-use crate::fetch_manager;
+use crate::{catter, fetch_manager};
 
 pub fn svg_to_image(
     mut reader: impl Read,
@@ -302,9 +302,9 @@ fn truncate_filename(name: String, width: u16) -> String {
 }
 
 fn calculate_items_per_row(terminal_width: u16) -> usize {
-    const MIN_ITEM_WIDTH: u16 = 15;
-    const MAX_ITEM_WIDTH: u16 = 25;
-    const MAX_ITEMS_PER_ROW: usize = 8;
+    const MIN_ITEM_WIDTH: u16 = 8;
+    const MAX_ITEM_WIDTH: u16 = 18;
+    const MAX_ITEMS_PER_ROW: usize = 10;
 
     let min_items = ((terminal_width + MAX_ITEM_WIDTH - 1) / MAX_ITEM_WIDTH) as usize;
     let max_items = (terminal_width / MIN_ITEM_WIDTH) as usize;
@@ -321,10 +321,7 @@ pub fn lsix(
 ) -> Result<(), Box<dyn error::Error>> {
     let dir_path = Path::new(input.as_ref());
     let entries = fs::read_dir(dir_path).unwrap_or_else(|_| fs::read_dir(".").unwrap());
-    let resize_for_ascii = match inline_encoder {
-        rasteroid::InlineEncoder::Ascii => true,
-        _ => false,
-    };
+    let resize_for_ascii = matches!(inline_encoder, rasteroid::InlineEncoder::Ascii);
     let ts = rasteroid::term_misc::get_winsize();
     let items_per_row = calculate_items_per_row(ts.sc_width);
     let x_padding = 4;
@@ -332,53 +329,80 @@ pub fn lsix(
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
     let height = format!("{}c", ts.sc_height / 5);
-    let images = entries.filter_map(move |entry| {
-        let entry = entry.ok()?;
-        let path = entry.path();
 
-        if !path.is_file() {
-            return None;
-        }
+    // Collect all valid paths first
+    let mut paths: Vec<_> = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.is_dir() {
+                return Some((path, "IAMADIR".to_owned()));
+            }
+            let ext = path
+                .extension()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase();
+            Some((path, ext))
+        })
+        .collect();
+    paths.sort_by(|a, b| {
+        let a_is_dir = a.0.is_dir();
+        let b_is_dir = b.0.is_dir();
 
-        let filename = path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        let ext = path
-            .extension()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_lowercase();
-        if ImageFormat::from_extension(&ext).is_some() {
-            let buf = fs::read(path).ok()?;
-            let dyn_img = image::load_from_memory(&buf).ok()?;
-            let (img, _, w, h) = dyn_img
-                .resize_plus(
-                    Some(&width_formatted),
-                    Some(&height),
-                    resize_for_ascii,
-                    true,
-                )
-                .ok()?;
-            return Some((img, filename, w, h));
+        match b_is_dir.cmp(&a_is_dir) {
+            std::cmp::Ordering::Equal => {
+                let a_str = a.0.to_string_lossy().to_lowercase();
+                let b_str = b.0.to_string_lossy().to_lowercase();
+                a_str.cmp(&b_str)
+            }
+            dir_order => dir_order,
         }
-        if ext == "svg" {
-            let file = File::open(path).ok()?;
-            let dyn_img = svg_to_image(file, Some(&width_formatted), Some(&height)).ok()?;
-            // may not be needed
-            let (img, _, w, h) = dyn_img
-                .resize_plus(
-                    Some(&width_formatted),
-                    Some(&height),
-                    resize_for_ascii,
-                    true,
-                )
-                .ok()?;
-            return Some((img, filename, w, h));
-        }
-        None
     });
+
+    // Process images in parallel
+    use rayon::prelude::*;
+    let images: Vec<_> = paths
+        .par_iter()
+        .filter_map(|(path, ext)| {
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            let dyn_img = if ext == "svg" {
+                let buf = fs::read(path).ok()?;
+                svg_to_image(buf.as_slice(), Some(&width_formatted), Some(&height)).ok()?
+            } else if ext == "IAMADIR" {
+                let svg = include_str!("../svgs/folder.svg");
+                let cursor = Cursor::new(svg);
+                svg_to_image(cursor, Some(&width_formatted), Some(&height)).ok()?
+            } else if ImageFormat::from_extension(ext).is_some() {
+                let buf = fs::read(path).ok()?;
+                image::load_from_memory(&buf).ok()?
+            } else if catter::is_video(ext) {
+                let svg = include_str!("../svgs/video.svg");
+                let cursor = Cursor::new(svg);
+                svg_to_image(cursor, Some(&width_formatted), Some(&height)).ok()?
+            } else {
+                let svg = include_str!("../svgs/document.svg");
+                let cursor = Cursor::new(svg);
+                svg_to_image(cursor, Some(&width_formatted), Some(&height)).ok()?
+            };
+
+            let (img, _, w, h) = dyn_img
+                .resize_plus(
+                    Some(&width_formatted),
+                    Some(&height),
+                    resize_for_ascii,
+                    true,
+                )
+                .ok()?;
+
+            Some((img, filename, w, h))
+        })
+        .collect();
 
     let (_, y) = cursor::position()?;
     let mut current_y = y + 2;
@@ -631,32 +655,4 @@ fn video_to_frames(
     let frames = child.iter()?.filter_frames();
 
     Ok(Box::new(frames))
-}
-
-fn _thumbnail_video(input: impl AsRef<str>) -> Result<DynamicImage, Box<dyn error::Error>> {
-    let input = input.as_ref();
-    if !ffmpeg_sidecar::command::ffmpeg_is_installed() {
-        eprintln!("ffmpeg isn't installed, installing.. it may take a little");
-        ffmpeg_sidecar::download::auto_download()?;
-    }
-
-    let mut command =
-        match fetch_manager::get_ffmpeg() {
-            Some(c) => c,
-            None => return Err(
-                "ffmpeg isn't installed. either install it manually, or call `mcat --fetch-ffmpeg`"
-                    .into(),
-            ),
-        };
-    command.hwaccel("auto").input(input).rawvideo();
-
-    let mut child = command.spawn()?;
-    let first = child
-        .iter()?
-        .filter_frames()
-        .next()
-        .ok_or("video doesn't contain any frames")?;
-    let rgb_img = ImageBuffer::from_raw(first.width, first.height, first.data)
-        .ok_or("failed to load image from video")?;
-    Ok(DynamicImage::ImageRgb8(rgb_img))
 }
