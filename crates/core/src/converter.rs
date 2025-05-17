@@ -272,7 +272,7 @@ fn truncate_filename(name: String, width: u16) -> String {
     let base_len = base.len();
 
     // if even only the ext can't fit, why..
-    if width < ext_len + 2 {
+    if width <= ext_len {
         return if width >= ext_len {
             ext.to_string()
         } else {
@@ -280,25 +280,16 @@ fn truncate_filename(name: String, width: u16) -> String {
         };
     }
 
-    let available_base_width = width - ext_len - 2; // 2 for ".."
+    let available_base_width = width - ext_len;
 
-    // If we can't fit any meaningful part of the base
-    if available_base_width <= 0 {
-        return format!("..{}", ext);
-    }
-
-    // Split base between front and back
-    let front_chars = available_base_width / 2;
-    let back_chars = available_base_width - front_chars;
-
-    let front_part = &base[..std::cmp::min(front_chars, base_len)];
-    let back_part = if back_chars <= base_len {
-        &base[base_len - back_chars..]
+    let front_part = if available_base_width < base_len {
+        let b = &base[..available_base_width - 1];
+        &format!("{b}.")
     } else {
         base
     };
 
-    format!("{}..{}{}", front_part, back_part, ext)
+    format!("{}{}", front_part, ext)
 }
 
 fn calculate_items_per_row(terminal_width: u16) -> usize {
@@ -385,22 +376,30 @@ pub fn lsix(
     let y_padding = 2;
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
-    let height = format!("{}c", ts.sc_height / 10);
+    let height = format!("{}c", ts.sc_height / 12);
 
     // Collect all valid paths first
     let mut paths: Vec<_> = entries
         .filter_map(|entry| {
             let entry = entry.ok()?;
             let path = entry.path();
+            let filename = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
             if path.is_dir() {
-                return Some((path, "IAMADIR".to_owned()));
+                return Some((path, "IAMADIR".to_owned(), filename));
             }
             let ext = path
                 .extension()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_lowercase();
-            Some((path, ext))
+            if ext == "" && filename.contains(".") {
+                return Some((path, filename.replace(".", ""), filename));
+            }
+            Some((path, ext, filename))
         })
         .collect();
     paths.sort_by(|a, b| {
@@ -421,13 +420,7 @@ pub fn lsix(
     use rayon::prelude::*;
     let images: Vec<_> = paths
         .par_iter()
-        .filter_map(|(path, ext)| {
-            let filename = path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-
+        .filter_map(|(path, ext, filename)| {
             let dyn_img = if ext == "svg" {
                 let buf = fs::read(path).ok()?;
                 svg_to_image(buf.as_slice(), Some(&width_formatted), Some(&height)).ok()?
@@ -516,7 +509,7 @@ pub fn lsix(
         current_y += max_height as u16 + 1;
         current_x = x_padding;
         for (_, path, _, _) in items.iter() {
-            let tpath = truncate_filename(path.clone(), width);
+            let tpath = truncate_filename((*path).clone(), width);
             write!(out, "\x1b[{current_y};{current_x}H{}", tpath)?;
             current_x += width + x_padding;
         }
