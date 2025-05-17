@@ -1,5 +1,6 @@
 ## V0.2.8
 - adding an ls command
+- adding parallelism for heavy operations
 
 ## V0.2.7
 - bumping zip version because it was yanked

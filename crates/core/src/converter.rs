@@ -302,8 +302,8 @@ fn truncate_filename(name: String, width: u16) -> String {
 }
 
 fn calculate_items_per_row(terminal_width: u16) -> usize {
-    const MIN_ITEM_WIDTH: u16 = 8;
-    const MAX_ITEM_WIDTH: u16 = 18;
+    const MIN_ITEM_WIDTH: u16 = 4;
+    const MAX_ITEM_WIDTH: u16 = 16;
     const MAX_ITEMS_PER_ROW: usize = 10;
 
     let min_items = ((terminal_width + MAX_ITEM_WIDTH - 1) / MAX_ITEM_WIDTH) as usize;
@@ -312,6 +312,63 @@ fn calculate_items_per_row(terminal_width: u16) -> usize {
     items = items.min(max_items);
     items = items.min(MAX_ITEMS_PER_ROW);
     items.max(1)
+}
+
+#[rustfmt::skip]
+fn ext_to_svg(ext: &str) -> &'static str {
+    let svg = if ext == "IAMADIR" {
+        include_str!("../svgs/folder.svg")
+    } else if catter::is_video(ext) {
+        include_str!("../svgs/video.svg")
+    } else if ext == "" {
+        include_str!("../svgs/file.svg")
+    } else if matches!(ext, 
+        "codes" | "py" | "rs" | "js" | "ts" | "java" | "c" | "cpp" | "h" | "hpp" | 
+        "go" | "php" | "rb" | "sh" | "pl" | "lua" | "swift" | "kt" | "kts" | 
+        "scala" | "dart" | "elm" | "hs" | "ml" | "mli" | "r" | "f" | "f90" | 
+        "cs" | "vb" | "asm" | "s" | "clj" | "cljs" | "edn" | "coffee" | "erl" | 
+        "hrl" | "ex" | "exs" | "json" | "toml" | "yaml" | "yml" | "xml" | "html" | 
+        "css" | "scss" | "less" | "vue" | "svelte" | "md" | "markdown" | "tex" | 
+        "nim" | "zig" | "v" | "odin" | "d" | "sql" | "ps1" | "bash" | "zsh" | "fish"
+    ) {
+        include_str!("../svgs/code.svg")
+    } else if matches!(ext, 
+        "conf" | "config" | "ini" | "cfg" | "cnf" | "properties" | "env" | 
+        "gitconfig" | "gitignore" | "npmrc" | "yarnrc" | "editorconfig" | 
+        "dockerignore" | "dockerfile" | "makefile" | "mk" | "nginx" | "apache" | 
+        "htaccess" | "htpasswd" | "hosts" | "service" | "socket" | "timer" | 
+        "mount" | "automount" | "swap" | "target" | "path" | "slice" | "sysctl" | 
+        "tmpfiles" | "udev" | "logind" | "resolved" | "timesyncd" | "coredump" | 
+        "journald" | "netdev" | "network" | "link" | "netctl" | "wpa" | "pacman" | 
+        "mirrorlist" | "vconsole" | "locale" | "fstab" | "crypttab" | "grub" | 
+        "syslinux" | "archlinux" | "inputrc" | "bashrc" | "bash_profile" | 
+        "bash_logout" | "profile" | "zshenv" | "zshrc" | "zprofile" | "zlogin" | 
+        "zlogout" | "fishrc" | "fish_variables" | "fish_config" | "fish_plugins" | 
+        "fish_functions" | "fish_completions" | "fish_aliases" | "fish_abbreviations" | 
+         "fish_user_init" | "fish_user_paths" | 
+        "fish_user_variables" | "fish_user_functions" | "fish_user_completions" | 
+        "fish_user_abbreviations" | "fish_user_aliases" | "fish_user_key_bindings"
+    ) {
+        include_str!("../svgs/conf.svg")
+    } else if matches!(ext,
+        "zip" | "tar" | "gz" | "bz2" | "xz" | "zst" | "lz" | "lzma" | "lzo" | 
+        "rz" | "sz" | "7z" | "rar" | "iso" | "dmg" | "pkg" | "deb" | "rpm" | 
+        "crx" | "cab" | "msi" | "ar" | "cpio" | "shar" | "lbr" | "mar" | 
+        "sbx" | "arc" | "wim" | "swm" | "esd" | "zipx" | "zoo" | "pak" | 
+        "kgb" | "ace" | "alz" | "apk" | "arj" | "ba" | "bh" | "cfs" | 
+        "cramfs" | "dar" | "dd" | "dgc" | "ear" | "gca" | "ha" | "hki" | 
+        "ice" | "jar" | "lzh" | "lha" | "lzx" | "partimg" | "paq6" | 
+        "paq7" | "paq8" | "pea" | "pim" | "pit" | "qda" | "rk" | "sda" | 
+        "sea" | "sen" | "sfx" | "shk" | "sit" | "sitx" | "sqx" | "tar.Z" | 
+        "uc" | "uc0" | "uc2" | "ucn" | "ur2" | "ue2" | "uca" | "uha" | 
+        "war" |  "xar" | "xp3" | "yz1" | "zap" |  
+        "zz"
+    ) {
+        include_str!("../svgs/archive.svg")
+    } else {
+        include_str!("../svgs/txt.svg")
+    };
+    svg
 }
 
 pub fn lsix(
@@ -328,7 +385,7 @@ pub fn lsix(
     let y_padding = 2;
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
-    let height = format!("{}c", ts.sc_height / 5);
+    let height = format!("{}c", ts.sc_height / 10);
 
     // Collect all valid paths first
     let mut paths: Vec<_> = entries
@@ -374,19 +431,11 @@ pub fn lsix(
             let dyn_img = if ext == "svg" {
                 let buf = fs::read(path).ok()?;
                 svg_to_image(buf.as_slice(), Some(&width_formatted), Some(&height)).ok()?
-            } else if ext == "IAMADIR" {
-                let svg = include_str!("../svgs/folder.svg");
-                let cursor = Cursor::new(svg);
-                svg_to_image(cursor, Some(&width_formatted), Some(&height)).ok()?
             } else if ImageFormat::from_extension(ext).is_some() {
                 let buf = fs::read(path).ok()?;
                 image::load_from_memory(&buf).ok()?
-            } else if catter::is_video(ext) {
-                let svg = include_str!("../svgs/video.svg");
-                let cursor = Cursor::new(svg);
-                svg_to_image(cursor, Some(&width_formatted), Some(&height)).ok()?
             } else {
-                let svg = include_str!("../svgs/document.svg");
+                let svg = ext_to_svg(ext);
                 let cursor = Cursor::new(svg);
                 svg_to_image(cursor, Some(&width_formatted), Some(&height)).ok()?
             };

@@ -2,19 +2,31 @@ use std::{fs::File, io::Write, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{GenericImage, ImageFormat};
+use itertools::Itertools;
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use tempfile::{NamedTempFile, TempDir};
 
 use crate::{catter, converter};
 
 pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
-    let mut markdown = String::new();
-    for (path, name) in paths {
-        let md = match markdownify::convert(path, name.as_ref()) {
-            Ok(md) => md,
-            Err(err) => format!("**[Failed Reading: {}]**", err),
-        };
-        markdown.push_str(&format!("{}\n\n", md));
-    }
+    let mut chunks: Vec<(usize, String)> = paths
+        .into_par_iter()
+        .enumerate()
+        .map(|(idx, (path, name))| {
+            let md = match markdownify::convert(path, name.as_ref()) {
+                Ok(md) => md,
+                Err(err) => format!("**[Failed Reading: {}]**", err),
+            };
+            (idx, md)
+        })
+        .collect();
+
+    chunks.sort_by_key(|&(idx, _)| idx);
+    let markdown: String = chunks
+        .into_iter()
+        .map(|(_, md)| md)
+        .collect::<Vec<_>>()
+        .join("\n\n");
 
     let mut tmp_file = NamedTempFile::with_suffix(".md").expect("failed to create tmp file");
     tmp_file
@@ -28,18 +40,25 @@ pub fn concat_images(
     image_paths: Vec<(PathBuf, Option<String>)>,
     horizontal: bool,
 ) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
-    // Load all images
-    let mut images = Vec::new();
-    for (path, _) in &image_paths {
-        if path.extension().is_some_and(|e| e == "svg") {
-            let file = File::open(path)?;
-            let dyn_img = converter::svg_to_image(file, None, None)?;
-            images.push(dyn_img);
-            continue;
-        }
-        let img = image::open(path)?;
-        images.push(img);
-    }
+    let images: Vec<image::DynamicImage> = image_paths
+        .into_par_iter()
+        .enumerate()
+        .filter_map(|(idx, (path, _))| {
+            let img = if path.extension().is_some_and(|e| e == "svg") {
+                File::open(&path)
+                    .ok()
+                    .and_then(|file| converter::svg_to_image(file, None, None).ok())
+            } else {
+                image::open(&path).ok()
+            };
+
+            img.map(|img| (idx, img))
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .sorted_by_key(|(idx, _)| *idx)
+        .map(|(_, img)| img)
+        .collect();
 
     // Calculate dimensions of the output image
     let (width, height) = if horizontal {
