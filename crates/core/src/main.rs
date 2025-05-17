@@ -184,7 +184,7 @@ fn main() {
         ascii,
     };
 
-    let is_ls = input[0].to_lowercase() == "ls";
+    let is_ls = input.get(0).unwrap_or(&"".to_owned()).to_lowercase() == "ls";
 
     // setting the winsize
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
@@ -196,7 +196,7 @@ fn main() {
     );
 
     // if ls
-    if input[0].to_lowercase() == "ls" {
+    if is_ls {
         let inline_encoder = &rasteroid::InlineEncoder::auto_detect(kitty, iterm, sixel, ascii);
         let d = ".".to_string();
         let input = input.get(1).unwrap_or(&d);
