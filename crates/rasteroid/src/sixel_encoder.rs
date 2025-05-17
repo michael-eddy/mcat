@@ -22,7 +22,7 @@ const SIXEL_MIN: u8 = 0x3f; // '?'
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// encode_image(&bytes, &stdout, None).unwrap();
+/// encode_image(&bytes, &stdout, None, None).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// the option offset just offsets the image to the right by the amount of cells you specify

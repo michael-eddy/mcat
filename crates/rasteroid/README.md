@@ -110,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let zoomed = img.zoom_pan(Some(3), Some(2), Some(1));
     
     // Resize to fit terminal width
-    let (resized_data, center_offset) = zoomed.resize_plus(Some("80%"), None)?;
+    let (resized_data, center_offset) = zoomed.resize_plus(Some("80%"), None, false, false)?;
     
     // Display
     let encoder = mcat_rasteroid::InlineEncoder::auto_detect(false, false, false);

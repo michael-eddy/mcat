@@ -212,7 +212,7 @@ fn visual_weight(r: u8, g: u8, b: u8, a: u8) -> f32 {
 ///        let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
 ///            .unwrap();
 ///        let img = image::DynamicImage::ImageRgb8(rgb_image);
-///        let (img, _) = img.resize_plus(width, height, true).unwrap();
+///        let (img, _, _, _) = img.resize_plus(width, height, true, false).unwrap();
 ///        Some(AsciiFrames { frame: f, img })
 ///     } else {
 ///        None

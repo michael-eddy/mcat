@@ -242,6 +242,65 @@ impl Frame for VideoFrames {
     }
 }
 
+fn truncate_filename(name: String, width: u16) -> String {
+    let width = width as usize;
+
+    let le = name.len();
+    if le <= width {
+        let rem_space = width - le;
+        let left_spaces = rem_space / 2;
+        let right_spaces = rem_space - left_spaces;
+        return format!(
+            "{}{}{}",
+            " ".repeat(left_spaces),
+            name,
+            " ".repeat(right_spaces)
+        );
+    }
+
+    // sep base and ext
+    let dot_pos = name.rfind('.');
+    let (base, ext) = match dot_pos {
+        Some(pos) => {
+            let (b, e) = name.split_at(pos);
+            (b, e)
+        }
+        None => (name.as_str(), ""),
+    };
+
+    let ext_len = ext.len();
+    let base_len = base.len();
+
+    // if even only the ext can't fit, why..
+    if width < ext_len + 2 {
+        return if width >= ext_len {
+            ext.to_string()
+        } else {
+            ext[..width].to_string()
+        };
+    }
+
+    let available_base_width = width - ext_len - 2; // 2 for ".."
+
+    // If we can't fit any meaningful part of the base
+    if available_base_width <= 0 {
+        return format!("..{}", ext);
+    }
+
+    // Split base between front and back
+    let front_chars = available_base_width / 2;
+    let back_chars = available_base_width - front_chars;
+
+    let front_part = &base[..std::cmp::min(front_chars, base_len)];
+    let back_part = if back_chars <= base_len {
+        &base[base_len - back_chars..]
+    } else {
+        base
+    };
+
+    format!("{}..{}{}", front_part, back_part, ext)
+}
+
 pub fn lsix(
     input: impl AsRef<str>,
     out: &mut impl Write,
@@ -255,10 +314,11 @@ pub fn lsix(
     };
     let ts = rasteroid::term_misc::get_winsize();
     let items_per_row = 5;
-    let spacing = 2;
-    let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - spacing - 1;
+    let x_padding = 4;
+    let y_padding = 2;
+    let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
-    let height = format!("{}c", ts.sc_height);
+    let height = format!("{}c", ts.sc_height / 5);
     let images = entries.filter_map(move |entry| {
         let entry = entry.ok()?;
         let path = entry.path();
@@ -281,15 +341,26 @@ pub fn lsix(
             let buf = fs::read(path).ok()?;
             let dyn_img = image::load_from_memory(&buf).ok()?;
             let (img, _, w, h) = dyn_img
-                .resize_plus(Some(&width_formatted), Some(&height), resize_for_ascii)
+                .resize_plus(
+                    Some(&width_formatted),
+                    Some(&height),
+                    resize_for_ascii,
+                    true,
+                )
                 .ok()?;
             return Some((img, filename, w, h));
         }
         if ext == "svg" {
             let file = File::open(path).ok()?;
-            let dyn_img = svg_to_image(file, None, Some("10%")).ok()?;
+            let dyn_img = svg_to_image(file, Some(&width_formatted), Some(&height)).ok()?;
+            // may not be needed
             let (img, _, w, h) = dyn_img
-                .resize_plus(Some(&width_formatted), Some(&height), resize_for_ascii)
+                .resize_plus(
+                    Some(&width_formatted),
+                    Some(&height),
+                    resize_for_ascii,
+                    true,
+                )
                 .ok()?;
             return Some((img, filename, w, h));
         }
@@ -299,7 +370,7 @@ pub fn lsix(
     let (_, y) = cursor::position()?;
     let mut current_y = y + 2;
     for chunk in &images.into_iter().chunks(items_per_row as usize) {
-        let mut current_x = spacing;
+        let mut current_x = x_padding;
         let mut max_height = 0;
         let items: Vec<_> = chunk.collect();
         for (img, _, _, h) in items.iter() {
@@ -354,11 +425,18 @@ pub fn lsix(
                     )?;
                 }
             }
-            current_x += width + spacing;
+            current_x += width + x_padding;
         }
-        current_y += max_height as u16 + spacing;
+        current_y += max_height as u16 + 1;
+        current_x = x_padding;
+        for (_, path, _, _) in items.iter() {
+            let tpath = truncate_filename(path.clone(), width);
+            write!(out, "\x1b[{current_y};{current_x}H{}", tpath)?;
+            current_x += width + x_padding;
+        }
+        current_y += y_padding;
     }
-    write!(out, "\x1b[{spacing}S")?;
+    write!(out, "\x1b[{y_padding}S")?;
     out.flush()?;
     Ok(())
 }
@@ -405,7 +483,9 @@ pub fn inline_a_video(
                 let rgb_image = image::RgbImage::from_raw(f.width, f.height, f.data.clone())
                     .unwrap_or_default();
                 let img = image::DynamicImage::ImageRgb8(rgb_image);
-                let (img, _, _, _) = img.resize_plus(width, height, true).unwrap_or_default();
+                let (img, _, _, _) = img
+                    .resize_plus(width, height, true, false)
+                    .unwrap_or_default();
                 VideoFrames {
                     timestamp: f.timestamp,
                     img,

@@ -177,7 +177,7 @@ pub fn cat(
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center, _, _) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            let (img, center, _, _) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii, false)?;
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }
@@ -193,7 +193,7 @@ pub fn cat(
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center, _, _) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            let (img, center, _, _) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii, false)?;
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }
@@ -218,7 +218,7 @@ pub fn cat(
         ("image", _) => {
             // default for image
             let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
-            let (img, center, _, _) = image_result.resize_plus(opts.width, opts.height, resize_for_ascii)?;
+            let (img, center, _, _) = image_result.resize_plus(opts.width, opts.height, resize_for_ascii, false)?;
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }

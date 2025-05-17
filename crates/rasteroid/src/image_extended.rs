@@ -2,7 +2,8 @@ use std::{error, io::Cursor};
 
 use fast_image_resize::{IntoImageView, Resizer, images::Image};
 use image::{
-    DynamicImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder, imageops::crop_imm,
+    DynamicImage, GenericImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder,
+    imageops::crop_imm,
 };
 
 use crate::term_misc::dim_to_cells;
@@ -22,16 +23,19 @@ pub trait InlineImage {
     ///     Err(e) => return,
     /// };
     /// let dyn_img = image::load_from_memory(&buf).unwrap();
-    /// let (img_data, offset, width, height) = dyn_img.resize_plus(Some("80%"),Some("200c"), false).unwrap();
+    /// let (img_data, offset, width, height) = dyn_img.resize_plus(Some("80%"),Some("200c"), false, false).unwrap();
     /// ```
     /// * the offset is for centering the image
     /// * it accepts either `%` (percentage) / `c` (cells) / just a number
     /// * when resize for ascii is true it resizes to cells, if not it resizes to pixels
+    /// * pad adds empty pixels so the image will be the exact dimensions specified, while still
+    /// maintaining aspect ratio
     fn resize_plus(
         &self,
         width: Option<&str>,
         height: Option<&str>,
         resize_for_ascii: bool,
+        pad: bool,
     ) -> Result<(Vec<u8>, u16, u32, u32), Box<dyn error::Error>>;
     /// zoom into the image, and move around
     /// # example:
@@ -57,6 +61,7 @@ impl InlineImage for DynamicImage {
         width: Option<&str>,
         height: Option<&str>,
         resize_for_ascii: bool,
+        pad: bool,
     ) -> Result<(Vec<u8>, u16, u32, u32), Box<dyn error::Error>> {
         let (src_width, src_height) = self.dimensions();
         let width = match width {
@@ -94,6 +99,25 @@ impl InlineImage for DynamicImage {
             dst_image.height(),
             self.color().into(),
         )?;
+
+        if pad && (new_width != width || new_height != height) {
+            let img = image::load_from_memory(&buffer)?;
+            let mut new_img = DynamicImage::new_rgba8(width, height);
+            let x_offset = if width == new_width {
+                0
+            } else {
+                (width - new_width) / 2
+            };
+            let y_offset = if height == new_height {
+                0
+            } else {
+                (height - new_height) / 2
+            };
+            new_img.copy_from(&img, x_offset, y_offset)?;
+            let mut cursor = Cursor::new(Vec::new());
+            new_img.write_to(&mut cursor, image::ImageFormat::Png)?;
+            return Ok((cursor.into_inner(), center, width, height));
+        }
 
         Ok((buffer, center, new_width, new_height))
     }
