@@ -301,6 +301,19 @@ fn truncate_filename(name: String, width: u16) -> String {
     format!("{}..{}{}", front_part, back_part, ext)
 }
 
+fn calculate_items_per_row(terminal_width: u16) -> usize {
+    const MIN_ITEM_WIDTH: u16 = 15;
+    const MAX_ITEM_WIDTH: u16 = 25;
+    const MAX_ITEMS_PER_ROW: usize = 8;
+
+    let min_items = ((terminal_width + MAX_ITEM_WIDTH - 1) / MAX_ITEM_WIDTH) as usize;
+    let max_items = (terminal_width / MIN_ITEM_WIDTH) as usize;
+    let mut items = min_items;
+    items = items.min(max_items);
+    items = items.min(MAX_ITEMS_PER_ROW);
+    items.max(1)
+}
+
 pub fn lsix(
     input: impl AsRef<str>,
     out: &mut impl Write,
@@ -313,7 +326,7 @@ pub fn lsix(
         _ => false,
     };
     let ts = rasteroid::term_misc::get_winsize();
-    let items_per_row = 5;
+    let items_per_row = calculate_items_per_row(ts.sc_width);
     let x_padding = 4;
     let y_padding = 2;
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
