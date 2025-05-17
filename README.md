@@ -22,7 +22,7 @@
 
 [Installation](#%EF%B8%8F-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANGELOG](./CHANGELOG.md)
 
-![mcat_demo](https://github.com/user-attachments/assets/b47aa276-f0e4-4259-b2c5-1525d7d9d6cb)
+![mcat_demo](https://github.com/Skardyy/assets/blob/main/mcat_opt.gif)
 </div>
 
 ## ✨ Features
@@ -70,6 +70,12 @@ mcat "https://somewebite.com/file.pdf"
 
 # Or HTML
 mcat project.docx -o html
+
+# ls, you can list a dir
+mcat ls
+
+# or a specific dir
+mcat ls ~/Download
 
 # Show a document inline as an image
 mcat readme.md -i
