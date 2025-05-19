@@ -1,3 +1,15 @@
+## V0.3.0 (Not Released)
+#### New Features:
+- [ ] added -a --hidden flag for showing hidden files, along with making hidden files off by default.
+- [ ] the pretty print now supports syntax highlighting, along with auto detecting if the pipe is the terminal so it can be on by default.
+- [ ] added a pager for the pretty print
+- [ ] added shell auto completion for standard shells
+- [ ] added interactive mode to zoom / pan images for more detail
+#### Fixes:
+- [ ] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
+- [ ] fixed an issue in the ls command that would make the first item in a row up by 1 cell
+- [ ] fixed an issue where  the ls command won't work on windows-wezterm when encoding to Iterm
+
 ## V0.2.8
 - adding an ls command
 - adding parallelism for heavy operations
