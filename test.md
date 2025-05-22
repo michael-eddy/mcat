@@ -250,6 +250,12 @@ Reference-style image: ![Alt text][image1]
 
 ---
 
+## Image with link
+
+[![Rust Logo](https://www.rust-lang.org/logos/rust-logo-512x512.png)](https://www.rust-lang.org/)
+
+---
+
 ## FootnoteReference
 *The `[^1]` and `[^note2]` in the FootnoteDefinition section above represent NodeValue::FootnoteReference*
 
@@ -267,15 +273,14 @@ $$
 
 ## MultilineBlockQuote
 > This is a multiline block quote
-> that spans several lines
-> and maintains its formatting
-> 
-> It can contain multiple paragraphs
-> and other elements like:
-> 
-> - Lists
-> - **Bold text**
-> - `Code`
+that spans several lines
+and maintains its formatting
+It can contain multiple paragraphs
+and other elements like:
+
+- Lists
+- **Bold text**
+- `Code`
 
 ---
 
