@@ -9,6 +9,8 @@
 - [ ] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
 - [ ] fixed an issue in the ls command that would make the first item in a row up by 1 cell
 - [ ] fixed an issue where  the ls command won't work on windows-wezterm when encoding to Iterm
+#### Changes:
+- [x] dark theme is not the default
 
 ## V0.2.8
 - adding an ls command

@@ -6,9 +6,11 @@ use std::{
 
 use image::{DynamicImage, ImageFormat};
 use rasteroid::image_extended::InlineImage;
-use termimad::{FmtText, MadSkin, StyledChar, crossterm::style::Color, rgb};
 
-use crate::converter::{self};
+use crate::{
+    converter::{self},
+    markdown,
+};
 
 pub enum CatType {
     Markdown,
@@ -154,26 +156,24 @@ pub fn cat(
     // converting
     match (from, to) {
         ("md", "html") => {
-            let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
+            let html = markdown::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
         },
         ("md", "pretty") => {
             let res = string_result.unwrap();
-            let skin = make_skin();
-
-            let fmt_text = FmtText::from(&skin, &res, None);
-            write!(out, "{}", &fmt_text)?;
+            let ansi = markdown::md_to_ansi(&res);
+            out.write_all(ansi.as_bytes())?;
             Ok(CatType::Pretty)
         },
         ("md", "image") => {
-            let html = converter::md_to_html(&string_result.unwrap(), opts.style);
+            let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
             Ok(CatType::Image)
         },
         ("md", "inline") => {
-            let html = converter::md_to_html(&string_result.unwrap(), opts.style);
+            let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
@@ -237,30 +237,4 @@ pub fn is_video(ext: &str) -> bool {
         ext,
         "mp4" | "mov" | "avi" | "mkv" | "webm" | "wmv" | "flv" | "m4v" | "ts" | "gif"
     )
-}
-
-fn make_skin() -> MadSkin {
-    let mut skin = MadSkin::default();
-    skin.set_headers_bg(rgb(40, 40, 30));
-    skin.set_headers_fg(Color::Yellow);
-
-    skin.italic.set_fg(Color::Magenta);
-
-    skin.bold.set_fg(Color::Yellow);
-
-    skin.table.set_fg(Color::Cyan);
-
-    skin.strikeout.set_fg(Color::Red);
-
-    skin.bullet = StyledChar::from_fg_char(Color::Yellow, '•');
-
-    skin.quote_mark.set_fg(Color::Yellow);
-
-    skin.code_block.set_fg(rgb(176, 179, 239));
-    skin.code_block.set_bg(rgb(30, 31, 40));
-
-    skin.inline_code.set_fg(Color::Green);
-    skin.inline_code.set_bg(rgb(30, 40, 31));
-
-    skin
 }

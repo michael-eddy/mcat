@@ -3,6 +3,7 @@ mod concater;
 mod converter;
 mod fetch_manager;
 mod inspector;
+mod markdown;
 mod prompter;
 mod scrapy;
 
@@ -56,7 +57,7 @@ fn main() {
             Arg::new("theme")
                 .short('t')
                 .help("alternative css file for images, valid options: [light, dark, <local file>]",)
-                .default_value("light")
+                .default_value("dark")
         )
         .arg(
             Arg::new("style-html")
@@ -98,12 +99,6 @@ fn main() {
             Arg::new("pretty")
                 .short('p')
                 .help("shortcut for putting --output pretty")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("dark-theme")
-                .short('d')
-                .help("shortcut for putting --theme dark")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -216,9 +211,6 @@ fn main() {
     let hori = *opts.get_one::<bool>("horizontal").unwrap();
 
     // shortcuts
-    let dark = opts.get_flag("dark-theme");
-    let style: &str = if dark { "dark" } else { style };
-
     let inline = opts.get_flag("inline");
     let pretty = opts.get_flag("pretty");
     let output: Option<&str> = if inline {

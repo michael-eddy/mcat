@@ -14,14 +14,16 @@ use resvg::{
 use std::{
     error,
     fs::{self},
-    io::{BufRead, Cursor, Read},
+    io::{BufRead, BufWriter, Cursor, Read},
     path::Path,
     sync::{Arc, atomic::Ordering},
 };
 use tokio::sync::oneshot;
 
 use comrak::{
-    ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins, plugins::syntect::SyntectAdapter,
+    Arena, ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins,
+    nodes::{AstNode, NodeValue},
+    plugins::syntect::SyntectAdapter,
 };
 use std::io::Write;
 
@@ -166,59 +168,6 @@ fn screenshot_uri(data_uri: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>>
 
         Ok(screenshot)
     })
-}
-
-pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
-    let mut options = ComrakOptions::default();
-
-    let mut plugins = ComrakPlugins::default();
-    let adapter = SyntectAdapter::new(None);
-    plugins.render.codefence_syntax_highlighter = Some(&adapter);
-
-    // ➕ Enable extensions
-    options.extension.strikethrough = true;
-    options.extension.tagfilter = true;
-    options.extension.table = true;
-    options.extension.autolink = true;
-    options.extension.tasklist = true;
-    options.extension.footnotes = true;
-    options.extension.description_lists = true;
-
-    // 🎯 Parsing options
-    options.parse.smart = true; // fancy quotes, dashes, ellipses
-
-    // 💄 Render options
-    options.render.unsafe_ = true;
-    options.render.hardbreaks = false;
-    options.render.github_pre_lang = true; // <pre lang="rust">
-    options.render.full_info_string = true;
-
-    let css_content = match css_path {
-        Some("dark") => Some(include_str!("../styles/dark.css").to_string()),
-        Some("light") => Some(include_str!("../styles/light.css").to_string()),
-        Some(path) => std::fs::read_to_string(path).ok(),
-        None => None,
-    };
-
-    let html = markdown_to_html_with_plugins(markdown, &options, &plugins);
-    match css_content {
-        Some(css) => format!(
-            r#"
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>{}</style>
-</head>
-<body>
-  {}
-</body>
-</html>
-"#,
-            css, html
-        ),
-        None => html,
-    }
 }
 
 pub struct VideoFrames {
