@@ -5,6 +5,7 @@ use std::{
 };
 
 use image::{DynamicImage, ImageFormat};
+use pager::Pager;
 use rasteroid::image_extended::InlineImage;
 
 use crate::{
@@ -163,6 +164,7 @@ pub fn cat(
         ("md", "pretty") => {
             let res = string_result.unwrap();
             let ansi = markdown::md_to_ansi(&res);
+            Pager::with_default_pager("less -r").setup();
             out.write_all(ansi.as_bytes())?;
             Ok(CatType::Pretty)
         },
