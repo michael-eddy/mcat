@@ -272,11 +272,13 @@ $$
 ---
 
 ## MultilineBlockQuote
-> This is a multiline block quote
+>>>
+This is a multiline block quote
 that spans several lines
 and maintains its formatting
 It can contain multiple paragraphs
 and other elements like:
+>>>
 
 - Lists
 - **Bold text**
