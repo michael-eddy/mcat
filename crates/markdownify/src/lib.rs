@@ -73,7 +73,7 @@ pub fn convert(
     };
 
     let result = match name_header {
-        Some(name) => format!("<!-- from: {name} -->\n{result}\n---"),
+        Some(name) => format!("<!-- S-TITLE: {name} -->\n{result}\n---"),
         None => result,
     };
 

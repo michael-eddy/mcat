@@ -11,6 +11,7 @@ use comrak::{
     plugins::syntect::SyntectAdapter,
 };
 use rasteroid::term_misc;
+use regex::Regex;
 use syntect::{
     easy::HighlightLines,
     highlighting::{Color, ScopeSelectors, Style, StyleModifier, Theme, ThemeSettings},
@@ -23,6 +24,7 @@ const BOLD: &str = "\x1B[1m";
 const ITALIC: &str = "\x1B[3m";
 const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
+const FAINT: &str = "\x1b[2m";
 
 const FG_BLACK: &str = "\x1B[30m";
 const FG_RED: &str = "\x1B[31m";
@@ -248,7 +250,12 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 if bullet.is_empty() {
                     ctx.write(&format!("{offset}{line}"));
                 } else {
-                    let line = line.replace("\0", &format!("{bullet}{RESET}"));
+                    let line = if line.contains("\0") {
+                        let line = line.replace("\0", &format!("{bullet}{RESET}"));
+                        line
+                    } else {
+                        format!("  {line}")
+                    };
                     ctx.write(&format!("{offset}{line}"));
                 }
             }
@@ -293,6 +300,26 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             format_code(code, lang, &header, ctx);
         }
         NodeValue::HtmlBlock(node_html_block) => {
+            let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
+            if let Some(caps) = re.captures(&node_html_block.literal) {
+                let title = caps.get(1).unwrap().as_str();
+                let width = term_misc::get_winsize().sc_width;
+                let text_size = string_len(title);
+                let padding = width as usize - text_size;
+                let left_padding = padding / 2;
+                let right_padding = padding - left_padding;
+                let surface = ctx.theme.surface.bg.clone();
+                let block = &format!("{surface}{}{RESET}\n", " ".repeat(width as usize));
+                ctx.write(&block);
+                ctx.write(&format!(
+                    "{surface}{}{FG_YELLOW}{BOLD}{title}{surface}{}{RESET}",
+                    " ".repeat(left_padding),
+                    " ".repeat(right_padding)
+                ));
+                ctx.write(&block);
+                return;
+            }
+
             let ts = ctx.theme.to_syntect_theme();
             let syntax = ctx
                 .ps
@@ -347,8 +374,9 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             let mut column_widths: Vec<usize> = vec![0; alignments.len()];
             for row in &rows {
                 for (i, cell) in row.iter().enumerate() {
-                    if i < column_widths.len() && cell.len() > column_widths[i] {
-                        column_widths[i] = cell.len();
+                    let c = string_len(cell.trim());
+                    if c > column_widths[i] {
+                        column_widths[i] = c;
                     }
                 }
             }
@@ -383,7 +411,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     ctx.write(&format!("{color}│{RESET}"));
                     for (j, cell) in row.iter().enumerate() {
                         let width = column_widths[j];
-                        let padding = width - cell.len();
+                        let padding = width - string_len(cell);
                         let (left_pad, right_pad) = match alignments[j] {
                             comrak::nodes::TableAlignment::Center => {
                                 (padding / 2, padding - (padding / 2))
@@ -486,7 +514,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::SpoileredText => {
             let content = ctx.collect(node);
-            ctx.write(&format!("\x1b[2m{FG_BRIGHT_BLACK}{content}{RESET}"));
+            ctx.write(&format!("{FAINT}{FG_BRIGHT_BLACK}{content}{RESET}"));
         }
         NodeValue::Alert(node_alert) => {
             let kind = &node_alert.alert_type;
@@ -521,6 +549,10 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Subscript => {}            //disabled
         NodeValue::FootnoteReference(_) => {} // disabled
     }
+}
+
+fn string_len(str: &str) -> usize {
+    strip_ansi_escapes::strip_str(&str).chars().count()
 }
 
 fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
@@ -619,18 +651,16 @@ fn format_code(code: &str, lang: &str, header: &str, ctx: &mut AnsiContext) {
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;
     let term_width = term_misc::get_winsize().sc_width;
+    let color = FG_BRIGHT_BLACK;
 
     let top_header = format!(
-        "{FG_BRIGHT_BLACK}{}┬{}{RESET}",
+        "{color}{}┬{}{RESET}",
         "─".repeat(num_width),
         "-".repeat(term_width as usize - num_width - 1)
     );
-    let middle_header = format!(
-        "{FG_BRIGHT_BLACK}{}│ {header}{RESET}",
-        " ".repeat(num_width),
-    );
+    let middle_header = format!("{color}{}│ {header}{RESET}", " ".repeat(num_width),);
     let bottom_header = format!(
-        "{FG_BRIGHT_BLACK}{}┼{}{RESET}",
+        "{color}{}┼{}{RESET}",
         "─".repeat(num_width),
         "-".repeat(term_width as usize - num_width - 1)
     );
@@ -649,7 +679,7 @@ fn format_code(code: &str, lang: &str, header: &str, ctx: &mut AnsiContext) {
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
         ctx.write(&format!(
-            "{FG_BRIGHT_BLACK}{}{num}{}│ {RESET}{}",
+            "{color}{}{num}{}│ {RESET}{}",
             " ".repeat(left_offset),
             " ".repeat(right_offset),
             highlighted
@@ -658,7 +688,7 @@ fn format_code(code: &str, lang: &str, header: &str, ctx: &mut AnsiContext) {
     }
 
     let last_border = format!(
-        "{FG_BRIGHT_BLACK}{}┴{}{RESET}",
+        "{color}{}┴{}{RESET}",
         "─".repeat(num_width),
         "-".repeat(term_width as usize - num_width - 1)
     );

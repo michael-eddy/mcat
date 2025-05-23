@@ -29,7 +29,7 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
 
     for page in pdf.iter_pages() {
         i += 1;
-        result.push_str(&format!("\n\n<!-- Page number: {} -->\n", i));
+        result.push_str(&format!("\n\n<!-- S-TITLE: Page number {} -->\n", i));
         let mut page = page?;
         let units = page.handle_stream(page.stream.clone())?;
         let font_sizes: Vec<f32> = units

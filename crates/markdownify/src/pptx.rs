@@ -33,7 +33,10 @@ pub fn pptx_converter(path: &Path) -> Result<String, Box<dyn std::error::Error>>
         let file_name = file.name().to_string();
 
         if file_name.starts_with("ppt/slides/") && file_name.ends_with(".xml") {
-            markdown.push_str(&format!("\n\n<!-- Slide number: {} -->\n", slide_num));
+            markdown.push_str(&format!(
+                "\n\n<!-- S-TITLE: Slide number {} -->\n",
+                slide_num
+            ));
             slide_num += 1;
 
             let mut content = String::new();
