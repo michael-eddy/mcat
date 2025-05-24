@@ -462,7 +462,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "which",
+ "which 6.0.3",
  "winreg",
 ]
 
@@ -1079,6 +1079,12 @@ name = "entities"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5320ae4c3782150d900b79807611a59a99fc9a1d61d686faafc24b93fc8d7ca"
+
+[[package]]
+name = "env_home"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f84e12ccf0a7ddc17a6c41c93326024c42920d7ee630d04950e6926645c0fe"
 
 [[package]]
 name = "equivalent"
@@ -2259,6 +2265,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "urlencoding",
+ "which 7.0.3",
  "zip 3.0.0",
 ]
 
@@ -4427,6 +4434,18 @@ dependencies = [
  "either",
  "home",
  "rustix 0.38.44",
+ "winsafe",
+]
+
+[[package]]
+name = "which"
+version = "7.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24d643ce3fd3e5b54854602a080f34fb10ab75e0b813ee32d00ca2b44fa74762"
+dependencies = [
+ "either",
+ "env_home",
+ "rustix 1.0.5",
  "winsafe",
 ]
 

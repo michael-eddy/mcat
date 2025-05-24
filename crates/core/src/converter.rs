@@ -11,21 +11,15 @@ use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
+use std::io::Write;
 use std::{
     error,
     fs::{self},
-    io::{BufRead, BufWriter, Cursor, Read},
+    io::{BufRead, Cursor, Read},
     path::Path,
     sync::{Arc, atomic::Ordering},
 };
 use tokio::sync::oneshot;
-
-use comrak::{
-    Arena, ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins,
-    nodes::{AstNode, NodeValue},
-    plugins::syntect::SyntectAdapter,
-};
-use std::io::Write;
 
 use crate::{catter, fetch_manager};
 

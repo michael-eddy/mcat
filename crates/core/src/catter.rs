@@ -1,12 +1,14 @@
 use std::{
+    env,
     fs::{self, File},
-    io::Write,
+    io::{Write, stdout},
     path::Path,
 };
 
+use crossterm::tty::IsTty;
 use image::{DynamicImage, ImageFormat};
 use pager::Pager;
-use rasteroid::image_extended::InlineImage;
+use rasteroid::{image_extended::InlineImage, term_misc};
 
 use crate::{
     converter::{self},
@@ -156,17 +158,14 @@ pub fn cat(
 
     // converting
     match (from, to) {
+        ("md", "md") => {
+            out.write_all(string_result.unwrap().as_bytes())?;
+            Ok(CatType::Markdown)
+        }
         ("md", "html") => {
             let html = markdown::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
-        },
-        ("md", "pretty") => {
-            let res = string_result.unwrap();
-            let ansi = markdown::md_to_ansi(&res);
-            Pager::with_default_pager("less -r").setup();
-            out.write_all(ansi.as_bytes())?;
-            Ok(CatType::Pretty)
         },
         ("md", "image") => {
             let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
@@ -209,9 +208,19 @@ pub fn cat(
         },
         ("md", _) => {
             //default for md
-            out.write_all(string_result.unwrap().as_bytes())?;
-            Ok(CatType::Markdown)
-        }
+            let res = string_result.unwrap();
+            if stdout().is_tty() {
+                let ansi = markdown::md_to_ansi(&res, opts.style);
+                if ansi.lines().count() > term_misc::get_winsize().sc_height as usize {
+                    setup_pager();
+                }
+                out.write_all(ansi.as_bytes())?;
+                Ok(CatType::Pretty)
+            } else {
+                out.write_all(res.as_bytes())?;
+                return Ok(CatType::Markdown)
+            }
+        },
         ("html", _) => {
             // default for html
             out.write_all(string_result.unwrap().as_bytes())?;
@@ -239,4 +248,17 @@ pub fn is_video(ext: &str) -> bool {
         ext,
         "mp4" | "mov" | "avi" | "mkv" | "webm" | "wmv" | "flv" | "m4v" | "ts" | "gif"
     )
+}
+
+fn setup_pager() {
+    let pager = if which::which("moar").is_ok() {
+        "moar --no-linenumbers"
+    } else {
+        "less -r"
+    };
+
+    unsafe {
+        env::set_var("PAGER", pager);
+    }
+    Pager::new().setup();
 }

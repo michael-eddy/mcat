@@ -49,18 +49,22 @@ fn main() {
         .arg(input_arg)
         .arg(
             Arg::new("output")
+                .long("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md", "pretty", "image", "video", "inline"]),
+                .value_parser(["html", "md",  "image", "video", "inline"]),
         )
         .arg(
             Arg::new("theme")
+                .long("theme")
                 .short('t')
-                .help("alternative css file for images, valid options: [light, dark, <local file>]",)
+                .help("the theme to use")
+                .value_parser(["dark", "light", "catppuccin", "nord", "monokai", "dracula", "gruvbox", "one_dark", "solarized", "tokyo_night"])
                 .default_value("dark")
         )
         .arg(
             Arg::new("style-html")
+                .long("style-html")
                 .short('s')
                 .help("add style to html too (when html is the output)")
                 .action(clap::ArgAction::SetTrue)
@@ -93,12 +97,6 @@ fn main() {
             Arg::new("inline")
                 .short('i')
                 .help("shortcut for putting --output inline")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("pretty")
-                .short('p')
-                .help("shortcut for putting --output pretty")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -212,11 +210,8 @@ fn main() {
 
     // shortcuts
     let inline = opts.get_flag("inline");
-    let pretty = opts.get_flag("pretty");
     let output: Option<&str> = if inline {
         Some("inline")
-    } else if pretty {
-        Some("pretty")
     } else {
         match output {
             Some(o) => Some(o.as_ref()),

@@ -8,13 +8,13 @@ use std::{
 use comrak::{
     Arena, ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins,
     nodes::{AstNode, NodeMath, NodeValue, Sourcepos},
-    plugins::syntect::SyntectAdapter,
+    plugins::syntect::SyntectAdapterBuilder,
 };
 use rasteroid::term_misc;
 use regex::Regex;
 use syntect::{
     easy::HighlightLines,
-    highlighting::{Color, ScopeSelectors, Style, StyleModifier, Theme, ThemeSettings},
+    highlighting::{Color, ScopeSelectors, Style, StyleModifier, Theme, ThemeSet, ThemeSettings},
     parsing::SyntaxSet,
     util::{LinesWithEndings, as_24_bit_terminal_escaped},
 };
@@ -26,14 +26,11 @@ const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
 const FAINT: &str = "\x1b[2m";
 
-const FG_BLACK: &str = "\x1B[30m";
 const FG_RED: &str = "\x1B[31m";
 const FG_GREEN: &str = "\x1B[32m";
 const FG_YELLOW: &str = "\x1B[33m";
 const FG_BLUE: &str = "\x1B[34m";
-const FG_MAGENTA: &str = "\x1B[35m";
 const FG_CYAN: &str = "\x1B[36m";
-const FG_WHITE: &str = "\x1B[37m";
 const FG_BRIGHT_BLACK: &str = "\x1B[90m";
 const FG_BRIGHT_RED: &str = "\x1B[91m";
 const FG_BRIGHT_GREEN: &str = "\x1B[92m";
@@ -41,24 +38,6 @@ const FG_BRIGHT_YELLOW: &str = "\x1B[93m";
 const FG_BRIGHT_BLUE: &str = "\x1B[94m";
 const FG_BRIGHT_MAGENTA: &str = "\x1B[95m";
 const FG_BRIGHT_CYAN: &str = "\x1B[96m";
-const FG_BRIGHT_WHITE: &str = "\x1B[97m";
-
-const BG_BLACK: &str = "\x1B[40m";
-const BG_RED: &str = "\x1B[41m";
-const BG_GREEN: &str = "\x1B[42m";
-const BG_YELLOW: &str = "\x1B[43m";
-const BG_BLUE: &str = "\x1B[44m";
-const BG_MAGENTA: &str = "\x1B[45m";
-const BG_CYAN: &str = "\x1B[46m";
-const BG_WHITE: &str = "\x1B[47m";
-const BG_BRIGHT_BLACK: &str = "\x1B[100m";
-const BG_BRIGHT_RED: &str = "\x1B[101m";
-const BG_BRIGHT_GREEN: &str = "\x1B[102m";
-const BG_BRIGHT_YELLOW: &str = "\x1B[103m";
-const BG_BRIGHT_BLUE: &str = "\x1B[104m";
-const BG_BRIGHT_MAGENTA: &str = "\x1B[105m";
-const BG_BRIGHT_CYAN: &str = "\x1B[106m";
-const BG_BRIGHT_WHITE: &str = "\x1B[107m";
 
 struct AnsiContext {
     ps: SyntaxSet,
@@ -100,13 +79,13 @@ impl AnsiContext {
         self.write(&text);
     }
 }
-pub fn md_to_ansi(md: &str) -> String {
+pub fn md_to_ansi(md: &str, theme: Option<&str>) -> String {
     let arena = Arena::new();
     let opts = comrak_options();
     let root = comrak::parse_document(&arena, md, &opts);
 
     let ps = SyntaxSet::load_defaults_newlines();
-    let theme = CustomTheme::dark();
+    let theme = get_theme(theme);
     let mut ctx = AnsiContext {
         ps,
         theme,
@@ -143,22 +122,45 @@ fn comrak_options<'a>() -> ComrakOptions<'a> {
     options
 }
 
-pub fn md_to_html(markdown: &str, css_path: Option<&str>) -> String {
+fn get_theme(s: Option<&str>) -> CustomTheme {
+    match s.unwrap_or("dark") {
+        "catppuccin" => CustomTheme::catppuccin(),
+        "nord" => CustomTheme::nord(),
+        "monokai" => CustomTheme::monokai(),
+        "dracula" => CustomTheme::dracula(),
+        "gruvbox" => CustomTheme::gruvbox(),
+        "one_dark" => CustomTheme::one_dark(),
+        "solarized" => CustomTheme::solarized(),
+        "tokyo_night" => CustomTheme::tokyo_night(),
+        "light" => CustomTheme::light(),
+        _ => CustomTheme::dark(),
+    }
+}
+
+pub fn md_to_html(markdown: &str, style: Option<&str>) -> String {
     let options = comrak_options();
 
+    let theme = get_theme(style);
+    let mut theme_set = ThemeSet::load_defaults();
     let mut plugins = ComrakPlugins::default();
-    let adapter = SyntectAdapter::new(None);
-    plugins.render.codefence_syntax_highlighter = Some(&adapter);
+    theme_set
+        .themes
+        .insert("dark".to_string(), theme.to_syntect_theme());
+    let adapter = SyntectAdapterBuilder::new()
+        .theme("dark")
+        .theme_set(theme_set)
+        .build();
+    if style.is_some() {
+        plugins.render.codefence_syntax_highlighter = Some(&adapter);
+    }
 
-    let css_content = match css_path {
-        Some("dark") => Some(include_str!("../styles/dark.css").to_string()),
-        Some("light") => Some(include_str!("../styles/light.css").to_string()),
-        Some(path) => std::fs::read_to_string(path).ok(),
+    let full_css = match style {
+        Some(_) => Some(theme.to_html_style()),
         None => None,
     };
 
     let html = markdown_to_html_with_plugins(markdown, &options, &plugins);
-    match css_content {
+    match full_css {
         Some(css) => format!(
             r#"
 <!DOCTYPE html>
@@ -312,7 +314,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let block = &format!("{surface}{}{RESET}\n", " ".repeat(width as usize));
                 ctx.write(&block);
                 ctx.write(&format!(
-                    "{surface}{}{FG_YELLOW}{BOLD}{title}{surface}{}{RESET}",
+                    "{surface}{}{FG_YELLOW}{BOLD}{title}{surface}{}{RESET}\n",
                     " ".repeat(left_padding),
                     " ".repeat(right_padding)
                 ));
@@ -704,7 +706,7 @@ pub struct ThemeColor {
     value: String,
     color: Color,
     bg: String,
-    fg: String,
+    _fg: String,
 }
 
 impl From<&str> for ThemeColor {
@@ -716,7 +718,7 @@ impl From<&str> for ThemeColor {
             value: hex_color.to_owned(),
             color,
             bg: format!("\x1b[48;2;{};{};{}m", r, g, b),
-            fg: format!("\x1b[38;2;{};{};{}m", r, g, b),
+            _fg: format!("\x1b[38;2;{};{};{}m", r, g, b),
         }
     }
 }
@@ -733,6 +735,7 @@ pub struct CustomTheme {
     pub guide: ThemeColor,
     pub background: ThemeColor,
     pub surface: ThemeColor,
+    pub border: ThemeColor,
 }
 
 fn hex_to_rgba(hex: &str) -> Color {
@@ -755,14 +758,150 @@ impl CustomTheme {
             foreground: "#FFFFFF".into(),
             guide: "#2D3640".into(),
             background: "#15161B".into(),
-            surface: "#20202b".into(),
+            surface: "#14161f".into(),
+            border: "#2D3640".into(),
+        }
+    }
+    pub fn light() -> Self {
+        CustomTheme {
+            keyword: "#E35043".into(),
+            function: "#3D76F3".into(),
+            string: "#51A150".into(),
+            module: "#AB31A9".into(),
+            constant: "#976700".into(),
+            comment: "#A0A1A7".into(),
+            foreground: "#323640".into(),
+            guide: "#D1D5DB".into(),
+            background: "#f8f8fc".into(),
+            surface: "#ebebf4".into(),
+            border: "#7e8a9e".into(),
+        }
+    }
+    pub fn monokai() -> Self {
+        CustomTheme {
+            keyword: "#F92672".into(),    // Magenta
+            function: "#A6E22E".into(),   // Green
+            string: "#E6DB74".into(),     // Yellow
+            module: "#66D9EF".into(),     // Cyan
+            constant: "#AE81FF".into(),   // Purple
+            comment: "#75715E".into(),    // Brown/Gray
+            foreground: "#F8F8F2".into(), // Off-white
+            guide: "#3E3D32".into(),      // Dark gray
+            background: "#272822".into(), // Dark green-gray
+            surface: "#3E3D32".into(),    // Slightly lighter
+            border: "#49483E".into(),     // Border gray
+        }
+    }
+    pub fn catppuccin() -> Self {
+        CustomTheme {
+            keyword: "#CBA6F7".into(),    // Mauve
+            function: "#89B4FA".into(),   // Blue
+            string: "#A6E3A1".into(),     // Green
+            module: "#89DCEB".into(),     // Sky
+            constant: "#F38BA8".into(),   // Pink
+            comment: "#6C7086".into(),    // Overlay0
+            foreground: "#CDD6F4".into(), // Text
+            guide: "#45475A".into(),      // Surface1
+            background: "#1E1E2E".into(), // Base
+            surface: "#313244".into(),    // Surface0
+            border: "#45475A".into(),     // Surface1
+        }
+    }
+    pub fn tokyo_night() -> Self {
+        CustomTheme {
+            keyword: "#BB9AF7".into(),    // Purple
+            function: "#7AA2F7".into(),   // Blue
+            string: "#9ECE6A".into(),     // Green
+            module: "#2AC3DE".into(),     // Cyan
+            constant: "#FF9E64".into(),   // Orange
+            comment: "#565F89".into(),    // Comment
+            foreground: "#C0CAF5".into(), // Foreground
+            guide: "#3B4261".into(),      // Line highlight
+            background: "#1A1B26".into(), // Background
+            surface: "#24283B".into(),    // Background highlight
+            border: "#414868".into(),     // Border
+        }
+    }
+    pub fn dracula() -> Self {
+        CustomTheme {
+            keyword: "#FF79C6".into(),    // Pink
+            function: "#50FA7B".into(),   // Green
+            string: "#F1FA8C".into(),     // Yellow
+            module: "#8BE9FD".into(),     // Cyan
+            constant: "#BD93F9".into(),   // Purple
+            comment: "#6272A4".into(),    // Comment
+            foreground: "#F8F8F2".into(), // Foreground
+            guide: "#44475A".into(),      // Current line
+            background: "#282A36".into(), // Background
+            surface: "#44475A".into(),    // Selection
+            border: "#6272A4".into(),     // Comment (used as border)
+        }
+    }
+    pub fn nord() -> Self {
+        CustomTheme {
+            keyword: "#81A1C1".into(),    // Nord9 (blue)
+            function: "#88C0D0".into(),   // Nord8 (cyan)
+            string: "#A3BE8C".into(),     // Nord14 (green)
+            module: "#8FBCBB".into(),     // Nord7 (cyan)
+            constant: "#B48EAD".into(),   // Nord15 (purple)
+            comment: "#616E88".into(),    // Nord3 (bright black)
+            foreground: "#D8DEE9".into(), // Nord4 (white)
+            guide: "#434C5E".into(),      // Nord1 (dark gray)
+            background: "#2E3440".into(), // Nord0 (black)
+            surface: "#3B4252".into(),    // Nord1 (dark gray)
+            border: "#434C5E".into(),     // Nord2 (gray)
+        }
+    }
+    pub fn gruvbox() -> Self {
+        CustomTheme {
+            keyword: "#FB4934".into(),    // Red
+            function: "#FABD2F".into(),   // Yellow
+            string: "#B8BB26".into(),     // Green
+            module: "#83A598".into(),     // Blue
+            constant: "#D3869B".into(),   // Purple
+            comment: "#928374".into(),    // Gray
+            foreground: "#EBDBB2".into(), // Light cream
+            guide: "#504945".into(),      // Dark gray
+            background: "#282828".into(), // Dark background
+            surface: "#3C3836".into(),    // Dark gray
+            border: "#665C54".into(),     // Medium gray
+        }
+    }
+    pub fn solarized() -> Self {
+        CustomTheme {
+            keyword: "#268BD2".into(),    // Blue
+            function: "#B58900".into(),   // Yellow
+            string: "#2AA198".into(),     // Cyan
+            module: "#859900".into(),     // Green
+            constant: "#D33682".into(),   // Magenta
+            comment: "#586E75".into(),    // Base01
+            foreground: "#839496".into(), // Base0
+            guide: "#073642".into(),      // Base02
+            background: "#002B36".into(), // Base03
+            surface: "#073642".into(),    // Base02
+            border: "#586E75".into(),     // Base01
+        }
+    }
+    pub fn one_dark() -> Self {
+        CustomTheme {
+            keyword: "#C678DD".into(),    // Purple
+            function: "#61AFEF".into(),   // Blue
+            string: "#98C379".into(),     // Green
+            module: "#56B6C2".into(),     // Cyan
+            constant: "#E06C75".into(),   // Red
+            comment: "#5C6370".into(),    // Gray
+            foreground: "#ABB2BF".into(), // Light gray
+            guide: "#3E4451".into(),      // Dark gray
+            background: "#282C34".into(), // Dark background
+            surface: "#21252B".into(),    // Darker background
+            border: "#3E4451".into(),     // Border gray
         }
     }
 
     pub fn to_syntect_theme(&self) -> Theme {
         let mut settings = ThemeSettings::default();
         settings.foreground = Some(self.foreground.color);
-        settings.background = Some(self.background.color);
+        settings.background = Some(self.surface.color);
         settings.guide = Some(self.guide.color);
 
         let mut theme = Theme {
@@ -794,27 +933,33 @@ impl CustomTheme {
         });
 
         theme.scopes.push(syntect::highlighting::ThemeItem {
-            scope: create_selectors("module, struct, enum, generic, path"),
+            scope: create_selectors(
+                "module, struct, enum, generic, path, meta.path, entity.name.tag, support.type, meta.import-name",
+            ),
             style: create_style(self.module.color),
         });
 
         theme.scopes.push(syntect::highlighting::ThemeItem {
-            scope: create_selectors("string, punctuation.string"),
+            scope: create_selectors(
+                "string, punctuation.string, constant.other.color, punctuation.definition.string",
+            ),
             style: create_style(self.string.color),
         });
 
         theme.scopes.push(syntect::highlighting::ThemeItem {
-            scope: create_selectors("constant, support.type"),
+            scope: create_selectors("constant, keyword.other.unit, support.constant"),
             style: create_style(self.constant.color),
         });
 
         theme.scopes.push(syntect::highlighting::ThemeItem {
-            scope: create_selectors("comment, punctuation.comment"),
+            scope: create_selectors("comment, punctuation.comment, punctuation.definition.comment"),
             style: create_style(self.comment.color),
         });
 
         theme.scopes.push(syntect::highlighting::ThemeItem {
-            scope: create_selectors("variable, operator, punctuation, block"),
+            scope: create_selectors(
+                "variable, operator, punctuation, block, support.type.property-name, punctuation.definition, keyword.operator",
+            ),
             style: create_style(self.foreground.color),
         });
 
@@ -822,6 +967,33 @@ impl CustomTheme {
     }
 
     pub fn to_html_style(&self) -> String {
-        todo!()
+        let root_css = format!(
+            r#"
+:root {{
+  --keyword: {};
+  --function: {};
+  --type: {};
+  --constant: {};
+  --comment: {};
+  --foreground: {};
+  
+  /* UI Colors */
+  --background: {};
+  --surface: {};
+  --border: {};
+}}
+"#,
+            self.keyword.value,
+            self.function.value,
+            self.module.value,
+            self.constant.value,
+            self.comment.value,
+            self.foreground.value,
+            self.background.value,
+            self.surface.value,
+            self.border.value
+        );
+        let full_css = include_str!("../styles/style.css");
+        format!("{full_css}\n\n{root_css}")
     }
 }
