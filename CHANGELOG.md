@@ -1,19 +1,19 @@
 ## V0.3.0 (Not Released)
 #### New Features:
-- [ ] added -a --hidden flag for showing hidden files, along with making hidden files off by default.
+- [x] added -a --hidden flag for showing hidden files, along with making hidden files off by default.
 - [x] --pretty -p flag removed in favor of auto detecting if stdout is tty
 - [x] the pretty print of markdown is significantly improved
 - [x] now attempts to send text to a pager when the output is bigger then the screen and stdout is tty
 - [x] added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
-- [ ] added a -c --copy flag to send files / images in a special way that can be copied and pasted by clipboard
 - [x] added --generate flag for generating shell completions for zsh/bash/fish/powershell
 - [ ] adding tmux support
 - [ ] added interactive mode to zoom / pan images for more detail
 #### Fixes:
 - [ ] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
-- [ ] fixed an issue in the ls command that would make the first item in a row up by 1 cell
+- [x] fixed an issue in the ls command that would make the first item in a row up by 1 cell
 - [ ] fixed an issue where the ls command won't work on windows-wezterm when encoding to Iterm
 - [x] improved Iterm's graphic protocol support-detection
+- [x] fixed an issue where the process will quit when detecting symlink loop instead of just continuing
 #### Changes:
 - [ ] changed the way animation in kitty work, in favor for longer animation support
 

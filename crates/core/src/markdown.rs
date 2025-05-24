@@ -757,8 +757,8 @@ impl CustomTheme {
             comment: "#5C6773".into(),
             foreground: "#FFFFFF".into(),
             guide: "#2D3640".into(),
-            background: "#15161B".into(),
-            surface: "#14161f".into(),
+            background: "#14161f".into(),
+            surface: "#20202b".into(),
             border: "#2D3640".into(),
         }
     }

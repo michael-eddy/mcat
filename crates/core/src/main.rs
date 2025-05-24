@@ -80,6 +80,13 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("hidden")
+                .long("hidden")
+                .short('a')
+                .help("include hidden files")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("kitty")
                 .long("kitty")
                 .help("makes the inline image encoded to kitty")
@@ -220,12 +227,13 @@ fn main() {
         inline_options.scale,
     );
 
+    let hidden = opts.get_flag("hidden");
     // if ls
     if is_ls {
         let inline_encoder = &rasteroid::InlineEncoder::auto_detect(kitty, iterm, sixel, ascii);
         let d = ".".to_string();
         let input = input.get(1).unwrap_or(&d);
-        converter::lsix(input, &mut out, inline_encoder).unwrap_or_exit();
+        converter::lsix(input, &mut out, inline_encoder, hidden).unwrap_or_exit();
         std::process::exit(0);
     }
 
@@ -301,7 +309,7 @@ fn main() {
             }
             if path.is_dir() {
                 path_bufs.clear();
-                let mut selected_files = prompter::prompt_for_files(path).unwrap_or_exit();
+                let mut selected_files = prompter::prompt_for_files(path, hidden).unwrap_or_exit();
                 selected_files.sort();
                 path_bufs.extend_from_slice(&selected_files);
                 break;

@@ -3,8 +3,11 @@ use inquire::MultiSelect;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-pub fn prompt_for_files(dir: &Path) -> Result<Vec<(PathBuf, Option<String>)>, String> {
-    let mut all_paths = collect_gitignored_paths(dir)?;
+pub fn prompt_for_files(
+    dir: &Path,
+    hidden: bool,
+) -> Result<Vec<(PathBuf, Option<String>)>, String> {
+    let mut all_paths = collect_gitignored_paths(dir, hidden)?;
     all_paths.sort(); // Ensures folders come before contents
 
     let tree_view = format_file_list(&all_paths, dir);
@@ -51,9 +54,10 @@ pub fn prompt_for_files(dir: &Path) -> Result<Vec<(PathBuf, Option<String>)>, St
     Ok(final_files.into_iter().collect())
 }
 
-fn collect_gitignored_paths(dir: &Path) -> Result<Vec<PathBuf>, String> {
+fn collect_gitignored_paths(dir: &Path, hidden: bool) -> Result<Vec<PathBuf>, String> {
     let walker = WalkBuilder::new(dir)
-        .standard_filters(true)
+        .standard_filters(!hidden)
+        .hidden(!hidden)
         .follow_links(true)
         .max_depth(None)
         .build();
@@ -68,7 +72,7 @@ fn collect_gitignored_paths(dir: &Path) -> Result<Vec<PathBuf>, String> {
                     paths.push(path);
                 }
             }
-            Err(err) => return Err(format!("Error walking directory: {}", err)),
+            Err(_) => continue,
         }
     }
 
