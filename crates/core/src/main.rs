@@ -44,6 +44,7 @@ fn build_cli(stdin_streamed: bool) -> Command {
             "fetch-ffmpeg",
             "report",
             "generate-completions",
+            "delete-all-images",
         ]);
     }
     Command::new("mcat")
@@ -77,6 +78,12 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .long("style-html")
                 .short('s')
                 .help("add style to html too (when html is the output)")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("delete-all-images")
+                .long("delete-images")
+                .help("deletes all the images, even ones that are not in the scrollview.. currently only works in kitty, and will be extended..")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -176,6 +183,10 @@ fn main() {
             "powershell" => print_completions(Shell::PowerShell, &mut cmd),
             _ => unreachable!(),
         }
+        return;
+    }
+    if opts.get_flag("delete-all-images") {
+        println!("\x1b_Ga=d,d=r,x=1,y=2147483647\x1b\\");
         return;
     }
 

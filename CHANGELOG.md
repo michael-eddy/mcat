@@ -6,16 +6,16 @@
 - [x] now attempts to send text to a pager when the output is bigger then the screen and stdout is tty
 - [x] added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
 - [x] added --generate flag for generating shell completions for zsh/bash/fish/powershell
+- [x] kitty animation frames are stored in shm objects (writes the animation way faster, and less cpu power)
 - [ ] adding tmux support
 - [ ] added interactive mode to zoom / pan images for more detail
+- [-] added methods to clean after images/videos
 #### Fixes:
 - [ ] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
 - [x] fixed an issue in the ls command that would make the first item in a row up by 1 cell
 - [ ] fixed an issue where the ls command won't work on windows-wezterm when encoding to Iterm
 - [x] improved Iterm's graphic protocol support-detection
 - [x] fixed an issue where the process will quit when detecting symlink loop instead of just continuing
-#### Changes:
-- [ ] changed the way animation in kitty work, in favor for longer animation support
 
 ## V0.2.8
 - adding an ls command

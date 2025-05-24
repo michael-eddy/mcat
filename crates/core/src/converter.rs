@@ -494,7 +494,9 @@ pub fn inline_a_video(
                 timestamp: f.timestamp,
             });
             let id = rand::random::<u32>();
-            rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, id, center)?;
+            unsafe {
+                rasteroid::kitty_encoder::encode_frames_fast(&mut kitty_frames, out, id, center)?
+            };
             Ok(())
         }
         rasteroid::InlineEncoder::Iterm => {

@@ -141,10 +141,81 @@ fn process_frame(
     data: &[u8],
     out: &mut impl Write,
     first_opts: HashMap<String, String>,
+    sub_opts: Option<HashMap<String, String>>,
+    use_shm: bool,
     shm_name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    transmit_shm(data, out, first_opts, shm_name)?;
+    if use_shm {
+        transmit_shm(data, out, first_opts, shm_name)?;
+    } else {
+        let base64 = general_purpose::STANDARD.encode(data);
+        chunk_base64(&base64, out, 4096, first_opts, sub_opts.unwrap_or_default())?;
+    }
     Ok(())
+}
+
+/// encode a video into inline video.
+/// recommended to use in conjunction with video parsing library
+/// this function differs from encode_frames function by using shared memory objects; and in turns
+/// becomes faster, and requires less cpu power, but leaks memory (shm objects will only be cleaned
+/// when someone reads the shm objects e.g kitty)
+/// # example:
+/// first make sure you can supply a iter of Frames (using ffmpeg-sidecar here)
+/// ```rust,no_run
+/// use ffmpeg_sidecar::command::FfmpegCommand;
+/// use rasteroid::Frame;
+/// use ffmpeg_sidecar::event::OutputVideoFrame;
+/// use rasteroid::kitty_encoder::encode_frames;
+/// use rasteroid::kitty_encoder::is_kitty_capable;
+/// use rasteroid::image_extended::calc_fit;
+/// use ffmpeg_sidecar::event::FfmpegEvent;
+///
+/// pub struct KittyFrames(pub OutputVideoFrame);
+/// impl Frame for KittyFrames {
+///     fn width(&self) -> u16 {
+///         self.0.width as u16
+///     }
+///     fn height(&self) -> u16 {
+///         self.0.height as u16
+///     }
+///     fn timestamp(&self) -> f32 {
+///         self.0.timestamp
+///     }
+///     // must be rgb8!
+///     fn data(&self) -> &[u8] {
+///         &self.0.data
+///     }
+/// }
+/// // next get the frames (taken from ffmpeg-sidecar)
+///
+/// let mut out = std::io::stdout();
+/// let iter = match FfmpegCommand::new() // <- Builder API like `std::process::Command`
+///   .testsrc()  // <- Discoverable aliases for FFmpeg args
+///   .rawvideo() // <- Convenient argument presets
+///   .spawn()    // <- Ordinary `std::process::Child`
+///    {
+///        Ok(res) => res,
+///        Err(e) => return,
+/// }.iter().unwrap();   // <- Blocking iterator over logs and output
+/// // now convert to compatible frames
+/// let mut kitty_frames = iter
+///         .filter_map(|event| {
+///             if let FfmpegEvent::OutputFrame(frame) = event {
+///                 Some(KittyFrames(frame))
+///             } else {
+///                 None
+///             }
+///         });
+/// let id = rand::random::<u32>();
+/// encode_frames_fast(&mut kitty_frames, &mut out, id, true);
+/// ```
+pub unsafe fn encode_frames_fast(
+    frames: &mut dyn Iterator<Item = impl Frame>,
+    out: &mut impl Write,
+    id: u32,
+    center: bool,
+) -> Result<(), Box<dyn Error>> {
+    encode_frames_sep(frames, out, id, center, true)
 }
 
 /// encode a video into inline video.
@@ -205,6 +276,16 @@ pub fn encode_frames(
     id: u32,
     center: bool,
 ) -> Result<(), Box<dyn Error>> {
+    encode_frames_sep(frames, out, id, center, false)
+}
+
+fn encode_frames_sep(
+    frames: &mut dyn Iterator<Item = impl Frame>,
+    out: &mut impl Write,
+    id: u32,
+    center: bool,
+    use_shm: bool,
+) -> Result<(), Box<dyn Error>> {
     // getting the first frame
     let first = frames.next().ok_or("video doesn't contain any frames")?;
     let offset = term_misc::center_image(first.width() as u16, false);
@@ -230,6 +311,8 @@ pub fn encode_frames(
             ("s".to_string(), s),
             ("v".to_string(), v),
         ]),
+        None,
+        use_shm,
         &format!("{shm_name}thumb"),
     )?;
 
@@ -259,8 +342,18 @@ pub fn encode_frames(
             ("v".to_string(), v),
             ("z".to_string(), z.to_string()),
         ]);
+        let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
 
-        if process_frame(&frame.data(), out, first_opts, &format!("{shm_name}{c}")).is_err() {
+        if process_frame(
+            &frame.data(),
+            out,
+            first_opts,
+            Some(sub_opts),
+            use_shm,
+            &format!("{shm_name}{c}"),
+        )
+        .is_err()
+        {
             break;
         }
     }
