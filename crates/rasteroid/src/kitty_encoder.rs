@@ -1,12 +1,43 @@
 use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
 
 use base64::{Engine, engine::general_purpose};
-use flate2::{Compression, write::ZlibEncoder};
+use shared_memory::ShmemConf;
 
 use crate::{
     Frame,
     term_misc::{self, EnvIdentifiers, image_to_base64, loc_to_terminal, offset_to_terminal},
 };
+
+fn transmit_shm(
+    data: &[u8],
+    mut out: impl Write,
+    opts: HashMap<String, String>,
+    shm_name: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mut opts_string = Vec::with_capacity(opts.len() * 8);
+    for (key, value) in opts {
+        if !opts_string.is_empty() {
+            opts_string.push(b',');
+        }
+        write!(opts_string, "{}={}", key, value)?;
+    }
+    let s = data.len();
+    write!(opts_string, ",q=2,t=s,S={s}")?;
+
+    let mut shmem = ShmemConf::new().size(s).os_id(shm_name).create()?;
+    let shmem_slice = unsafe { shmem.as_slice_mut() };
+    shmem_slice[..data.len()].copy_from_slice(&data);
+    let shm_name = general_purpose::STANDARD.encode(shm_name);
+
+    out.write_all(b"\x1b_G")?;
+    out.write_all(&opts_string)?;
+    write!(out, ";{}", shm_name)?;
+    out.write_all(b"\x1b\\")?;
+
+    // will clean the shm if not leaked..
+    std::mem::forget(shmem);
+    Ok(())
+}
 
 fn chunk_base64(
     base64: &str,
@@ -55,7 +86,7 @@ fn chunk_base64(
 
         out.write_all(b"\x1b_G")?;
         out.write_all(opts)?;
-        write!(out, "m={};{}", more_chunks, chunk_data)?;
+        write!(out, "q=2,m={};{}", more_chunks, chunk_data)?;
         out.write_all(b"\x1b\\")?;
 
         start = end;
@@ -92,20 +123,16 @@ pub fn encode_image(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let center_string = offset_to_terminal(offset);
     let print_at_string = loc_to_terminal(print_at);
-    let base64 = image_to_base64(img);
+    let opts = HashMap::from([
+        ("f".to_string(), "100".to_string()),
+        ("a".to_string(), "T".to_string()),
+    ]);
 
     out.write_all(print_at_string.as_ref())?;
     out.write_all(center_string.as_ref())?;
-    chunk_base64(
-        &base64,
-        out,
-        4096,
-        HashMap::from([
-            ("f".to_string(), "100".to_string()),
-            ("a".to_string(), "T".to_string()),
-        ]),
-        HashMap::new(),
-    )?;
+
+    let base64 = image_to_base64(img);
+    chunk_base64(&base64, out, 4096, opts, HashMap::new())?;
 
     Ok(())
 }
@@ -114,15 +141,9 @@ fn process_frame(
     data: &[u8],
     out: &mut impl Write,
     first_opts: HashMap<String, String>,
-    sub_opts: HashMap<String, String>,
+    shm_name: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
-    encoder.write_all(data)?;
-    let compressed = encoder.finish()?;
-
-    let base64 = general_purpose::STANDARD.encode(compressed);
-    chunk_base64(&base64, out, 4096, first_opts, sub_opts)?;
-
+    transmit_shm(data, out, first_opts, shm_name)?;
     Ok(())
 }
 
@@ -192,27 +213,24 @@ pub fn encode_frames(
         out.write_all(center.as_bytes())?;
     }
     let mut pre_timestamp = 0.0;
+    let shm_name = format!("mcat-video-{id}-");
 
     // adding the root image
     let i = id.to_string();
     let s = first.width().to_string();
     let v = first.height().to_string();
     let f = "24".to_string();
-    let o = "z".to_string();
-    let q = "2".to_string();
     process_frame(
         &first.data(),
         out,
         HashMap::from([
             ("a".to_string(), "T".to_string()),
             ("f".to_string(), f),
-            ("o".to_string(), o),
             ("I".to_string(), i),
             ("s".to_string(), s),
             ("v".to_string(), v),
-            ("q".to_string(), q),
         ]),
-        HashMap::new(),
+        &format!("{shm_name}thumb"),
     )?;
 
     // starting the animation
@@ -229,23 +247,22 @@ pub fn encode_frames(
         let v = frame.height().to_string();
         let i = id.to_string();
         let f = "24".to_string();
-        let o = "z".to_string();
         let z = ((frame.timestamp() - pre_timestamp) * 1000.0) as u32;
         pre_timestamp = frame.timestamp();
 
         let first_opts = HashMap::from([
             ("a".to_string(), "f".to_string()),
             ("f".to_string(), f),
-            ("o".to_string(), o),
             ("I".to_string(), i),
             ("c".to_string(), c.to_string()),
             ("s".to_string(), s),
             ("v".to_string(), v),
             ("z".to_string(), z.to_string()),
         ]);
-        let sub_opts = HashMap::from([("a".to_string(), "f".to_string())]);
 
-        process_frame(&frame.data(), out, first_opts, sub_opts)?;
+        if process_frame(&frame.data(), out, first_opts, &format!("{shm_name}{c}")).is_err() {
+            break;
+        }
     }
 
     write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;

@@ -14,13 +14,13 @@ edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
+shared_memory = "0.12.4"
 image = "0.25.6"
 lazy_static = "1.5.0"
 windows = { version = "0.60.0", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 color_quant = "1.1.0"
 base64 = "0.22.1"
 fast_image_resize = { version = "5.1.2", features = ["image"] }
-flate2 = "1.1.0"
 signal-hook = "0.3.17"
 
 [dev-dependencies]
