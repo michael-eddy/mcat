@@ -1,14 +1,19 @@
 use std::{
+    env,
     fs::{self, File},
-    io::Write,
+    io::{Write, stdout},
     path::Path,
 };
 
+use crossterm::tty::IsTty;
 use image::{DynamicImage, ImageFormat};
-use rasteroid::image_extended::InlineImage;
-use termimad::{FmtText, MadSkin, StyledChar, crossterm::style::Color, rgb};
+use pager::Pager;
+use rasteroid::{image_extended::InlineImage, term_misc};
 
-use crate::converter::{self};
+use crate::{
+    converter::{self},
+    markdown,
+};
 
 pub enum CatType {
     Markdown,
@@ -153,27 +158,23 @@ pub fn cat(
 
     // converting
     match (from, to) {
+        ("md", "md") => {
+            out.write_all(string_result.unwrap().as_bytes())?;
+            Ok(CatType::Markdown)
+        }
         ("md", "html") => {
-            let html = converter::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
+            let html = markdown::md_to_html(&string_result.unwrap(), if opts.style_html {opts.style} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
         },
-        ("md", "pretty") => {
-            let res = string_result.unwrap();
-            let skin = make_skin();
-
-            let fmt_text = FmtText::from(&skin, &res, None);
-            write!(out, "{}", &fmt_text)?;
-            Ok(CatType::Pretty)
-        },
         ("md", "image") => {
-            let html = converter::md_to_html(&string_result.unwrap(), opts.style);
+            let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
             Ok(CatType::Image)
         },
         ("md", "inline") => {
-            let html = converter::md_to_html(&string_result.unwrap(), opts.style);
+            let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
@@ -207,9 +208,19 @@ pub fn cat(
         },
         ("md", _) => {
             //default for md
-            out.write_all(string_result.unwrap().as_bytes())?;
-            Ok(CatType::Markdown)
-        }
+            let res = string_result.unwrap();
+            if stdout().is_tty() {
+                let ansi = markdown::md_to_ansi(&res, opts.style);
+                if ansi.lines().count() > term_misc::get_winsize().sc_height as usize {
+                    setup_pager();
+                }
+                out.write_all(ansi.as_bytes())?;
+                Ok(CatType::Pretty)
+            } else {
+                out.write_all(res.as_bytes())?;
+                return Ok(CatType::Markdown)
+            }
+        },
         ("html", _) => {
             // default for html
             out.write_all(string_result.unwrap().as_bytes())?;
@@ -239,28 +250,15 @@ pub fn is_video(ext: &str) -> bool {
     )
 }
 
-fn make_skin() -> MadSkin {
-    let mut skin = MadSkin::default();
-    skin.set_headers_bg(rgb(40, 40, 30));
-    skin.set_headers_fg(Color::Yellow);
+fn setup_pager() {
+    let pager = if which::which("moar").is_ok() {
+        "moar --no-linenumbers"
+    } else {
+        "less -r"
+    };
 
-    skin.italic.set_fg(Color::Magenta);
-
-    skin.bold.set_fg(Color::Yellow);
-
-    skin.table.set_fg(Color::Cyan);
-
-    skin.strikeout.set_fg(Color::Red);
-
-    skin.bullet = StyledChar::from_fg_char(Color::Yellow, '•');
-
-    skin.quote_mark.set_fg(Color::Yellow);
-
-    skin.code_block.set_fg(rgb(176, 179, 239));
-    skin.code_block.set_bg(rgb(30, 31, 40));
-
-    skin.inline_code.set_fg(Color::Green);
-    skin.inline_code.set_bg(rgb(30, 40, 31));
-
-    skin
+    unsafe {
+        env::set_var("PAGER", pager);
+    }
+    Pager::new().setup();
 }

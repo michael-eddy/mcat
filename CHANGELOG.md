@@ -1,14 +1,21 @@
 ## V0.3.0 (Not Released)
 #### New Features:
 - [ ] added -a --hidden flag for showing hidden files, along with making hidden files off by default.
-- [ ] the pretty print now supports syntax highlighting, along with auto detecting if the pipe is the terminal so it can be on by default.
-- [ ] added a pager for the pretty print
+- [x] --pretty -p flag removed in favor of auto detecting if stdout is tty
+- [x] the pretty print of markdown is significantly improved
+- [x] now attempts to send text to a pager when the output is bigger then the screen and stdout is tty
+- [x] added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
+- [ ] added a -c --copy flag to send files / images in a special way that can be copied and pasted by clipboard
 - [ ] added shell auto completion for standard shells
+- [ ] adding tmux support
 - [ ] added interactive mode to zoom / pan images for more detail
 #### Fixes:
 - [ ] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
 - [ ] fixed an issue in the ls command that would make the first item in a row up by 1 cell
-- [ ] fixed an issue where  the ls command won't work on windows-wezterm when encoding to Iterm
+- [ ] fixed an issue where the ls command won't work on windows-wezterm when encoding to Iterm
+- [x] improved Iterm's graphic protocol support-detection
+#### Changes:
+- [ ] changed the way animation in kitty work, in favor for longer animation support
 
 ## V0.2.8
 - adding an ls command
