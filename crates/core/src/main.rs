@@ -18,25 +18,35 @@ use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
 };
+use clap_complete::{Generator, Shell, generate};
 use crossterm::tty::IsTty;
 use dirs::home_dir;
 use rasteroid::term_misc;
 
-fn main() {
-    let stdin_steamed = !std::io::stdin().is_tty();
+fn print_completions<G: Generator>(gene: G, cmd: &mut Command) {
+    generate(
+        gene,
+        cmd,
+        cmd.get_name().to_string(),
+        &mut std::io::stdout(),
+    );
+}
+
+fn build_cli(stdin_streamed: bool) -> Command {
     let mut input_arg = Arg::new("input")
         .index(1)
         .num_args(1..)
         .help("file / dir / url");
-    if !stdin_steamed {
+    if !stdin_streamed {
         input_arg = input_arg.required_unless_present_any([
             "fetch-clean",
             "fetch-chromium",
             "fetch-ffmpeg",
             "report",
+            "generate-completions",
         ]);
     }
-    let opts = Command::new("mcat")
+    Command::new("mcat")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
@@ -138,7 +148,29 @@ fn main() {
                 .long("fetch-clean")
                 .help("Clean up the local binaries")
                 .action(clap::ArgAction::SetTrue))
-        .get_matches();
+        .arg(
+            Arg::new("generate-completions")
+                .long("generate")
+                .help("Generate shell completions")
+                .value_parser(["bash", "zsh", "fish", "powershell"])
+        )
+}
+
+fn main() {
+    let stdin_streamed = !std::io::stdin().is_tty();
+    let opts = build_cli(stdin_streamed).get_matches();
+
+    if let Some(shell) = opts.get_one::<String>("generate-completions") {
+        let mut cmd = build_cli(stdin_streamed);
+        match shell.as_str() {
+            "bash" => print_completions(Shell::Bash, &mut cmd),
+            "zsh" => print_completions(Shell::Zsh, &mut cmd),
+            "fish" => print_completions(Shell::Fish, &mut cmd),
+            "powershell" => print_completions(Shell::PowerShell, &mut cmd),
+            _ => unreachable!(),
+        }
+        return;
+    }
 
     let stdout = std::io::stdout();
     let mut out = BufWriter::new(stdout);
@@ -237,7 +269,7 @@ fn main() {
     let mut tmp_files = Vec::new(); //for lifetime
     let mut path_bufs = Vec::new();
     // if stdin is streamed into
-    if stdin_steamed {
+    if stdin_streamed {
         let mut buffer = Vec::new();
         std::io::stdin().read_to_end(&mut buffer).unwrap_or_exit();
 

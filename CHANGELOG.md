@@ -6,7 +6,7 @@
 - [x] now attempts to send text to a pager when the output is bigger then the screen and stdout is tty
 - [x] added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
 - [ ] added a -c --copy flag to send files / images in a special way that can be copied and pasted by clipboard
-- [ ] added shell auto completion for standard shells
+- [x] added --generate flag for generating shell completions for zsh/bash/fish/powershell
 - [ ] adding tmux support
 - [ ] added interactive mode to zoom / pan images for more detail
 #### Fixes:
