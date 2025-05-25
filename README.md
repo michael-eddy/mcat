@@ -59,11 +59,8 @@ or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/l
 
 ## 🏋️ Example Usage
 ```sh
-# View a document as Markdown
+# View a document at the terminal
 mcat resume.pdf
-
-# View a document as pretty text in the terminal
-mcat resume.pdf -p
 
 # Or from a url!
 mcat "https://somewebite.com/file.pdf"
@@ -74,17 +71,17 @@ mcat project.docx -o html
 # ls, you can list a dir
 mcat ls
 
-# or a specific dir
-mcat ls ~/Download
-
 # Show a document inline as an image
 mcat readme.md -i
 
-# Show a document as an image inline with a dark theme
-mcat presentation.pptx -id
+# Or HTML!
+mcat index.html -i
 
-# Show a document as an image in the terminal with your own css
-mcat document.pdf -it "path/to/your/file.css"
+# Just save?
+mcat index.html -o image > page.png
+
+# Show a document as an image inline with a different theme
+mcat main.rs another.rs -it monokai
 
 # Render a document to an image and save it
 mcat readme.md -o image > img.png
@@ -146,16 +143,16 @@ Arguments:
   [input]...  file / dir / url
 
 Options:
-  -o <output>                            the format to output [possible values: html, md, pretty, image, video, inline]
-  -t <theme>                             alternative css file for images, valid options: [light, dark, <local file>] [default: light]
-  -s                                     add style to html too (when html is the output)
+  -o, --output <output>                  the format to output [possible values: html, md, image, video, inline]
+  -t, --theme <theme>                    the theme to use [default: dark] [possible values: dark, light, catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night]
+  -s, --style-html                       add style to html too (when html is the output)
+      --delete-images                    deletes all the images, even ones that are not in the scrollview.. currently only works in kitty, and will be extended..
+  -a, --hidden                           include hidden files
       --kitty                            makes the inline image encoded to kitty
       --iterm                            makes the inline image encoded to iterm
       --sixel                            makes the inline image encoded to sixel
       --ascii                            makes the inline image encoded to ascii
   -i                                     shortcut for putting --output inline
-  -p                                     shortcut for putting --output pretty
-  -d                                     shortcut for putting --theme dark
       --hori                             concat images horizontal instead of vertical
       --inline-options <inline-options>  options for the --output inline
                                          *  center=<bool>
@@ -173,6 +170,7 @@ Options:
       --fetch-chromium                   download and prepare chromium
       --fetch-ffmpeg                     download and prepare ffmpeg
       --fetch-clean                      Clean up the local binaries
+      --generate <generate-completions>  Generate shell completions [possible values: bash, zsh, fish, powershell]
   -h, --help                             Print help
   -V, --version                          Print version
 ```
