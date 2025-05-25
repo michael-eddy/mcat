@@ -1,4 +1,6 @@
-use std::{cmp::min, collections::HashMap, error::Error, io::Write, sync::atomic::Ordering};
+use std::{
+    cmp::min, collections::HashMap, error::Error, fs::write, io::Write, sync::atomic::Ordering,
+};
 
 use base64::{Engine, engine::general_purpose};
 use shared_memory::ShmemConf;
@@ -360,6 +362,13 @@ fn encode_frames_sep(
 
     write!(out, "\x1b_Ga=a,s=3,v=1,r=1,I={},z={}\x1b\\", id, z)?;
     Ok(())
+}
+
+pub fn delete_all_images(out: &mut impl Write) -> Result<(), std::io::Error> {
+    out.write_all(b"\x1b_Ga=d,d=r,x=0,y=2147483647\x1b\\")
+}
+pub fn delete_single_image(id: u32, out: &mut impl Write) -> Result<(), std::io::Error> {
+    write!(out, "\x1b_Gd,d=i,i={id},p={id}")
 }
 
 /// checks if the current terminal supports Kitty's graphic protocol
