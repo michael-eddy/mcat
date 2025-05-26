@@ -226,22 +226,32 @@ fn main() {
         sixel,
         ascii,
     };
+    let env = term_misc::EnvIdentifiers::new();
+    let inline_encoder = &rasteroid::InlineEncoder::auto_detect(
+        encoder.kitty,
+        encoder.iterm,
+        encoder.sixel,
+        encoder.ascii,
+        &env,
+    );
+    let is_tmux = rasteroid::is_tmux(&env);
 
     let is_ls = input.get(0).unwrap_or(&"".to_owned()).to_lowercase() == "ls";
 
     // setting the winsize
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default(), !is_ls);
-    let _ = term_misc::init_winsize(
+    let _ = term_misc::init_wininfo(
         &term_misc::break_size_string(inline_options.spx.unwrap_or_default()).unwrap_or_exit(),
         &term_misc::break_size_string(inline_options.sc.unwrap_or_default()).unwrap_or_exit(),
         inline_options.scale,
+        is_tmux,
+        false,
     );
 
     let hidden = opts.get_flag("hidden");
     // if ls
     if is_ls {
-        let inline_encoder = &rasteroid::InlineEncoder::auto_detect(kitty, iterm, sixel, ascii);
         let d = ".".to_string();
         let input = input.get(1).unwrap_or(&d);
         converter::lsix(input, &mut out, inline_encoder, hidden).unwrap_or_exit();
@@ -278,7 +288,7 @@ fn main() {
         zoom: inline_options.zoom,
         x: inline_options.x,
         y: inline_options.y,
-        encoder: Some(encoder),
+        encoder: inline_encoder,
         style: Some(style),
         style_html,
         report,
@@ -338,6 +348,9 @@ fn main() {
             catter::cat(tmp.path(), &mut out, Some(opts)).unwrap_or_exit();
         }
         "video" => {
+            if is_tmux {
+                rasteroid::set_tmux_passthrough(true).unwrap_or_exit();
+            }
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
             } else {
@@ -347,6 +360,9 @@ fn main() {
             }
         }
         "image" => {
+            if is_tmux {
+                rasteroid::set_tmux_passthrough(true).unwrap_or_exit();
+            }
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
             } else {
@@ -460,7 +476,9 @@ fn report_and_leave() {
     let iterm = rasteroid::iterm_encoder::is_iterm_capable(&env);
     let sixel = rasteroid::sixel_encoder::is_sixel_capable(&env);
     let ascii = true; //not sure what doesn't support it
-    let winsize = term_misc::get_winsize();
+    let winsize = term_misc::get_wininfo();
+    let tmux = winsize.is_tmux;
+    let inline = winsize.needs_inline;
 
     // Print header with fancy box
     println!("┌────────────────────────────────────────────────────┐");
@@ -490,6 +508,13 @@ fn report_and_leave() {
             red("× UNSUPPORTED")
         }
     }
+    fn format_info(status: bool) -> String {
+        if status {
+            green("✓ YES")
+        } else {
+            red("× NO")
+        }
+    }
 
     // Print required dependencies
     println!("│ Dependencies:                                      │");
@@ -509,11 +534,13 @@ fn report_and_leave() {
 
     // Print terminal dimensions
     println!("├────────────────────────────────────────────────────┤");
-    println!("│ Terminal Dimensions:                               │");
+    println!("│ Terminal Info:                                     │");
     println!("│   Width:        {:<34} │", winsize.sc_width);
     println!("│   Height:       {:<34} │", winsize.sc_height);
     println!("│   Pixel Width:  {:<34} │", winsize.spx_width);
     println!("│   Pixel Height: {:<34} │", winsize.spx_height);
+    println!("│   Tmux:         {:<43} │", format_info(tmux));
+    println!("│   Inline:       {:<43} │", format_info(inline));
 
     // Print footer
     println!("└────────────────────────────────────────────────────┘");

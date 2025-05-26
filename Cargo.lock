@@ -2024,12 +2024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazy_static"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
 name = "lebe"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2260,10 +2254,8 @@ dependencies = [
  "indicatif",
  "inquire",
  "itertools 0.14.0",
- "lazy_static",
  "markdownify",
  "pager",
- "rand 0.9.1",
  "rasteroid",
  "rayon",
  "regex",
@@ -2986,7 +2978,6 @@ dependencies = [
  "fast_image_resize",
  "ffmpeg-sidecar",
  "image",
- "lazy_static",
  "rand 0.9.1",
  "shared_memory",
  "signal-hook",

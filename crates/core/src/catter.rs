@@ -8,7 +8,7 @@ use std::{
 use crossterm::tty::IsTty;
 use image::{DynamicImage, ImageFormat};
 use pager::Pager;
-use rasteroid::{image_extended::InlineImage, term_misc};
+use rasteroid::{InlineEncoder, image_extended::InlineImage, term_misc};
 
 use crate::{
     converter::{self},
@@ -36,7 +36,7 @@ pub struct EncoderForce {
 #[derive(Clone, Copy)]
 pub struct CatOpts<'a> {
     pub to: Option<&'a str>,
-    pub encoder: Option<EncoderForce>,
+    pub encoder: &'a InlineEncoder,
     pub style: Option<&'a str>,
     pub width: Option<&'a str>,
     pub height: Option<&'a str>,
@@ -52,7 +52,7 @@ impl CatOpts<'_> {
     pub fn default() -> Self {
         CatOpts {
             to: None,
-            encoder: None,
+            encoder: &InlineEncoder::Ascii,
             width: Some("80%"),
             height: Some("80%"),
             zoom: None,
@@ -80,19 +80,7 @@ pub fn cat(
         Some(o) => o,
         None => CatOpts::default(),
     };
-    let encoder = opts.encoder.unwrap_or(EncoderForce {
-        kitty: false,
-        iterm: false,
-        sixel: false,
-        ascii: false,
-    });
-    let inline_encoder = &rasteroid::InlineEncoder::auto_detect(
-        encoder.kitty,
-        encoder.iterm,
-        encoder.sixel,
-        encoder.ascii,
-    );
-    let resize_for_ascii = match inline_encoder {
+    let resize_for_ascii = match opts.encoder {
         rasteroid::InlineEncoder::Ascii => true,
         _ => false,
     };
@@ -116,7 +104,7 @@ pub fn cat(
         converter::inline_a_video(
             path.to_string_lossy(),
             out,
-            inline_encoder,
+            opts.encoder,
             opts.width,
             opts.height,
             opts.center,
@@ -182,7 +170,7 @@ pub fn cat(
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }
-            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder)?;
             Ok(CatType::InlineImage)
         },
         ("html", "image") => {
@@ -198,7 +186,7 @@ pub fn cat(
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }
-            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder)?;
             Ok(CatType::InlineImage)
         },
         ("image", "image") => {
@@ -211,7 +199,7 @@ pub fn cat(
             let res = string_result.unwrap();
             if stdout().is_tty() {
                 let ansi = markdown::md_to_ansi(&res, opts.style);
-                if ansi.lines().count() > term_misc::get_winsize().sc_height as usize {
+                if ansi.lines().count() > term_misc::get_wininfo().sc_height as usize {
                     setup_pager();
                 }
                 out.write_all(ansi.as_bytes())?;
@@ -233,7 +221,7 @@ pub fn cat(
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }
-            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, inline_encoder)?;
+            rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder)?;
             Ok(CatType::InlineImage)
         },
         _ => Err(format!(

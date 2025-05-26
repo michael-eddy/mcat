@@ -1,4 +1,4 @@
-use crate::term_misc::{EnvIdentifiers, loc_to_terminal, offset_to_terminal};
+use crate::term_misc::{self, EnvIdentifiers, loc_to_terminal, offset_to_terminal};
 use color_quant::NeuQuant;
 use image::{ImageBuffer, Rgb};
 use std::{
@@ -80,8 +80,12 @@ fn write_sixel<W: Write>(out: &mut W, img: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> io
     let width = img.width() as usize;
     let height = img.height() as usize;
 
+    let tmux = term_misc::get_wininfo().is_tmux;
+    let prefix = if tmux { "\x1bPtmux;\x1b\x1b" } else { "\x1b" };
+    let suffix = if tmux { "\x1b\x1b\\\x1b\\" } else { "\x07" };
+
     // DECSIXEL introducer and raster attributes
-    write!(out, "\x1bP0;1q\"1;1;{};{}", width, height)?;
+    write!(out, "{prefix}P0;1q\"1;1;{};{}", width, height)?;
 
     // median quant works the best through testing
     let pixels: Vec<u8> = img.pixels().flat_map(|p| p.0[..3].to_vec()).collect();
@@ -171,8 +175,7 @@ fn write_sixel<W: Write>(out: &mut W, img: &ImageBuffer<Rgb<u8>, Vec<u8>>) -> io
         }
     }
 
-    // SIXEL terminator
-    write!(out, "\x1b\\")?;
+    out.write_all(suffix.as_bytes())?;
 
     Ok(())
 }

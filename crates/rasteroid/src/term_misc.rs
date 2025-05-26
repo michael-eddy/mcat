@@ -9,11 +9,13 @@ use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
 
-pub struct Winsize {
+pub struct Wininfo {
     pub sc_width: u16,
     pub sc_height: u16,
     pub spx_width: u16,
     pub spx_height: u16,
+    pub is_tmux: bool,
+    pub needs_inline: bool,
 }
 
 /// converts image bytse into base64
@@ -37,9 +39,7 @@ pub fn loc_to_terminal(at: Option<(u16, u16)>) -> String {
     }
 }
 
-lazy_static! {
-    static ref WINSIZE: OnceLock<Winsize> = OnceLock::new();
-}
+static WINSIZE: OnceLock<Wininfo> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct Size {
@@ -48,8 +48,14 @@ pub struct Size {
     pub force: bool,
 }
 
-impl Winsize {
-    fn new(spx_fallback: &Size, sc_fallback: &Size, scale: Option<f32>) -> Self {
+impl Wininfo {
+    fn new(
+        spx_fallback: &Size,
+        sc_fallback: &Size,
+        scale: Option<f32>,
+        is_tmux: bool,
+        needs_inline: bool,
+    ) -> Self {
         let mut spx_width = 0;
         let mut spx_height = 0;
         if let Ok(res) = window_size() {
@@ -78,11 +84,13 @@ impl Winsize {
 
         let scale = scale.unwrap_or(1.0);
 
-        Winsize {
+        Wininfo {
             sc_height,
             sc_width: (sc_width as f32 * scale) as u16,
             spx_height,
             spx_width: (spx_width as f32 * scale) as u16,
+            is_tmux,
+            needs_inline,
         }
     }
 }
@@ -106,9 +114,15 @@ impl Winsize {
 /// };
 /// init_winsize(&spx, &sc, None).unwrap(); // going to error if you called it before already.
 /// ```
-pub fn init_winsize(spx: &Size, sc: &Size, scale: Option<f32>) -> Result<(), &'static str> {
+pub fn init_wininfo(
+    spx: &Size,
+    sc: &Size,
+    scale: Option<f32>,
+    is_tmux: bool,
+    needs_inline: bool,
+) -> Result<(), &'static str> {
     WINSIZE
-        .set(Winsize::new(spx, sc, scale))
+        .set(Wininfo::new(spx, sc, scale, is_tmux, needs_inline))
         .map_err(|_| "Winsize already initialized")?;
     Ok(())
 }
@@ -120,7 +134,7 @@ pub enum SizeDirection {
 
 /// call init_winsize before it if you need to;
 /// if not going to use 1920x1080, 100x20 fallback for when failing to query sizes
-pub fn get_winsize() -> &'static Winsize {
+pub fn get_wininfo() -> &'static Wininfo {
     WINSIZE.get_or_init(|| {
         let spx = Size {
             width: 1920,
@@ -132,14 +146,14 @@ pub fn get_winsize() -> &'static Winsize {
             height: 20,
             force: false,
         };
-        Winsize::new(&spx, &sc, None)
+        Wininfo::new(&spx, &sc, None, false, false)
     })
 }
 
 /// Returns the horizontal offset (in cells) needed to center the image in the terminal.
 /// If `is_ascii` is true, `image_width` is already in cells. Otherwise, it's in pixels.
 pub fn center_image(image_width: u16, is_ascii: bool) -> u16 {
-    let winsize = get_winsize();
+    let winsize = get_wininfo();
 
     let offset = if is_ascii {
         (winsize.sc_width as f32 - image_width as f32) / 2.0
@@ -162,7 +176,7 @@ pub fn dim_to_px(dim: &str, direction: SizeDirection) -> Result<u32, String> {
     // only call it if needed
     let not_px = dim.ends_with("c") || dim.ends_with("%");
     let (width, height) = if not_px {
-        let winsize = get_winsize();
+        let winsize = get_wininfo();
         match direction {
             SizeDirection::Width => (winsize.spx_width, winsize.sc_width),
             SizeDirection::Height => (winsize.spx_height, winsize.sc_height),
@@ -201,7 +215,7 @@ pub fn dim_to_cells(dim: &str, direction: SizeDirection) -> Result<u32, String> 
     // only call it if needed
     let needs_calc = dim.ends_with("px") || dim.ends_with("%");
     let (spx, sc) = if needs_calc {
-        let winsize = get_winsize();
+        let winsize = get_wininfo();
         match direction {
             SizeDirection::Width => (winsize.spx_width, winsize.sc_width),
             SizeDirection::Height => (winsize.spx_height, winsize.sc_height),
@@ -292,6 +306,7 @@ impl EnvIdentifiers {
             "KITTY_WINDOW_ID",
             "KONSOLE_VERSION",
             "WT_PROFILE_ID",
+            "TMUX",
         ];
         let mut result = HashMap::new();
 

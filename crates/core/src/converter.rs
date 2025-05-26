@@ -320,7 +320,7 @@ pub fn lsix(
         .follow_links(true)
         .build();
     let resize_for_ascii = matches!(inline_encoder, rasteroid::InlineEncoder::Ascii);
-    let ts = rasteroid::term_misc::get_winsize();
+    let ts = rasteroid::term_misc::get_wininfo();
     let items_per_row = calculate_items_per_row(ts.sc_width);
     let x_padding = 4;
     let y_padding = 2;
@@ -493,9 +493,8 @@ pub fn inline_a_video(
                 img: f.data,
                 timestamp: f.timestamp,
             });
-            let id = rand::random::<u32>();
             unsafe {
-                rasteroid::kitty_encoder::encode_frames_fast(&mut kitty_frames, out, id, center)?
+                rasteroid::kitty_encoder::encode_frames_fast(&mut kitty_frames, out, center)?
             };
             Ok(())
         }

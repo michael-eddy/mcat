@@ -1,4 +1,6 @@
-use std::io::Write;
+use std::{io::Write, process::Command};
+
+use term_misc::EnvIdentifiers;
 
 pub mod ascii_encoder;
 pub mod image_extended;
@@ -6,9 +8,6 @@ pub mod iterm_encoder;
 pub mod kitty_encoder;
 pub mod sixel_encoder;
 pub mod term_misc;
-
-#[macro_use]
-extern crate lazy_static;
 
 /// encode an image bytes into inline image using the given encoder
 /// # example:
@@ -31,7 +30,7 @@ extern crate lazy_static;
 /// MENTION: it should work for Iterm Gifs too.
 pub fn inline_an_image(
     img: &[u8],
-    out: impl Write,
+    out: &mut impl Write,
     offset: Option<u16>,
     print_at: Option<(u16, u16)>,
     inline_encoder: &InlineEncoder,
@@ -44,6 +43,7 @@ pub fn inline_an_image(
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum InlineEncoder {
     Kitty,
     Iterm,
@@ -58,6 +58,7 @@ impl InlineEncoder {
         force_iterm: bool,
         force_sixel: bool,
         force_ascii: bool,
+        env: &EnvIdentifiers,
     ) -> Self {
         if force_kitty {
             return Self::Kitty;
@@ -72,7 +73,6 @@ impl InlineEncoder {
             return Self::Ascii;
         }
 
-        let env = term_misc::EnvIdentifiers::new();
         if kitty_encoder::is_kitty_capable(&env) {
             return Self::Kitty;
         }
@@ -85,6 +85,26 @@ impl InlineEncoder {
 
         Self::Ascii
     }
+}
+
+/// checks if the current terminal is a tmux terminal
+/// # example:
+/// ```
+///  use rasteroid::is_tmux;
+///
+/// let env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let tmux = is_tmux(&env);
+/// println!("Tmux: {}", tmux);
+/// ```
+pub fn is_tmux(env: &EnvIdentifiers) -> bool {
+    env.term_contains("tmux") || env.has_key("TMUX")
+}
+
+pub fn set_tmux_passthrough(enabled: bool) -> Result<std::process::ExitStatus, std::io::Error> {
+    let status = if enabled { "on" } else { "off" };
+    Command::new("tmux")
+        .args(["set", "-g", "allow-passthrough", status])
+        .status()
 }
 
 pub trait Frame {
