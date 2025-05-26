@@ -7,7 +7,8 @@
 - [x] added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
 - [x] added --generate flag for generating shell completions for zsh/bash/fish/powershell
 - [x] kitty animation frames are stored in shm objects (writes the animation way faster, and less cpu power)
-- [ ] adding tmux support
+- [x] added tmux support
+- [x] added kitty inline support
 - [ ] added interactive mode to zoom / pan images for more detail
 - [-] added methods to clean after images/videos
 #### Fixes:
@@ -17,6 +18,11 @@
 - [x] improved Iterm's graphic protocol support-detection
 - [x] fixed an issue that restricted rendering html into image directly
 - [x] fixed an issue where the process will quit when detecting symlink loop instead of just continuing
+#### TODO:
+- [ ] fix the ls in kitty inside tmux
+- [ ] make better exmps in the readme
+- [ ] make a new gif for the readme...
+- [ ] make the clean methods also work in tmux..
 
 ## V0.2.8
 - adding an ls command

@@ -131,7 +131,7 @@ fn build_cli(stdin_streamed: bool) -> Command {
         .arg(
             Arg::new("inline-options")
                 .long("inline-options")
-                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  inline=<bool>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
         )
         .arg(
             Arg::new("report")
@@ -246,7 +246,7 @@ fn main() {
         &term_misc::break_size_string(inline_options.sc.unwrap_or_default()).unwrap_or_exit(),
         inline_options.scale,
         is_tmux,
-        false,
+        inline_options.inline,
     );
 
     let hidden = opts.get_flag("hidden");
@@ -386,6 +386,7 @@ struct InlineOptions<'a> {
     x: Option<i32>,
     y: Option<i32>,
     center: bool,
+    inline: bool,
 }
 
 impl<'a> InlineOptions<'a> {
@@ -400,6 +401,7 @@ impl<'a> InlineOptions<'a> {
             x: None,
             y: None,
             center: true,
+            inline: false,
         };
         let map: HashMap<_, _> = s
             .split(',')
@@ -437,6 +439,9 @@ impl<'a> InlineOptions<'a> {
         }
         if let Some(&val) = map.get("center") {
             options.center = val == "true" || val == "1";
+        }
+        if let Some(&val) = map.get("inline") {
+            options.inline = val == "true" || val == "1";
         }
 
         options

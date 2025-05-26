@@ -161,10 +161,11 @@ Options:
                                          *  scale=<f32>
                                          *  spx=<string>
                                          *  sc=<string>
+                                         *  inline=<bool>
                                          *  zoom=<usize> [only for images]
                                          *  x=<int> [only for images]
                                          *  y=<int> [only for images]
-                                         *  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
+                                         *  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
       --report                           reports image / video dimensions when drawing images. along with reporting more info when not drawing images
       --silent                           removes loading bars
       --fetch-chromium                   download and prepare chromium

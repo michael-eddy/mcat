@@ -16,6 +16,7 @@ pub mod term_misc;
 /// use rasteroid::InlineEncoder;
 /// use rasteroid::inline_an_image;
 /// use std::io::Write;
+/// use rasteroid::term_misc::EnvIdentifiers;
 ///
 /// let path = Path::new("image.png");
 /// let bytes = match std::fs::read(path) {
@@ -23,8 +24,9 @@ pub mod term_misc;
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// let encoder = InlineEncoder::auto_detect(true, false, false, false); // force kitty as fallback
-/// inline_an_image(&bytes, &stdout, None, None, &encoder).unwrap();
+/// let env = EnvIdentifiers::new();
+/// let encoder = InlineEncoder::auto_detect(true, false, false, false, &env); // force kitty as fallback
+/// inline_an_image(&bytes, &mut stdout, None, None, &encoder).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// MENTION: it should work for Iterm Gifs too.

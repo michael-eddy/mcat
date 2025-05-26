@@ -129,7 +129,7 @@ fn chunk_base64(
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// encode_image(&bytes, &stdout, None, None).unwrap();
+/// encode_image(&bytes, &mut stdout, None, None).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// the option offset just offsets the image to the right by the amount of cells you specify
@@ -231,9 +231,8 @@ pub fn create_unicode_placeholder(
     let id_char = get_diacritic(((image_id >> 24) & 255) as usize);
 
     for row in 0..rows {
-        if let Some(offset) = offset {
-            result.push_str(&" ".repeat(offset as usize));
-        }
+        let offset_string = term_misc::offset_to_terminal(offset);
+        result.push_str(&offset_string);
         for col in 0..columns {
             result.push(PLACEHOLDER);
             if let Some(row_diacritic) = get_diacritic(row as usize) {
@@ -291,7 +290,7 @@ fn process_frame(
 /// use ffmpeg_sidecar::command::FfmpegCommand;
 /// use rasteroid::Frame;
 /// use ffmpeg_sidecar::event::OutputVideoFrame;
-/// use rasteroid::kitty_encoder::encode_frames;
+/// use rasteroid::kitty_encoder::encode_frames_fast;
 /// use rasteroid::kitty_encoder::is_kitty_capable;
 /// use rasteroid::image_extended::calc_fit;
 /// use ffmpeg_sidecar::event::FfmpegEvent;
@@ -333,7 +332,10 @@ fn process_frame(
 ///             }
 ///         });
 /// let id = rand::random::<u32>();
-/// encode_frames_fast(&mut kitty_frames, &mut out, id, true);
+/// // should be used carefully, leaks memory with lifetime over the app itself. if kitty doesn't
+/// // consume the animation, will just sit in /dev/shm or corresponding place for other os and
+/// // take alot of memory
+/// unsafe { encode_frames_fast(&mut kitty_frames, &mut out, true) };
 /// ```
 pub unsafe fn encode_frames_fast(
     frames: &mut dyn Iterator<Item = impl Frame>,
@@ -393,7 +395,7 @@ pub unsafe fn encode_frames_fast(
 ///             }
 ///         });
 /// let id = rand::random::<u32>();
-/// encode_frames(&mut kitty_frames, &mut out, id, true);
+/// encode_frames(&mut kitty_frames, &mut out, true);
 /// ```
 pub fn encode_frames(
     frames: &mut dyn Iterator<Item = impl Frame>,
@@ -413,11 +415,7 @@ fn encode_frames_sep(
     let first = frames.next().ok_or("video doesn't contain any frames")?;
     let width = first.width();
     let height = first.height();
-    let offset = term_misc::center_image(width as u16, false);
-    if center {
-        let center = offset_to_terminal(Some(offset));
-        out.write_all(center.as_bytes())?;
-    }
+
     let mut pre_timestamp = 0.0;
     let id = rand::random::<u32>();
     let shm_name = format!("mcat-video-{id}-");
@@ -432,6 +430,16 @@ fn encode_frames_sep(
     };
     let suffix = if tmux { "\x1b\x1b\\\x1b\\" } else { "\x1b\\" };
 
+    let offset = if center {
+        Some(term_misc::center_image(width as u16, false))
+    } else {
+        None
+    };
+    if center && !inline {
+        let center = offset_to_terminal(offset);
+        out.write_all(center.as_bytes())?;
+    }
+
     let i = id.to_string();
     let s = first.width().to_string();
     let v = first.height().to_string();
@@ -439,7 +447,7 @@ fn encode_frames_sep(
     let mut opts = HashMap::from([
         ("a".to_string(), "T".to_string()),
         ("f".to_string(), f),
-        ("I".to_string(), i),
+        ("i".to_string(), i),
         ("s".to_string(), s),
         ("v".to_string(), v),
     ]);
@@ -468,7 +476,7 @@ fn encode_frames_sep(
 
     // starting the animation
     let z = 100;
-    write!(out, "{prefix}a=a,s=2,v=1,r=1,I={id},z={z}{suffix}")?;
+    write!(out, "{prefix}a=a,s=2,v=1,r=1,i={id},z={z}{suffix}")?;
 
     let shutdown = term_misc::setup_signal_handler();
 
@@ -486,7 +494,7 @@ fn encode_frames_sep(
         let first_opts = HashMap::from([
             ("a".to_string(), "f".to_string()),
             ("f".to_string(), f),
-            ("I".to_string(), i),
+            ("i".to_string(), i),
             ("c".to_string(), c.to_string()),
             ("s".to_string(), s),
             ("v".to_string(), v),
@@ -510,10 +518,10 @@ fn encode_frames_sep(
     }
 
     if inline {
-        let placement = create_unicode_placeholder(cols, rows, id, Some(offset))?;
+        let placement = create_unicode_placeholder(cols, rows, id, offset)?;
         out.write_all(placement.as_bytes())?;
     }
-    write!(out, "{prefix}a=a,s=3,v=1,r=1,I={id},z={z}{suffix}")?;
+    write!(out, "{prefix}a=a,s=3,v=1,r=1,i={id},z={z}{suffix}")?;
     Ok(())
 }
 

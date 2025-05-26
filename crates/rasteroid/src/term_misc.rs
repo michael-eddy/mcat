@@ -99,8 +99,9 @@ impl Wininfo {
 /// scale is for scaling while maintaining center. (scale the box not the image)
 /// # example:
 /// ```
-/// use rasteroid::term_misc::init_winsize;
+/// use rasteroid::term_misc::init_wininfo;
 /// use rasteroid::term_misc::Size;
+/// use rasteroid::is_tmux;
 ///
 /// let spx = Size {
 ///     width: 1920,  // width in pixels
@@ -112,7 +113,12 @@ impl Wininfo {
 ///     height: 20,   // height in cells
 ///     force: false, // use that instead of checking
 /// };
-/// init_winsize(&spx, &sc, None).unwrap(); // going to error if you called it before already.
+/// let env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_tmux = is_tmux(&env);
+/// // inline is for kitty to put a placeholder for images / videos so they can be placed in apps
+/// // that don't understand kitty gp and have them scroll with the buffer; e.g vim, tmux
+/// let inline = false;
+/// init_wininfo(&spx, &sc, None, is_tmux, inline).unwrap(); // going to error if you called it before already.
 /// ```
 pub fn init_wininfo(
     spx: &Size,

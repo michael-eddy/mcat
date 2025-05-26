@@ -1,5 +1,8 @@
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
-use crossterm::cursor::{self};
+use crossterm::{
+    cursor::{self},
+    tty::IsTty,
+};
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
 use ignore::WalkBuilder;
@@ -12,7 +15,7 @@ use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
-use std::io::Write;
+use std::io::{Write, stdout};
 use std::{
     error,
     fs::{self},
@@ -493,9 +496,13 @@ pub fn inline_a_video(
                 img: f.data,
                 timestamp: f.timestamp,
             });
-            unsafe {
-                rasteroid::kitty_encoder::encode_frames_fast(&mut kitty_frames, out, center)?
-            };
+            match stdout().is_tty() {
+                // the fast function leaks memory, not good if not consumed right away..
+                true => unsafe {
+                    rasteroid::kitty_encoder::encode_frames_fast(&mut kitty_frames, out, center)?
+                },
+                false => rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, center)?,
+            }
             Ok(())
         }
         rasteroid::InlineEncoder::Iterm => {
