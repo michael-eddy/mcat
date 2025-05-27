@@ -5,13 +5,21 @@ use std::{
     path::Path,
 };
 
-use crossterm::tty::IsTty;
+use crossterm::{
+    terminal::{disable_raw_mode, enable_raw_mode},
+    tty::IsTty,
+};
 use image::{DynamicImage, ImageFormat};
 use pager::Pager;
-use rasteroid::{InlineEncoder, image_extended::InlineImage, term_misc};
+use rasteroid::{
+    InlineEncoder,
+    image_extended::{InlineImage, Viewport},
+    term_misc,
+};
 
 use crate::{
     converter::{self},
+    image_viewer::{clear_screen, run_interactive_viewer, show_help_prompt},
     markdown,
 };
 
@@ -23,6 +31,7 @@ pub enum CatType {
     Video,
     InlineImage,
     InlineVideo,
+    Interactive,
 }
 
 #[derive(Clone, Copy)]
@@ -165,13 +174,38 @@ pub fn cat(
             let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
-            let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
+            // let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center, _, _) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii, false)?;
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
             }
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder)?;
             Ok(CatType::InlineImage)
+        },
+        ("md", "interactive") => {
+            let html = markdown::md_to_html(&string_result.unwrap(), opts.style);
+            let image = converter::html_to_image(&html)?;
+            let dyn_img = image::load_from_memory(&image)?;
+            let term_height = term_misc::get_wininfo().sc_height;
+            let term_width = rasteroid::term_misc::get_wininfo().sc_width;
+            let height_cells = term_misc::dim_to_cells(opts.height.unwrap_or_default(), term_misc::SizeDirection::Height)?;
+            let height = (term_height-3).min(height_cells as u16);
+            run_interactive_viewer(|state| {
+                clear_screen(out ).unwrap();
+                // let new_img = dyn_img.clone().zoom_pan(Some(state.zoom), Some(state.x), Some(state.y));
+                let (img, center, _, _) = dyn_img.resize_plus(opts.width, Some(&format!("{height}c")), resize_for_ascii, false).unwrap();
+                if resize_for_ascii {
+                    disable_raw_mode().unwrap();
+                }
+                rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder).unwrap();
+                show_help_prompt(out, term_width, term_height, state).unwrap();
+                out.flush().unwrap();
+                if resize_for_ascii {
+                    enable_raw_mode().unwrap();
+                }
+                false
+            }).unwrap();
+            Ok(CatType::Interactive)
         },
         ("html", "image") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
@@ -181,7 +215,7 @@ pub fn cat(
         ("html", "inline") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
-            let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
+            // let dyn_img = dyn_img.zoom_pan(opts.zoom, opts.x, opts.y);
             let (img, center, _, _) = dyn_img.resize_plus(opts.width, opts.height, resize_for_ascii, false)?;
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());
@@ -189,10 +223,61 @@ pub fn cat(
             rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder)?;
             Ok(CatType::InlineImage)
         },
+        ("html", "interactive") => {
+            let html = &string_result.unwrap();
+            let image = converter::html_to_image(&html)?;
+            let dyn_img = image::load_from_memory(&image)?;
+            let term_height = term_misc::get_wininfo().sc_height;
+            let term_width = rasteroid::term_misc::get_wininfo().sc_width;
+            let height_cells = term_misc::dim_to_cells(opts.height.unwrap_or_default(), term_misc::SizeDirection::Height)?;
+            let height = (term_height-3).min(height_cells as u16);
+            run_interactive_viewer(|state| {
+                clear_screen(out ).unwrap();
+                // let new_img = dyn_img.clone().zoom_pan(Some(state.zoom), Some(state.x), Some(state.y));
+                let (img, center, _, _) = dyn_img.resize_plus(opts.width, Some(&format!("{height}c")), resize_for_ascii, false).unwrap();
+                if resize_for_ascii {
+                    disable_raw_mode().unwrap();
+                }
+                rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder).unwrap();
+                show_help_prompt(out, term_width, term_height, state).unwrap();
+                out.flush().unwrap();
+                if resize_for_ascii {
+                    enable_raw_mode().unwrap();
+                }
+                false
+            }).unwrap();
+            Ok(CatType::Interactive)
+        },
         ("image", "image") => {
             let buf = fs::read(path)?;
             out.write_all(&buf)?;
             Ok(CatType::Image)
+        },
+        ("image", "interactive") => {
+            let dyn_img = image_result.unwrap();
+            let term_height = term_misc::get_wininfo().sc_height;
+            let term_width = rasteroid::term_misc::get_wininfo().sc_width;
+            let height_cells = term_misc::dim_to_cells(opts.height.unwrap_or_default(), term_misc::SizeDirection::Height)?;
+            let height = (term_height-3).min(height_cells as u16);
+            run_interactive_viewer(|state| {
+                clear_screen(out).unwrap();
+                let mut viewport = Viewport::new(&dyn_img);
+                viewport.zoom(state.zoom as f32, None, None);
+                viewport.pan(state.x, state.y);
+                let new_img = viewport.apply(&dyn_img);
+                let (img, center, _, _) = new_img.resize_plus(opts.width, Some(&format!("{height}c")), resize_for_ascii, false).unwrap();
+                if resize_for_ascii {
+                    disable_raw_mode().unwrap();
+                }
+                rasteroid::inline_an_image(&img, out, if opts.center {Some(center)} else {None}, None, opts.encoder).unwrap();
+                show_help_prompt(out, term_width, term_height, state).unwrap();
+                out.flush().unwrap();
+                if resize_for_ascii {
+                    enable_raw_mode().unwrap();
+                }
+                false
+            }).unwrap();
+            Ok(CatType::Interactive)
         },
         ("md", _) => {
             //default for md
@@ -216,7 +301,8 @@ pub fn cat(
         },
         ("image", _) => {
             // default for image
-            let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
+            // let image_result = image_result.unwrap().zoom_pan(opts.zoom, opts.x, opts.y);
+            let image_result = image_result.unwrap();
             let (img, center, _, _) = image_result.resize_plus(opts.width, opts.height, resize_for_ascii, false)?;
             if opts.report {
                 rasteroid::term_misc::report_size(opts.width.unwrap_or_default(), opts.height.unwrap_or_default());

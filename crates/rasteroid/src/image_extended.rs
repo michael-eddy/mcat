@@ -1,12 +1,9 @@
 use std::{error, io::Cursor};
 
 use fast_image_resize::{IntoImageView, Resizer, images::Image};
-use image::{
-    DynamicImage, GenericImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder,
-    imageops::crop_imm,
-};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageEncoder, codecs::png::PngEncoder};
 
-use crate::term_misc::dim_to_cells;
+use crate::term_misc::{SizeDirection, dim_to_cells};
 
 use super::term_misc::{self, dim_to_px};
 
@@ -37,22 +34,6 @@ pub trait InlineImage {
         resize_for_ascii: bool,
         pad: bool,
     ) -> Result<(Vec<u8>, u16, u32, u32), Box<dyn error::Error>>;
-    /// zoom into the image, and move around
-    /// # example:
-    /// ```
-    /// use std::path::Path;
-    /// use rasteroid::image_extended::InlineImage;
-    ///
-    /// let path = Path::new("image.png");
-    /// let buf = match std::fs::read(path) {
-    ///     Ok(buf) => buf,
-    ///     Err(e) => return,
-    /// };
-    /// let dyn_img = image::load_from_memory(&buf).unwrap();
-    /// let dyn_img = dyn_img.zoom_pan(Some(5), Some(3), Some(2));
-    /// ```
-    /// the above zooms 50%, moves right 15% and down 10%
-    fn zoom_pan(self, zoom: Option<usize>, x: Option<i32>, y: Option<i32>) -> Self;
 }
 
 impl InlineImage for DynamicImage {
@@ -121,40 +102,108 @@ impl InlineImage for DynamicImage {
 
         Ok((buffer, center, new_width, new_height))
     }
+}
 
-    fn zoom_pan(self, zoom: Option<usize>, x: Option<i32>, y: Option<i32>) -> Self {
-        if zoom.is_none() && x.is_none() && y.is_none() {
-            return self;
+pub struct Viewport {
+    zoom: usize,
+    x: i32,
+    y: i32,
+    image_width: u32,
+    image_height: u32,
+    term_width: u32,
+    term_height: u32,
+}
+
+impl Viewport {
+    pub fn new(image: &DynamicImage) -> Self {
+        let (img_width, img_height) = image.dimensions();
+        let tinfo = term_misc::get_wininfo();
+
+        Viewport {
+            zoom: 1,
+            x: 0,
+            y: 0,
+            image_width: img_width,
+            image_height: img_height,
+            term_width: tinfo.sc_width as u32,
+            term_height: tinfo.sc_height as u32,
+        }
+    }
+
+    pub fn pan(&mut self, dx: i32, dy: i32) {
+        self.x += dx;
+        self.y += dy;
+        self.clamp_viewport();
+    }
+
+    pub fn zoom(&mut self, factor: f32, center_x: Option<f32>, center_y: Option<f32>) {
+        let old_zoom = self.zoom as f32;
+        let new_zoom = (self.zoom as f32 * factor).max(1.0).round() as usize;
+
+        if new_zoom == self.zoom {
+            return;
         }
 
-        let (width, height) = self.dimensions();
-        let (width, height) = (width as f32, height as f32);
-        let zoom = zoom.unwrap_or(1) as f32;
-        let pan_x = x.unwrap_or(0) as f32;
-        let pan_y = y.unwrap_or(0) as f32;
+        // Get center coordinates (either provided or current center)
+        let (cx, cy) = match (center_x, center_y) {
+            (Some(x), Some(y)) => (x, y),
+            _ => {
+                let center_x = self.x as f32 + (self.term_width as f32 / 2.0) / old_zoom;
+                let center_y = self.y as f32 + (self.term_height as f32 / 2.0) / old_zoom;
+                (center_x, center_y)
+            }
+        };
 
-        // Calculate the zoom factor
-        let zoom_factor = 1.0 - 0.1 * zoom;
-        let zoomed_width = (width * zoom_factor).clamp(1.0, width);
-        let zoomed_height = (height * zoom_factor).clamp(1.0, height);
+        // Calculate new position to keep the center point stable
+        self.zoom = new_zoom;
+        let new_x = cx - (self.term_width as f32 / 2.0) / self.zoom as f32;
+        let new_y = cy - (self.term_height as f32 / 2.0) / self.zoom as f32;
 
-        // Calculate pan offsets (5% per pan unit)
-        let pan_offset_x = 0.05 * width * pan_x;
-        let pan_offset_y = 0.05 * height * pan_y;
+        self.x = new_x.round() as i32;
+        self.y = new_y.round() as i32;
+        self.clamp_viewport();
+    }
 
-        let crop_x = ((width - zoomed_width) / 2.0 + pan_offset_x).clamp(0.0, width - zoomed_width);
-        let crop_y =
-            ((height - zoomed_height) / 2.0 + pan_offset_y).clamp(0.0, height - zoomed_height);
+    pub fn apply(&self, image: &DynamicImage) -> DynamicImage {
+        if self.zoom == 1 && self.x == 0 && self.y == 0 {
+            return image.clone();
+        }
 
-        let cropped = crop_imm(
-            &self,
-            crop_x.round() as u32,
-            crop_y.round() as u32,
-            zoomed_width.round() as u32,
-            zoomed_height.round() as u32,
-        );
+        // Calculate visible rectangle in image coordinates
+        let view_x = (self.x as f32 / self.zoom as f32).max(0.0);
+        let view_y = (self.y as f32 / self.zoom as f32).max(0.0);
+        let view_width = self.term_width as f32 / self.zoom as f32;
+        let view_height = self.term_height as f32 / self.zoom as f32;
 
-        DynamicImage::ImageRgba8(cropped.to_image())
+        // Convert to pixel coordinates with bounds checking
+        let x1 = view_x.round() as u32;
+        let y1 = view_y.round() as u32;
+        let x2 = (view_x + view_width).round() as u32;
+        let y2 = (view_y + view_height).round() as u32;
+
+        // Clamp coordinates to image bounds
+        let x1 = x1.min(self.image_width - 1);
+        let y1 = y1.min(self.image_height - 1);
+        let x2 = x2.min(self.image_width);
+        let y2 = y2.min(self.image_height);
+
+        // Extract the visible region
+        let x1 = dim_to_px(&format!("{x1}c"), SizeDirection::Width).unwrap();
+        let x2 = dim_to_px(&format!("{x2}c"), SizeDirection::Width).unwrap();
+        let y1 = dim_to_px(&format!("{y1}c"), SizeDirection::Height).unwrap();
+        let y2 = dim_to_px(&format!("{y2}c"), SizeDirection::Height).unwrap();
+
+        image.crop_imm(x1, y1, x2 - x1, y2 - y1)
+    }
+
+    fn clamp_viewport(&mut self) {
+        let max_x =
+            ((self.image_width as f32 * self.zoom as f32) - self.term_width as f32).max(0.0) as i32;
+        let max_y = ((self.image_height as f32 * self.zoom as f32) - self.term_height as f32)
+            .max(0.0) as i32;
+
+        self.x = self.x.clamp(0, max_x);
+        self.y = self.y.clamp(0, max_y);
     }
 }
 

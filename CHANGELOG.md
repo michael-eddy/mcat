@@ -10,7 +10,6 @@
 - [x] added tmux support
 - [x] added kitty inline support
 - [ ] added interactive mode to zoom / pan images for more detail
-- [-] added methods to clean after images/videos
 #### Fixes:
 - [ ] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
 - [x] fixed an issue in the ls command that would make the first item in a row up by 1 cell
@@ -19,10 +18,8 @@
 - [x] fixed an issue that restricted rendering html into image directly
 - [x] fixed an issue where the process will quit when detecting symlink loop instead of just continuing
 #### TODO:
-- [ ] fix the ls in kitty inside tmux
 - [ ] make better exmps in the readme
 - [ ] make a new gif for the readme...
-- [ ] make the clean methods also work in tmux..
 
 ## V0.2.8
 - adding an ls command

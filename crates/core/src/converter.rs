@@ -403,7 +403,7 @@ pub fn lsix(
         .collect();
 
     let (_, y) = cursor::position()?;
-    let mut current_y = y + 2;
+    let mut current_y = y + y_padding;
     for chunk in &images.into_iter().chunks(items_per_row as usize) {
         let mut current_x = x_padding;
         let mut max_height = 0;

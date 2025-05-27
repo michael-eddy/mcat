@@ -2,6 +2,7 @@ mod catter;
 mod concater;
 mod converter;
 mod fetch_manager;
+mod image_viewer;
 mod inspector;
 mod markdown;
 mod prompter;
@@ -63,7 +64,7 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .long("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md",  "image", "video", "inline"]),
+                .value_parser(["html", "md",  "image", "video", "inline", "interactive"]),
         )
         .arg(
             Arg::new("theme")
@@ -78,12 +79,6 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .long("style-html")
                 .short('s')
                 .help("add style to html too (when html is the output)")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("delete-all-images")
-                .long("delete-images")
-                .help("deletes all the images, even ones that are not in the scrollview.. currently only works in kitty, and will be extended..")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -130,8 +125,14 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .help("concat images horizontal instead of vertical"))
         .arg(
             Arg::new("inline-options")
-                .long("inline-options")
+                .long("opts")
                 .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  inline=<bool>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+        )
+        .arg(
+            Arg::new("delete-all-images")
+                .long("delete-images")
+                .help("deletes all the images, even ones that are not in the scrollview.. currently only works in kitty")
+                .action(clap::ArgAction::SetTrue)
         )
         .arg(
             Arg::new("report")
@@ -185,13 +186,15 @@ fn main() {
         }
         return;
     }
-    if opts.get_flag("delete-all-images") {
-        println!("\x1b_Ga=d,d=r,x=1,y=2147483647\x1b\\");
-        return;
-    }
 
     let stdout = std::io::stdout();
     let mut out = BufWriter::new(stdout);
+
+    if opts.get_flag("delete-all-images") {
+        rasteroid::kitty_encoder::delete_all_images(&mut out).unwrap_or_exit();
+        return;
+    }
+
     //subcommand
     if opts.get_flag("fetch-chromium") {
         fetch_manager::fetch_chromium().unwrap_or_exit();

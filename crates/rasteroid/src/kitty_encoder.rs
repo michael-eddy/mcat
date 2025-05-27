@@ -164,7 +164,7 @@ pub fn encode_image(
         let base64 = image_to_base64(img);
         chunk_base64(&base64, out, 4096, opts, HashMap::new(), tmux)?;
 
-        let placement = create_unicode_placeholder(cols, rows, id, offset)?;
+        let placement = create_unicode_placeholder(cols, rows, id, offset, print_at)?;
         out.write_all(placement.as_bytes())?;
     } else {
         let center_string = offset_to_terminal(offset);
@@ -220,6 +220,7 @@ pub fn create_unicode_placeholder(
     rows: u32,
     image_id: u32,
     offset: Option<u16>,
+    print_at: Option<(u16, u16)>,
 ) -> Result<String, Box<dyn Error>> {
     let mut result = String::new();
 
@@ -229,10 +230,15 @@ pub fn create_unicode_placeholder(
     result.push_str(&format!("\x1b[38;2;{};{};{}m", r, g, b));
 
     let id_char = get_diacritic(((image_id >> 24) & 255) as usize);
+    let is_controlled = print_at.is_some();
 
     for row in 0..rows {
         let offset_string = term_misc::offset_to_terminal(offset);
+        let print_at_for_row = print_at.map(|(x, y)| (x, y + row as u16));
+        let print_at_string = loc_to_terminal(print_at_for_row);
+        result.push_str(&print_at_string);
         result.push_str(&offset_string);
+
         for col in 0..columns {
             result.push(PLACEHOLDER);
             if let Some(row_diacritic) = get_diacritic(row as usize) {
@@ -245,8 +251,10 @@ pub fn create_unicode_placeholder(
                 result.push(id);
             }
         }
-        if row < rows - 1 {
-            result.push_str("\n");
+        if !is_controlled {
+            if row < rows - 1 {
+                result.push_str("\n");
+            }
         }
     }
 
@@ -518,7 +526,7 @@ fn encode_frames_sep(
     }
 
     if inline {
-        let placement = create_unicode_placeholder(cols, rows, id, offset)?;
+        let placement = create_unicode_placeholder(cols, rows, id, offset, None)?;
         out.write_all(placement.as_bytes())?;
     }
     write!(out, "{prefix}a=a,s=3,v=1,r=1,i={id},z={z}{suffix}")?;
@@ -526,10 +534,23 @@ fn encode_frames_sep(
 }
 
 pub fn delete_all_images(out: &mut impl Write) -> Result<(), std::io::Error> {
-    out.write_all(b"\x1b_Ga=d,d=r,x=0,y=2147483647\x1b\\")
+    let tmux = term_misc::get_wininfo().is_tmux;
+    if tmux {
+        out.write_all(b"\x1bPtmux;\x1b\x1b_Ga=d,d=r,x=0,y=4294967295\x1b\x1b\\\x1b\\")
+    } else {
+        out.write_all(b"\x1b_Ga=d,d=r,x=0,y=4294967295\x1b\\")
+    }
 }
 pub fn delete_single_image(id: u32, out: &mut impl Write) -> Result<(), std::io::Error> {
-    write!(out, "\x1b_Gd,d=i,i={id},p={id}")
+    let tmux = term_misc::get_wininfo().is_tmux;
+    if tmux {
+        write!(
+            out,
+            "\x1bPtmux;\x1b\x1b_Ga=d,d=i,i={id},p={id}\x1b\x1b\\\x1b\\"
+        )
+    } else {
+        write!(out, "\x1b_Ga=d,d=i,i={id},p={id}\x1b\\")
+    }
 }
 
 /// checks if the current terminal supports Kitty's graphic protocol
