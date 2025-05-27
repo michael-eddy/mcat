@@ -305,7 +305,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
             if let Some(caps) = re.captures(&node_html_block.literal) {
                 let title = caps.get(1).unwrap().as_str();
-                let width = term_misc::get_winsize().sc_width;
+                let width = term_misc::get_wininfo().sc_width;
                 let text_size = string_len(title);
                 let padding = width as usize - text_size;
                 let left_padding = padding / 2;
@@ -652,7 +652,7 @@ fn format_code(code: &str, lang: &str, header: &str, ctx: &mut AnsiContext) {
 
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;
-    let term_width = term_misc::get_winsize().sc_width;
+    let term_width = term_misc::get_wininfo().sc_width;
     let color = FG_BRIGHT_BLACK;
 
     let top_header = format!(
@@ -698,7 +698,7 @@ fn format_code(code: &str, lang: &str, header: &str, ctx: &mut AnsiContext) {
 }
 
 fn br() -> String {
-    "─".repeat(term_misc::get_winsize().sc_width as usize)
+    "─".repeat(term_misc::get_wininfo().sc_width as usize)
 }
 
 #[derive(Debug, Clone)]
@@ -757,8 +757,8 @@ impl CustomTheme {
             comment: "#5C6773".into(),
             foreground: "#FFFFFF".into(),
             guide: "#2D3640".into(),
-            background: "#15161B".into(),
-            surface: "#14161f".into(),
+            background: "#14161f".into(),
+            surface: "#20202b".into(),
             border: "#2D3640".into(),
         }
     }

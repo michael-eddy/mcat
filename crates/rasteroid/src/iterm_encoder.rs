@@ -35,11 +35,15 @@ pub fn encode_image(
     out.write_all(at.as_ref())?;
     out.write_all(center.as_ref())?;
 
-    out.write_all(b"\x1b]1337;File=inline=1;size=")?;
-    write!(out, "{}", base64_encoded.len())?;
-    out.write_all(b":")?;
-    out.write_all(base64_encoded.as_bytes())?;
-    out.write_all(b"\x07")?;
+    let tmux = term_misc::get_wininfo().is_tmux;
+    let prefix = if tmux { "\x1bPtmux;\x1b\x1b" } else { "\x1b" };
+    let suffix = if tmux { "\x1b\x07\x1b\\" } else { "\x07" };
+
+    write!(
+        out,
+        "{prefix}]1337;File=inline=1;size={}:{base64_encoded}{suffix}",
+        base64_encoded.len()
+    )?;
 
     Ok(())
 }

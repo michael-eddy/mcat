@@ -1,7 +1,11 @@
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
-use crossterm::cursor::{self};
+use crossterm::{
+    cursor::{self},
+    tty::IsTty,
+};
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
+use ignore::WalkBuilder;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
@@ -11,7 +15,7 @@ use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
-use std::io::Write;
+use std::io::{Write, stdout};
 use std::{
     error,
     fs::{self},
@@ -309,11 +313,17 @@ pub fn lsix(
     input: impl AsRef<str>,
     out: &mut impl Write,
     inline_encoder: &rasteroid::InlineEncoder,
+    hidden: bool,
 ) -> Result<(), Box<dyn error::Error>> {
     let dir_path = Path::new(input.as_ref());
-    let entries = fs::read_dir(dir_path).unwrap_or_else(|_| fs::read_dir(".").unwrap());
+    let walker = WalkBuilder::new(dir_path)
+        .standard_filters(!hidden)
+        .hidden(!hidden)
+        .max_depth(Some(1))
+        .follow_links(true)
+        .build();
     let resize_for_ascii = matches!(inline_encoder, rasteroid::InlineEncoder::Ascii);
-    let ts = rasteroid::term_misc::get_winsize();
+    let ts = rasteroid::term_misc::get_wininfo();
     let items_per_row = calculate_items_per_row(ts.sc_width);
     let x_padding = 4;
     let y_padding = 2;
@@ -322,10 +332,13 @@ pub fn lsix(
     let height = format!("{}c", ts.sc_height / 12);
 
     // Collect all valid paths first
-    let mut paths: Vec<_> = entries
+    let mut paths: Vec<_> = walker
         .filter_map(|entry| {
             let entry = entry.ok()?;
-            let path = entry.path();
+            let path = entry.path().to_path_buf();
+            if path == dir_path {
+                return None;
+            }
             let filename = path
                 .file_name()
                 .unwrap_or_default()
@@ -390,7 +403,7 @@ pub fn lsix(
         .collect();
 
     let (_, y) = cursor::position()?;
-    let mut current_y = y + 2;
+    let mut current_y = y + y_padding;
     for chunk in &images.into_iter().chunks(items_per_row as usize) {
         let mut current_x = x_padding;
         let mut max_height = 0;
@@ -410,6 +423,7 @@ pub fn lsix(
                 max_height = h;
             }
             if current_y + h as u16 >= ts.sc_height {
+                let h = h + 1;
                 write!(out, "\x1b[{h}S")?;
                 current_y -= h as u16;
             }
@@ -482,8 +496,13 @@ pub fn inline_a_video(
                 img: f.data,
                 timestamp: f.timestamp,
             });
-            let id = rand::random::<u32>();
-            rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, id, center)?;
+            match stdout().is_tty() {
+                // the fast function leaks memory, not good if not consumed right away..
+                true => unsafe {
+                    rasteroid::kitty_encoder::encode_frames_fast(&mut kitty_frames, out, center)?
+                },
+                false => rasteroid::kitty_encoder::encode_frames(&mut kitty_frames, out, center)?,
+            }
             Ok(())
         }
         rasteroid::InlineEncoder::Iterm => {

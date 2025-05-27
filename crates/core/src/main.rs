@@ -2,6 +2,7 @@ mod catter;
 mod concater;
 mod converter;
 mod fetch_manager;
+mod image_viewer;
 mod inspector;
 mod markdown;
 mod prompter;
@@ -18,25 +19,36 @@ use clap::{
     Arg, ColorChoice, Command,
     builder::{Styles, styling::AnsiColor},
 };
+use clap_complete::{Generator, Shell, generate};
 use crossterm::tty::IsTty;
 use dirs::home_dir;
 use rasteroid::term_misc;
 
-fn main() {
-    let stdin_steamed = !std::io::stdin().is_tty();
+fn print_completions<G: Generator>(gene: G, cmd: &mut Command) {
+    generate(
+        gene,
+        cmd,
+        cmd.get_name().to_string(),
+        &mut std::io::stdout(),
+    );
+}
+
+fn build_cli(stdin_streamed: bool) -> Command {
     let mut input_arg = Arg::new("input")
         .index(1)
         .num_args(1..)
         .help("file / dir / url");
-    if !stdin_steamed {
+    if !stdin_streamed {
         input_arg = input_arg.required_unless_present_any([
             "fetch-clean",
             "fetch-chromium",
             "fetch-ffmpeg",
             "report",
+            "generate-completions",
+            "delete-all-images",
         ]);
     }
-    let opts = Command::new("mcat")
+    Command::new("mcat")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
@@ -52,7 +64,7 @@ fn main() {
                 .long("output")
                 .short('o')
                 .help("the format to output")
-                .value_parser(["html", "md",  "image", "video", "inline"]),
+                .value_parser(["html", "md",  "image", "video", "inline", "interactive"]),
         )
         .arg(
             Arg::new("theme")
@@ -67,6 +79,13 @@ fn main() {
                 .long("style-html")
                 .short('s')
                 .help("add style to html too (when html is the output)")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("hidden")
+                .long("hidden")
+                .short('a')
+                .help("include hidden files")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -106,8 +125,14 @@ fn main() {
                 .help("concat images horizontal instead of vertical"))
         .arg(
             Arg::new("inline-options")
-                .long("inline-options")
-                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+                .long("opts")
+                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  inline=<bool>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
+        )
+        .arg(
+            Arg::new("delete-all-images")
+                .long("delete-images")
+                .help("deletes all the images, even ones that are not in the scrollview.. currently only works in kitty")
+                .action(clap::ArgAction::SetTrue)
         )
         .arg(
             Arg::new("report")
@@ -138,10 +163,38 @@ fn main() {
                 .long("fetch-clean")
                 .help("Clean up the local binaries")
                 .action(clap::ArgAction::SetTrue))
-        .get_matches();
+        .arg(
+            Arg::new("generate-completions")
+                .long("generate")
+                .help("Generate shell completions")
+                .value_parser(["bash", "zsh", "fish", "powershell"])
+        )
+}
+
+fn main() {
+    let stdin_streamed = !std::io::stdin().is_tty();
+    let opts = build_cli(stdin_streamed).get_matches();
+
+    if let Some(shell) = opts.get_one::<String>("generate-completions") {
+        let mut cmd = build_cli(stdin_streamed);
+        match shell.as_str() {
+            "bash" => print_completions(Shell::Bash, &mut cmd),
+            "zsh" => print_completions(Shell::Zsh, &mut cmd),
+            "fish" => print_completions(Shell::Fish, &mut cmd),
+            "powershell" => print_completions(Shell::PowerShell, &mut cmd),
+            _ => unreachable!(),
+        }
+        return;
+    }
 
     let stdout = std::io::stdout();
     let mut out = BufWriter::new(stdout);
+
+    if opts.get_flag("delete-all-images") {
+        rasteroid::kitty_encoder::delete_all_images(&mut out).unwrap_or_exit();
+        return;
+    }
+
     //subcommand
     if opts.get_flag("fetch-chromium") {
         fetch_manager::fetch_chromium().unwrap_or_exit();
@@ -176,24 +229,35 @@ fn main() {
         sixel,
         ascii,
     };
+    let env = term_misc::EnvIdentifiers::new();
+    let inline_encoder = &rasteroid::InlineEncoder::auto_detect(
+        encoder.kitty,
+        encoder.iterm,
+        encoder.sixel,
+        encoder.ascii,
+        &env,
+    );
+    let is_tmux = rasteroid::is_tmux(&env);
 
     let is_ls = input.get(0).unwrap_or(&"".to_owned()).to_lowercase() == "ls";
 
     // setting the winsize
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default(), !is_ls);
-    let _ = term_misc::init_winsize(
+    let _ = term_misc::init_wininfo(
         &term_misc::break_size_string(inline_options.spx.unwrap_or_default()).unwrap_or_exit(),
         &term_misc::break_size_string(inline_options.sc.unwrap_or_default()).unwrap_or_exit(),
         inline_options.scale,
+        is_tmux,
+        inline_options.inline,
     );
 
+    let hidden = opts.get_flag("hidden");
     // if ls
     if is_ls {
-        let inline_encoder = &rasteroid::InlineEncoder::auto_detect(kitty, iterm, sixel, ascii);
         let d = ".".to_string();
         let input = input.get(1).unwrap_or(&d);
-        converter::lsix(input, &mut out, inline_encoder).unwrap_or_exit();
+        converter::lsix(input, &mut out, inline_encoder, hidden).unwrap_or_exit();
         std::process::exit(0);
     }
 
@@ -227,7 +291,7 @@ fn main() {
         zoom: inline_options.zoom,
         x: inline_options.x,
         y: inline_options.y,
-        encoder: Some(encoder),
+        encoder: inline_encoder,
         style: Some(style),
         style_html,
         report,
@@ -237,7 +301,7 @@ fn main() {
     let mut tmp_files = Vec::new(); //for lifetime
     let mut path_bufs = Vec::new();
     // if stdin is streamed into
-    if stdin_steamed {
+    if stdin_streamed {
         let mut buffer = Vec::new();
         std::io::stdin().read_to_end(&mut buffer).unwrap_or_exit();
 
@@ -269,7 +333,7 @@ fn main() {
             }
             if path.is_dir() {
                 path_bufs.clear();
-                let mut selected_files = prompter::prompt_for_files(path).unwrap_or_exit();
+                let mut selected_files = prompter::prompt_for_files(path, hidden).unwrap_or_exit();
                 selected_files.sort();
                 path_bufs.extend_from_slice(&selected_files);
                 break;
@@ -287,6 +351,9 @@ fn main() {
             catter::cat(tmp.path(), &mut out, Some(opts)).unwrap_or_exit();
         }
         "video" => {
+            if is_tmux {
+                rasteroid::set_tmux_passthrough(true).unwrap_or_exit();
+            }
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
             } else {
@@ -296,6 +363,9 @@ fn main() {
             }
         }
         "image" => {
+            if is_tmux {
+                rasteroid::set_tmux_passthrough(true).unwrap_or_exit();
+            }
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
             } else {
@@ -319,6 +389,7 @@ struct InlineOptions<'a> {
     x: Option<i32>,
     y: Option<i32>,
     center: bool,
+    inline: bool,
 }
 
 impl<'a> InlineOptions<'a> {
@@ -333,6 +404,7 @@ impl<'a> InlineOptions<'a> {
             x: None,
             y: None,
             center: true,
+            inline: false,
         };
         let map: HashMap<_, _> = s
             .split(',')
@@ -370,6 +442,9 @@ impl<'a> InlineOptions<'a> {
         }
         if let Some(&val) = map.get("center") {
             options.center = val == "true" || val == "1";
+        }
+        if let Some(&val) = map.get("inline") {
+            options.inline = val == "true" || val == "1";
         }
 
         options
@@ -409,7 +484,9 @@ fn report_and_leave() {
     let iterm = rasteroid::iterm_encoder::is_iterm_capable(&env);
     let sixel = rasteroid::sixel_encoder::is_sixel_capable(&env);
     let ascii = true; //not sure what doesn't support it
-    let winsize = term_misc::get_winsize();
+    let winsize = term_misc::get_wininfo();
+    let tmux = winsize.is_tmux;
+    let inline = winsize.needs_inline;
 
     // Print header with fancy box
     println!("┌────────────────────────────────────────────────────┐");
@@ -439,6 +516,13 @@ fn report_and_leave() {
             red("× UNSUPPORTED")
         }
     }
+    fn format_info(status: bool) -> String {
+        if status {
+            green("✓ YES")
+        } else {
+            red("× NO")
+        }
+    }
 
     // Print required dependencies
     println!("│ Dependencies:                                      │");
@@ -458,11 +542,13 @@ fn report_and_leave() {
 
     // Print terminal dimensions
     println!("├────────────────────────────────────────────────────┤");
-    println!("│ Terminal Dimensions:                               │");
+    println!("│ Terminal Info:                                     │");
     println!("│   Width:        {:<34} │", winsize.sc_width);
     println!("│   Height:       {:<34} │", winsize.sc_height);
     println!("│   Pixel Width:  {:<34} │", winsize.spx_width);
     println!("│   Pixel Height: {:<34} │", winsize.spx_height);
+    println!("│   Tmux:         {:<43} │", format_info(tmux));
+    println!("│   Inline:       {:<43} │", format_info(inline));
 
     // Print footer
     println!("└────────────────────────────────────────────────────┘");
