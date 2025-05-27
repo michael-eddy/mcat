@@ -5,27 +5,24 @@ use crossterm::{
     style::Print,
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
+use rasteroid::image_extended::ZoomPanViewport;
 use std::{
     io::{self, Write},
     time::Duration,
 };
 
-pub struct ImageViewerState {
-    pub x: i32,
-    pub y: i32,
-    pub zoom: usize,
-}
-
 pub fn show_help_prompt(
     out: &mut impl Write,
     term_width: u16,
     term_height: u16,
-    state: &ImageViewerState,
+    state: &ZoomPanViewport,
 ) -> io::Result<()> {
-    let help_text = "[Arrow/hjkl] Move  [+/-] Zoom  [0] Reset  [q/ESC] Quit";
+    let help_text = "[Arrow/hjkl] Move [g/G] Start/End  [+/-] Zoom  [0] Reset  [q/ESC] Quit";
     let status_text = format!(
         "Position: ({}, {}) | Zoom: {}x",
-        state.x, state.y, state.zoom
+        state.pan_x(),
+        state.pan_y(),
+        state.zoom()
     );
 
     // Calculate positions (bottom of screen)
@@ -59,22 +56,23 @@ pub fn clear_screen(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
 }
 
 pub fn run_interactive_viewer(
-    mut callback: impl FnMut(&ImageViewerState) -> bool,
+    container_width: u32,
+    container_height: u32,
+    image_width: u32,
+    image_height: u32,
+    mut callback: impl FnMut(&ZoomPanViewport) -> Option<()>,
 ) -> std::io::Result<()> {
     enable_raw_mode()?;
 
-    let mut state = ImageViewerState {
-        x: 0,
-        y: 0,
-        zoom: 1,
-    };
+    let mut viewport =
+        ZoomPanViewport::new(container_width, container_height, image_width, image_height);
 
     // Initial callback
-    let mut should_quit = callback(&state);
+    let mut should_quit = callback(&viewport);
     let mut last_callback_time = std::time::Instant::now();
     let callback_throttle = std::time::Duration::from_millis(50);
 
-    while !should_quit {
+    while should_quit.is_some() {
         if event::poll(Duration::from_millis(16))? {
             // ~60fps
             if let Event::Key(key) = event::read()? {
@@ -90,7 +88,7 @@ pub fn run_interactive_viewer(
                         code: KeyCode::Esc, ..
                     } => break,
 
-                    // Movement (arrow keys or hjkl)
+                    //left
                     KeyEvent {
                         code: KeyCode::Left,
                         ..
@@ -100,11 +98,15 @@ pub fn run_interactive_viewer(
                         modifiers: KeyModifiers::NONE,
                         ..
                     } => {
-                        clicked_correct_key = true;
-                        state.x -= 1
+                        if viewport.adjust_pan(-50, 0) {
+                            clicked_correct_key = true;
+                        }
                     }
+
+                    // right
                     KeyEvent {
                         code: KeyCode::Right,
+                        modifiers: KeyModifiers::NONE,
                         ..
                     }
                     | KeyEvent {
@@ -112,22 +114,31 @@ pub fn run_interactive_viewer(
                         modifiers: KeyModifiers::NONE,
                         ..
                     } => {
-                        clicked_correct_key = true;
-                        state.x += 1
+                        if viewport.adjust_pan(50, 0) {
+                            clicked_correct_key = true;
+                        }
                     }
+
+                    // up
                     KeyEvent {
-                        code: KeyCode::Up, ..
+                        code: KeyCode::Up,
+                        modifiers: KeyModifiers::NONE,
+                        ..
                     }
                     | KeyEvent {
                         code: KeyCode::Char('k'),
                         modifiers: KeyModifiers::NONE,
                         ..
                     } => {
-                        clicked_correct_key = true;
-                        state.y -= 1
+                        if viewport.adjust_pan(0, -50) {
+                            clicked_correct_key = true;
+                        }
                     }
+
+                    // down
                     KeyEvent {
                         code: KeyCode::Down,
+                        modifiers: KeyModifiers::NONE,
                         ..
                     }
                     | KeyEvent {
@@ -135,8 +146,31 @@ pub fn run_interactive_viewer(
                         modifiers: KeyModifiers::NONE,
                         ..
                     } => {
-                        clicked_correct_key = true;
-                        state.y += 1
+                        if viewport.adjust_pan(0, 50) {
+                            clicked_correct_key = true;
+                        }
+                    }
+
+                    // stronger up
+                    KeyEvent {
+                        code: KeyCode::Char('u'),
+                        modifiers: KeyModifiers::CONTROL,
+                        ..
+                    } => {
+                        if viewport.adjust_pan(0, -200) {
+                            clicked_correct_key = true;
+                        }
+                    }
+
+                    // stronger down
+                    KeyEvent {
+                        code: KeyCode::Char('d'),
+                        modifiers: KeyModifiers::CONTROL,
+                        ..
+                    } => {
+                        if viewport.adjust_pan(0, 200) {
+                            clicked_correct_key = true;
+                        }
                     }
 
                     // Zoom (+, - or =)
@@ -151,16 +185,39 @@ pub fn run_interactive_viewer(
                         ..
                     } => {
                         clicked_correct_key = true;
-                        state.zoom += 1
+                        viewport.set_zoom(viewport.zoom() + 1);
                     }
                     KeyEvent {
                         code: KeyCode::Char('-'),
                         modifiers: KeyModifiers::NONE,
                         ..
                     } => {
-                        if state.zoom > 1 {
+                        if viewport.zoom() > 1 {
                             clicked_correct_key = true;
-                            state.zoom -= 1
+                            viewport.set_zoom(viewport.zoom() - 1);
+                        }
+                    }
+
+                    KeyEvent {
+                        code: KeyCode::Char('g'),
+                        modifiers: KeyModifiers::NONE,
+                        ..
+                    } => {
+                        let (_, _, y, _) = viewport.get_pan_limits();
+                        if viewport.pan_y() != y {
+                            clicked_correct_key = true;
+                            viewport.set_pan(viewport.pan_x(), y);
+                        }
+                    }
+                    KeyEvent {
+                        code: KeyCode::Char('G'),
+                        modifiers: KeyModifiers::SHIFT,
+                        ..
+                    } => {
+                        let (_, _, _, y) = viewport.get_pan_limits();
+                        if viewport.pan_y() != y {
+                            clicked_correct_key = true;
+                            viewport.set_pan(viewport.pan_x(), y);
                         }
                     }
 
@@ -171,9 +228,8 @@ pub fn run_interactive_viewer(
                         ..
                     } => {
                         clicked_correct_key = true;
-                        state.x = 0;
-                        state.y = 0;
-                        state.zoom = 1;
+                        viewport.set_zoom(1);
+                        viewport.set_pan(0, 0);
                     }
 
                     _ => {}
@@ -183,7 +239,7 @@ pub fn run_interactive_viewer(
                 if clicked_correct_key {
                     let now = std::time::Instant::now();
                     if now.duration_since(last_callback_time) >= callback_throttle {
-                        should_quit = callback(&state);
+                        should_quit = callback(&viewport);
                         last_callback_time = now;
                     }
                 }
