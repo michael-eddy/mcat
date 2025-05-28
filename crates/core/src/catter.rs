@@ -306,7 +306,6 @@ fn interact_with_image(
         InlineEncoder::Ascii => true,
         InlineEncoder::Iterm | InlineEncoder::Sixel => false,
     };
-    let mut pre_ar = 0.0;
 
     run_interactive_viewer(
         container_width,
@@ -315,10 +314,6 @@ fn interact_with_image(
         image_height,
         |vp| {
             let new_img = vp.apply_to_image(&img);
-            let new_ar = new_img.width() as f32 / new_img.height() as f32;
-            let rounded = (new_ar * 100.0).round() / 100.0;
-            let is_same_ar = pre_ar == rounded;
-            pre_ar = rounded;
             let (img, center, _, _) = new_img
                 .resize_plus(
                     opts.width,
@@ -339,7 +334,7 @@ fn interact_with_image(
                 opts.encoder,
             )
             .ok()?;
-            clear_screen(out, !is_same_ar).ok()?;
+            clear_screen(out).ok()?;
             out.write_all(&buf).ok()?;
             show_help_prompt(out, tinfo.sc_width, tinfo.sc_height, vp).ok()?;
             out.flush().ok()?;
@@ -350,7 +345,7 @@ fn interact_with_image(
             Some(())
         },
     )?;
-    clear_screen(out, true)?;
+    clear_screen(out)?;
     Ok(())
 }
 
