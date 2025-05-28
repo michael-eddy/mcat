@@ -50,8 +50,12 @@ pub fn show_help_prompt(
     Ok(())
 }
 
-pub fn clear_screen(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
-    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+pub fn clear_screen(stdout: &mut impl std::io::Write, clear: bool) -> std::io::Result<()> {
+    if clear {
+        execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+    } else {
+        execute!(stdout, MoveTo(0, 0))?;
+    }
     Ok(())
 }
 

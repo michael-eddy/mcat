@@ -301,6 +301,12 @@ fn interact_with_image(
         term_misc::SizeDirection::Height,
     )?;
     let height = (tinfo.sc_height - 3).min(height_cells as u16);
+    let should_disable_raw_mode = match opts.encoder {
+        InlineEncoder::Kitty => tinfo.is_tmux,
+        InlineEncoder::Ascii => true,
+        InlineEncoder::Iterm | InlineEncoder::Sixel => false,
+    };
+    let mut pre_ar = 0.0;
 
     run_interactive_viewer(
         container_width,
@@ -309,6 +315,10 @@ fn interact_with_image(
         image_height,
         |vp| {
             let new_img = vp.apply_to_image(&img);
+            let new_ar = new_img.width() as f32 / new_img.height() as f32;
+            let rounded = (new_ar * 100.0).round() / 100.0;
+            let is_same_ar = pre_ar == rounded;
+            pre_ar = rounded;
             let (img, center, _, _) = new_img
                 .resize_plus(
                     opts.width,
@@ -317,7 +327,7 @@ fn interact_with_image(
                     false,
                 )
                 .ok()?;
-            if resize_for_ascii {
+            if should_disable_raw_mode {
                 disable_raw_mode().ok()?;
             }
             let mut buf = Vec::new();
@@ -329,17 +339,18 @@ fn interact_with_image(
                 opts.encoder,
             )
             .ok()?;
-            clear_screen(out).ok()?;
+            clear_screen(out, !is_same_ar).ok()?;
             out.write_all(&buf).ok()?;
             show_help_prompt(out, tinfo.sc_width, tinfo.sc_height, vp).ok()?;
             out.flush().ok()?;
-            if resize_for_ascii {
+            if should_disable_raw_mode {
                 enable_raw_mode().ok()?;
             }
 
             Some(())
         },
     )?;
+    clear_screen(out, true)?;
     Ok(())
 }
 
