@@ -2,8 +2,9 @@ use std::{
     env,
     error::Error,
     fs::{self, File},
-    io::{Write, stdout},
+    io::{self, Write, stdout},
     path::Path,
+    process::{Command, Stdio},
 };
 
 use crossterm::{
@@ -11,7 +12,6 @@ use crossterm::{
     tty::IsTty,
 };
 use image::{DynamicImage, ImageFormat};
-use pager::Pager;
 use rasteroid::{
     InlineEncoder,
     image_extended::{InlineImage, ZoomPanViewport},
@@ -229,7 +229,8 @@ pub fn cat(
             if stdout().is_tty() {
                 let ansi = markdown::md_to_ansi(&res, opts.style);
                 if ansi.lines().count() > term_misc::get_wininfo().sc_height as usize {
-                    setup_pager();
+                    let pager = Pager::new();
+                    pager.page(&ansi)?;
                 }
                 out.write_all(ansi.as_bytes())?;
                 Ok(CatType::Pretty)
@@ -344,15 +345,63 @@ pub fn is_video(ext: &str) -> bool {
     )
 }
 
-fn setup_pager() {
-    let pager = if which::which("moar").is_ok() {
-        "moar --no-linenumbers"
-    } else {
-        "less -r"
-    };
+pub struct Pager {
+    command: Option<(String, Vec<String>)>,
+}
 
-    unsafe {
-        env::set_var("PAGER", pager);
+impl Pager {
+    pub fn new() -> Self {
+        let command = Self::find_pager();
+        Self { command }
     }
-    Pager::new().setup();
+
+    fn find_pager() -> Option<(String, Vec<String>)> {
+        // Check MCATPAGER first, then PAGER
+        if let Ok(pager_env) = env::var("MCATPAGER").or_else(|_| env::var("PAGER")) {
+            let pager_name = pager_env.split_whitespace().next()?;
+
+            // Only support known pagers that handle ANSI codes well
+            match pager_name {
+                "less" => {
+                    if which::which("less").is_ok() {
+                        return Some(("less".to_string(), vec!["-r".to_string()]));
+                    }
+                }
+                "moar" => {
+                    if which::which("moar").is_ok() {
+                        return Some(("moar".to_string(), vec!["--no-linenumbers".to_string()]));
+                    }
+                }
+                _ => {} // Ignore unsupported pagers
+            }
+        }
+
+        // Try default pagers
+        if which::which("moar").is_ok() {
+            Some(("moar".to_string(), vec!["--no-linenumbers".to_string()]))
+        } else if which::which("less").is_ok() {
+            Some(("less".to_string(), vec!["-r".to_string()]))
+        } else {
+            None
+        }
+    }
+
+    pub fn page(&self, content: &str) -> io::Result<()> {
+        if let Some((cmd, args)) = &self.command {
+            let mut child = Command::new(cmd)
+                .args(args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?;
+
+            if let Some(stdin) = child.stdin.as_mut() {
+                stdin.write_all(content.as_bytes())?;
+            }
+
+            let _ = child.wait();
+        }
+
+        Ok(())
+    }
 }
