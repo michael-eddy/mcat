@@ -1,6 +1,6 @@
 ## V0.3.1 (Not Released)
-- [x] fixed an issue that tmux passthrough won't be enabled on the ls command
-- [ ] made the interactive image viewer overlay images instead of clearing screen; to avoid constant blink
+- fixed an issue that tmux passthrough won't be enabled on the ls command
+- made the interactive image viewer blink less ~ to none; making it easier to the eye
 
 ## V0.3.0
 #### New Features:

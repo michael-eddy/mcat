@@ -308,7 +308,6 @@ fn interact_with_image(
         image_width,
         image_height,
         |vp| {
-            clear_screen(out).ok()?;
             let new_img = vp.apply_to_image(&img);
             let (img, center, _, _) = new_img
                 .resize_plus(
@@ -321,14 +320,17 @@ fn interact_with_image(
             if resize_for_ascii {
                 disable_raw_mode().ok()?;
             }
+            let mut buf = Vec::new();
             rasteroid::inline_an_image(
                 &img,
-                out,
+                &mut buf,
                 if opts.center { Some(center) } else { None },
                 None,
                 opts.encoder,
             )
             .ok()?;
+            clear_screen(out).ok()?;
+            out.write_all(&buf).ok()?;
             show_help_prompt(out, tinfo.sc_width, tinfo.sc_height, vp).ok()?;
             out.flush().ok()?;
             if resize_for_ascii {
