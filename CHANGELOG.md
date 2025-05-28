@@ -1,3 +1,7 @@
+## V0.3.1 (Not Released)
+- [x] fixed an issue that tmux passthrough won't be enabled on the ls command
+- [ ] made the interactive image viewer overlay images instead of clearing screen; to avoid constant blink
+
 ## V0.3.0
 #### New Features:
 - added -a --hidden flag for showing hidden files, along with making hidden files off by default.
