@@ -1,4 +1,4 @@
-## V0.3.0 (Not Released)
+## V0.3.0
 #### New Features:
 - added -a --hidden flag for showing hidden files, along with making hidden files off by default.
 - --pretty -p flag removed in favor of auto detecting if stdout is tty
