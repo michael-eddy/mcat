@@ -2,7 +2,7 @@ use std::{
     env,
     error::Error,
     fs::{self, File},
-    io::{self, Write, stdout},
+    io::{Write, stdout},
     path::Path,
     process::{Command, Stdio},
 };
@@ -230,9 +230,12 @@ pub fn cat(
                 let ansi = markdown::md_to_ansi(&res, opts.style);
                 if ansi.lines().count() > term_misc::get_wininfo().sc_height as usize {
                     let pager = Pager::new();
-                    pager.page(&ansi)?;
+                    if pager.page(&ansi).is_err() {
+                        out.write_all(ansi.as_bytes())?;
+                    }
+                } else {
+                    out.write_all(ansi.as_bytes())?;
                 }
-                out.write_all(ansi.as_bytes())?;
                 Ok(CatType::Pretty)
             } else {
                 out.write_all(res.as_bytes())?;
@@ -377,29 +380,27 @@ impl Pager {
         }
 
         // Try default pagers
-        if which::which("moar").is_ok() {
-            Some(("moar".to_string(), vec!["--no-linenumbers".to_string()]))
-        } else if which::which("less").is_ok() {
+        if which::which("less").is_ok() {
             Some(("less".to_string(), vec!["-r".to_string()]))
+        } else if which::which("moar").is_ok() {
+            Some(("moar".to_string(), vec!["--no-linenumbers".to_string()]))
         } else {
             None
         }
     }
 
-    pub fn page(&self, content: &str) -> io::Result<()> {
+    pub fn page(&self, content: &str) -> Result<(), Box<dyn Error>> {
         if let Some((cmd, args)) = &self.command {
-            let mut child = Command::new(cmd)
-                .args(args)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn()?;
+            let mut child = Command::new(cmd).args(args).stdin(Stdio::piped()).spawn()?;
 
             if let Some(stdin) = child.stdin.as_mut() {
-                stdin.write_all(content.as_bytes())?;
+                // ignoring cuz the pipe will break when the user quits most likely
+                let _ = stdin.write_all(content.as_bytes());
             }
 
-            let _ = child.wait();
+            child.wait()?;
+        } else {
+            return Err("no pager was found in the system".into());
         }
 
         Ok(())
