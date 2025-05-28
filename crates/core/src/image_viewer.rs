@@ -1,6 +1,6 @@
 use crossterm::{
     cursor::MoveTo,
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     style::Print,
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
@@ -76,6 +76,9 @@ pub fn run_interactive_viewer(
         if event::poll(Duration::from_millis(16))? {
             // ~60fps
             if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Release {
+                    continue;
+                }
                 let mut clicked_correct_key = false;
                 match key {
                     // Quit (q or ESC)
