@@ -57,6 +57,64 @@ cargo install --path ./crates/core
 ```
 or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/latest)
 
+## ⚙️ Supported Pipeline
+```mermaid
+flowchart TD
+    %% Input sources (grouped)
+    INPUT[📁 Input Sources<br/>Local Files, stdin, URL]
+    
+    %% Various file formats (grouped)
+    DOCS[📄 Documents<br/>DOCX, PDF, ODT...]
+    CODE[💻 Code<br/>Rust, Go, Python...]
+    DATA[📊 Data<br/>CSV, JSON, XML...]
+    MEDIA[🎬 Media<br/>Images, Videos]
+    
+    %% Core processing formats
+    MD[📝 Markdown]
+    HTML[🌐 HTML]
+    
+    %% Output options
+    TERM[💻 Pretty Terminal]
+    IMAGE[🖼️ Static Image]
+    INTERACTIVE[⚡ Interactive Images]
+    INLINE_DISPLAY[👁️ Inline Display<br/>Images & Videos]
+    
+    %% Input to file types
+    INPUT --> DOCS
+    INPUT --> CODE
+    INPUT --> DATA
+    INPUT --> MEDIA
+    
+    %% Main processing pipeline
+    DOCS --> MD
+    CODE --> MD
+    DATA --> MD
+    
+    MD --> HTML
+    MD --> TERM
+    
+    HTML --> IMAGE
+    
+    %% Image output paths
+    IMAGE --> INTERACTIVE
+    IMAGE --> INLINE_DISPLAY
+    
+    %% Media direct paths
+    MEDIA --> INTERACTIVE
+    MEDIA --> INLINE_DISPLAY
+    
+    %% Styling
+    classDef inputSource fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000
+    classDef fileFormat fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef coreFormat fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef outputFormat fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px,color:#000
+    
+    class INPUT inputSource
+    class DOCS,CODE,DATA,MEDIA fileFormat
+    class MD,HTML coreFormat
+    class TERM,IMAGE,INTERACTIVE,INLINE_DISPLAY outputFormat
+```
+
 ## 🏋️ Example Usage
 ```sh
 # View a document at the terminal
@@ -116,15 +174,6 @@ mcat someimage.png anotherimage.bmp --hori -o image > save.png
 # Concatenate videos (must be same format: codec,audio..)
 mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 ```
-
-## ⚙️ Supported Formats
-| Input Type | Output Options |
-|---|---|
-| DOCX, PDF, CSV, ODT, PPTX, and more.. | Markdown, HTML, Image, Inline, Interactive |
-| Markdown | Pretty terminal formatting |
-| Markdown / HTML | Image, Inline Image, Interactive |
-| Images, Videos | Inline Display |
-| URLs | Fetch + Everything above! |
 
 ## 🛐 Dependencies
 Mcat tries to have as little dependencies as possible.

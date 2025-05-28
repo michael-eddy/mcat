@@ -1,21 +1,21 @@
 ## V0.3.0 (Not Released)
 #### New Features:
-- [x] added -a --hidden flag for showing hidden files, along with making hidden files off by default.
-- [x] --pretty -p flag removed in favor of auto detecting if stdout is tty
-- [x] the pretty print of markdown is significantly improved
-- [x] now attempts to send text to a pager when the output is bigger then the screen and stdout is tty
-- [x] added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
-- [x] added `--generate` flag for generating shell completions for zsh/bash/fish/powershell
-- [x] kitty animation frames are stored in shm objects (writes the animation way faster, and less cpu power)
-- [x] added tmux support
-- [x] added kitty inline support; allows for having kitty images/animations be scrollable in apps like vim,tmux.
-- [x] added `-o interactive` mode to zoom & pan images for more detail
+- added -a --hidden flag for showing hidden files, along with making hidden files off by default.
+- --pretty -p flag removed in favor of auto detecting if stdout is tty
+- the pretty print of markdown is significantly improved
+- now attempts to send text to a pager when the output is bigger then the screen and stdout is tty
+- added catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night themes!
+- added `--generate` flag for generating shell completions for zsh/bash/fish/powershell
+- kitty animation frames are stored in shm objects (writes the animation way faster, and less cpu power)
+- added tmux support
+- added kitty inline support; allows for having kitty images/animations be scrollable in apps like vim,tmux.
+- added `-o interactive` mode to zoom & pan images for more detail
 #### Fixes:
-- [x] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
-- [x] fixed an issue in the ls command that would make the first item in a row up by 1 cell
-- [x] improved Iterm's graphic protocol support-detection
-- [x] fixed an issue that restricted rendering HTML into image directly
-- [x] fixed an issue where the process will quit when detecting symlink loop instead of just continuing
+- fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
+- fixed an issue in the ls command that would make the first item in a row up by 1 cell
+- improved Iterm's graphic protocol support-detection
+- fixed an issue that restricted rendering HTML into image directly
+- fixed an issue where the process will quit when detecting symlink loop instead of just continuing
 
 ## V0.2.8
 - adding an ls command
