@@ -33,17 +33,17 @@
   Render Markdown or HTML files into images.
   
 * 🖼️ **Inline Image/Videos**  
-  Display images/videos *inside* your terminal using protocols like Kitty, iTerm, or Sixel.
+  Display images/videos *inside* your terminal using protocols like Kitty, iTerm, or Sixel (with tmux support!).
   
-* 🌐 **Handles URLs too!**  
-  View Images/Videos/Document from a URL in your terminal (or save them)
+* 🌐 **Handles URLs and Stdin too!**  
+  You don't have to save things locally in your PC to use mcat!
 
 * 🔗 **Concatenate Images and Video too!**  
   Concatenate videos of the same format (time concat)
   and Concatenate images by stacking them horizontal or vertical(default)
   
-* 💃🏻 **Automatic Styling for HTML**  
-  automatically inject styles into the HTML to make the image cooler!
+* 💃🏻 **Style-able**  
+  Contains different themes to fit your taste
 
 ## ⬇️ Installation
 ```sh
@@ -65,10 +65,10 @@ mcat resume.pdf
 # Or from a url!
 mcat "https://somewebite.com/file.pdf"
 
-# Or HTML
+# Need it as HTML?
 mcat project.docx -o html
 
-# ls, you can list a dir
+# list a directory using images!
 mcat ls
 
 # Show a document inline as an image
@@ -80,11 +80,12 @@ mcat index.html -i
 # Just save?
 mcat index.html -o image > page.png
 
+# Too big? zoom and pan it inside the terminal!
+mcat file1.js file2.js file3.js file4.js -o interactive
+mcat bigimg.png -o interactive
+
 # Show a document as an image inline with a different theme
 mcat main.rs another.rs -it monokai
-
-# Render a document to an image and save it
-mcat readme.md -o image > img.png
 
 # Show media inline in your terminal
 mcat diagram.png
@@ -119,9 +120,9 @@ mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 ## ⚙️ Supported Formats
 | Input Type | Output Options |
 |---|---|
-| DOCX, PDF, CSV, ODT, PPTX, and more.. | Markdown, HTML, Image, Inline |
+| DOCX, PDF, CSV, ODT, PPTX, and more.. | Markdown, HTML, Image, Inline, Interactive |
 | Markdown | Pretty terminal formatting |
-| Markdown / HTML | Image, Inline Image |
+| Markdown / HTML | Image, Inline Image, Interactive |
 | Images, Videos | Inline Display |
 | URLs | Fetch + Everything above! |
 
@@ -143,10 +144,9 @@ Arguments:
   [input]...  file / dir / url
 
 Options:
-  -o, --output <output>                  the format to output [possible values: html, md, image, video, inline]
+  -o, --output <output>                  the format to output [possible values: html, md, image, video, inline, interactive]
   -t, --theme <theme>                    the theme to use [default: dark] [possible values: dark, light, catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night]
   -s, --style-html                       add style to html too (when html is the output)
-      --delete-images                    deletes all the images, even ones that are not in the scrollview.. currently only works in kitty, and will be extended..
   -a, --hidden                           include hidden files
       --kitty                            makes the inline image encoded to kitty
       --iterm                            makes the inline image encoded to iterm
@@ -154,7 +154,7 @@ Options:
       --ascii                            makes the inline image encoded to ascii
   -i                                     shortcut for putting --output inline
       --hori                             concat images horizontal instead of vertical
-      --inline-options <inline-options>  options for the --output inline
+      --opts <inline-options>            options for the --output inline
                                          *  center=<bool>
                                          *  width=<string> [only for images]
                                          *  height=<string> [only for images]
@@ -166,6 +166,7 @@ Options:
                                          *  x=<int> [only for images]
                                          *  y=<int> [only for images]
                                          *  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
+      --delete-images                    deletes all the images, even ones that are not in the scrollview.. currently only works in kitty
       --report                           reports image / video dimensions when drawing images. along with reporting more info when not drawing images
       --silent                           removes loading bars
       --fetch-chromium                   download and prepare chromium

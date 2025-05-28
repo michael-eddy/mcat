@@ -13,13 +13,9 @@
 #### Fixes:
 - [x] fixed an issue where the zoom / pan aspect ratio would stay the same, making it difficult to see in some cases.
 - [x] fixed an issue in the ls command that would make the first item in a row up by 1 cell
-- [ ] fixed an issue where the ls command won't work on windows-wezterm when encoding to Iterm
 - [x] improved Iterm's graphic protocol support-detection
 - [x] fixed an issue that restricted rendering HTML into image directly
 - [x] fixed an issue where the process will quit when detecting symlink loop instead of just continuing
-#### TODO:
-- [ ] make better exmps in the readme
-- [ ] make a new gif for the readme...
 
 ## V0.2.8
 - adding an ls command
