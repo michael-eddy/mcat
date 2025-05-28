@@ -102,11 +102,18 @@ pub fn is_tmux(env: &EnvIdentifiers) -> bool {
     env.term_contains("tmux") || env.has_key("TMUX")
 }
 
-pub fn set_tmux_passthrough(enabled: bool) -> Result<std::process::ExitStatus, std::io::Error> {
+pub fn set_tmux_passthrough(enabled: bool) {
     let status = if enabled { "on" } else { "off" };
-    Command::new("tmux")
+    if Command::new("tmux")
         .args(["set", "-g", "allow-passthrough", status])
         .status()
+        .is_err()
+    {
+        // better ignored imo
+        // eprintln!(
+        //     "failed enabling tmux passthrough, even though the term is tmux. please enable manually with - `tmux set -g allow-passthrough`"
+        // )
+    }
 }
 
 pub trait Frame {

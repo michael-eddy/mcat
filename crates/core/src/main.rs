@@ -351,8 +351,13 @@ fn main() {
             catter::cat(tmp.path(), &mut out, Some(opts)).unwrap_or_exit();
         }
         "video" => {
-            if is_tmux {
-                rasteroid::set_tmux_passthrough(true).unwrap_or_exit();
+            match inline_encoder {
+                rasteroid::InlineEncoder::Ascii | rasteroid::InlineEncoder::Sixel => {}
+                _ => {
+                    if is_tmux {
+                        rasteroid::set_tmux_passthrough(true);
+                    }
+                }
             }
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
@@ -363,8 +368,13 @@ fn main() {
             }
         }
         "image" => {
-            if is_tmux {
-                rasteroid::set_tmux_passthrough(true).unwrap_or_exit();
+            match inline_encoder {
+                rasteroid::InlineEncoder::Ascii => {}
+                _ => {
+                    if is_tmux {
+                        rasteroid::set_tmux_passthrough(true);
+                    }
+                }
             }
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, Some(opts)).unwrap_or_exit();
