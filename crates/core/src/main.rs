@@ -257,6 +257,9 @@ fn main() {
     if is_ls {
         let d = ".".to_string();
         let input = input.get(1).unwrap_or(&d);
+        if is_tmux {
+            rasteroid::set_tmux_passthrough(true);
+        }
         converter::lsix(input, &mut out, inline_encoder, hidden).unwrap_or_exit();
         std::process::exit(0);
     }

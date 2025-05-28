@@ -104,16 +104,9 @@ pub fn is_tmux(env: &EnvIdentifiers) -> bool {
 
 pub fn set_tmux_passthrough(enabled: bool) {
     let status = if enabled { "on" } else { "off" };
-    if Command::new("tmux")
+    let _ = Command::new("tmux")
         .args(["set", "-g", "allow-passthrough", status])
-        .status()
-        .is_err()
-    {
-        // better ignored imo
-        // eprintln!(
-        //     "failed enabling tmux passthrough, even though the term is tmux. please enable manually with - `tmux set -g allow-passthrough`"
-        // )
-    }
+        .status();
 }
 
 pub trait Frame {
