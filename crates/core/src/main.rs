@@ -129,6 +129,12 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  inline=<bool>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
         )
         .arg(
+            Arg::new("no-linenumbers")
+                .long("no-linenumbers")
+                .help("changes the format of codeblock in the markdown viewer")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("delete-all-images")
                 .long("delete-images")
                 .help("deletes all the images, even ones that are not in the scrollview.. currently only works in kitty")
@@ -217,12 +223,19 @@ fn main() {
         .unwrap_or_default()
         .cloned()
         .collect();
-
-    // encoders
     let kitty = opts.get_flag("kitty");
     let iterm = opts.get_flag("iterm");
     let sixel = opts.get_flag("sixel");
     let ascii = opts.get_flag("ascii");
+    let hidden = opts.get_flag("hidden");
+    let output = opts.get_one::<String>("output");
+    let style = opts.get_one::<String>("theme").unwrap();
+    let style_html = opts.get_flag("style-html");
+    let hori = *opts.get_one::<bool>("horizontal").unwrap();
+    let inline = opts.get_flag("inline");
+    let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
+    let no_line_numbers = opts.get_flag("no-linenumbers");
+
     let encoder = EncoderForce {
         kitty,
         iterm,
@@ -242,7 +255,6 @@ fn main() {
     let is_ls = input.get(0).unwrap_or(&"".to_owned()).to_lowercase() == "ls";
 
     // setting the winsize
-    let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
     let inline_options = InlineOptions::from_string(inline_options.unwrap_or_default(), !is_ls);
     let _ = term_misc::init_wininfo(
         &term_misc::break_size_string(inline_options.spx.unwrap_or_default()).unwrap_or_exit(),
@@ -252,7 +264,6 @@ fn main() {
         inline_options.inline,
     );
 
-    let hidden = opts.get_flag("hidden");
     // if ls
     if is_ls {
         let d = ".".to_string();
@@ -269,14 +280,6 @@ fn main() {
         report_and_leave();
     }
 
-    // rest
-    let output = opts.get_one::<String>("output");
-    let style = opts.get_one::<String>("theme").unwrap();
-    let style_html = opts.get_flag("style-html");
-    let hori = *opts.get_one::<bool>("horizontal").unwrap();
-
-    // shortcuts
-    let inline = opts.get_flag("inline");
     let output: Option<&str> = if inline {
         Some("inline")
     } else {
@@ -299,6 +302,7 @@ fn main() {
         style_html,
         report,
         silent,
+        hide_line_numbers: no_line_numbers,
     };
 
     let mut tmp_files = Vec::new(); //for lifetime

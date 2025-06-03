@@ -36,12 +36,12 @@ const FG_BRIGHT_RED: &str = "\x1B[91m";
 const FG_BRIGHT_GREEN: &str = "\x1B[92m";
 const FG_BRIGHT_YELLOW: &str = "\x1B[93m";
 const FG_BRIGHT_BLUE: &str = "\x1B[94m";
-const FG_BRIGHT_MAGENTA: &str = "\x1B[95m";
 const FG_BRIGHT_CYAN: &str = "\x1B[96m";
 
 struct AnsiContext {
     ps: SyntaxSet,
     theme: CustomTheme,
+    hide_line_numbers: bool,
     line: AtomicUsize,
     output: String,
 }
@@ -66,6 +66,7 @@ impl AnsiContext {
         let mut ctx = AnsiContext {
             ps: self.ps.clone(),
             theme: self.theme.clone(),
+            hide_line_numbers: self.hide_line_numbers,
             line,
             output: String::new(),
         };
@@ -79,7 +80,7 @@ impl AnsiContext {
         self.write(&text);
     }
 }
-pub fn md_to_ansi(md: &str, theme: Option<&str>) -> String {
+pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> String {
     let arena = Arena::new();
     let opts = comrak_options();
     let root = comrak::parse_document(&arena, md, &opts);
@@ -89,6 +90,7 @@ pub fn md_to_ansi(md: &str, theme: Option<&str>) -> String {
     let mut ctx = AnsiContext {
         ps,
         theme,
+        hide_line_numbers,
         output: String::new(),
         line: AtomicUsize::new(1),
     };
@@ -294,12 +296,11 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 lang
             };
 
-            let header = match get_lang_icon_and_color(lang) {
-                Some((icon, color)) => &format!("{color}{icon} {lang}",),
-                None => lang,
-            };
-
-            format_code(code, lang, &header, ctx);
+            if ctx.hide_line_numbers {
+                format_code_simple(code, lang, ctx);
+            } else {
+                format_code(code, lang, ctx);
+            }
         }
         NodeValue::HtmlBlock(node_html_block) => {
             let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
@@ -348,9 +349,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 _ => "",
             };
             let content = ctx.collect(node);
-            ctx.write(&format!(
-                "{BOLD}{FG_BRIGHT_MAGENTA}{prefix} {content}{RESET}"
-            ));
+            ctx.write(&format!("{BOLD}{FG_BLUE}{prefix} {content}{RESET}"));
         }
         NodeValue::ThematicBreak => {
             let br = br();
@@ -642,13 +641,61 @@ fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
     map.get(lang.to_lowercase().as_str()).copied()
 }
 
-fn format_code(code: &str, lang: &str, header: &str, ctx: &mut AnsiContext) {
+fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext) {
+    let full_width = term_misc::get_wininfo().sc_width as usize;
+    let box_width = (full_width as f32 / 2.5) as usize;
+
+    let (mut title, color) = match get_lang_icon_and_color(lang) {
+        Some((icon, color)) => (format!("{color}{icon} {lang}"), color),
+        None => (lang.to_owned(), ""),
+    };
+
+    if string_len(&title) > box_width.saturating_sub(2) {
+        if let Some((icon, color)) = get_lang_icon_and_color(lang) {
+            title = format!("{color}{icon}");
+        }
+    }
+
+    let visible_len = string_len(&title);
+    let padding = box_width.saturating_sub(visible_len) - 2;
+    let left_pad = padding / 2;
+    let right_pad = padding - left_pad;
+
+    let top = format!(
+        "{color}{}{RESET} {}{RESET} {color}{}{RESET}\n",
+        "─".repeat(left_pad),
+        title,
+        "─".repeat(right_pad)
+    );
+    let bottom = format!("{color}{}{RESET}", "─".repeat(box_width));
+
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
         .ps
         .find_syntax_by_token(lang)
         .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
     let mut highlighter = HighlightLines::new(syntax, &ts);
+
+    ctx.write(&top);
+    for line in LinesWithEndings::from(code) {
+        let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
+        let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
+        ctx.write(&highlighted);
+    }
+    ctx.write(&bottom);
+}
+fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext) {
+    let ts = ctx.theme.to_syntect_theme();
+    let syntax = ctx
+        .ps
+        .find_syntax_by_token(lang)
+        .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
+    let mut highlighter = HighlightLines::new(syntax, &ts);
+
+    let header = match get_lang_icon_and_color(lang) {
+        Some((icon, color)) => &format!("{color}{icon} {lang}",),
+        None => lang,
+    };
 
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;

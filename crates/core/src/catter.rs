@@ -57,6 +57,7 @@ pub struct CatOpts<'a> {
     pub center: bool,
     pub report: bool,
     pub silent: bool,
+    pub hide_line_numbers: bool,
 }
 impl CatOpts<'_> {
     pub fn default() -> Self {
@@ -73,6 +74,7 @@ impl CatOpts<'_> {
             center: false,
             report: false,
             silent: false,
+            hide_line_numbers: false,
         }
     }
 }
@@ -227,7 +229,7 @@ pub fn cat(
             //default for md
             let res = string_result.unwrap();
             if stdout().is_tty() {
-                let ansi = markdown::md_to_ansi(&res, opts.style);
+                let ansi = markdown::md_to_ansi(&res, opts.style, opts.hide_line_numbers);
                 if ansi.lines().count() > term_misc::get_wininfo().sc_height as usize {
                     let pager = Pager::new();
                     if pager.page(&ansi).is_err() {

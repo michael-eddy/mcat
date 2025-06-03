@@ -1,6 +1,17 @@
 ## V0.3.1 (Not Released)
-- fixed an issue that tmux passthrough won't be enabled on the ls command
-- made the interactive image viewer blink less ~ to none; making it easier to the eye
+- [x] fixed an issue that tmux passthrough won't be enabled on the ls command
+- [ ] made the interactive image viewer blink less ~ to none; making it easier to the eye
+- [x] added a `--no-linenumber` flag to remove line numbers from the markdown viewer
+- [x] raw text from stdin now defaults to markdown instead of txt in the markdown viewer
+- [ ] improved rendering of images in tmux by moving the cursor after the image
+- [ ] added an optional config file; allowing users to have a config file instead of aliasing 
+- [ ] improved GP support auto detetion; especially in tmux
+- [ ] the ls command now combines images by row to fix bugs from quick image printing
+- [ ] the `--report` flag now shows more info
+- [ ] fixed an issue where the interactive selector had special visible in windows
+- [ ] ascii video play now blinks less to none
+- [-] now renders images inside the markdown viewer
+- [-] added a `-p --playback` flag for watching videos in the terminal with sound
 
 ## V0.3.0
 #### New Features:

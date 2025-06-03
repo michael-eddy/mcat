@@ -38,7 +38,8 @@ impl InspectedBytes {
             if path.exists() {
                 return Ok(InspectedBytes::Path(path.to_path_buf()));
             } else {
-                return Ok(write_with_ext(bytes, "txt"));
+                // defaults to markdown because its close enough to txt
+                return Ok(write_with_ext(bytes, "md"));
             }
         }
 
