@@ -149,18 +149,7 @@ Options:
       --ascii                            makes the inline image encoded to ascii
   -i                                     shortcut for putting --output inline
       --hori                             concat images horizontal instead of vertical
-      --opts <inline-options>            options for the --output inline
-                                         *  center=<bool>
-                                         *  width=<string> [only for images]
-                                         *  height=<string> [only for images]
-                                         *  scale=<f32>
-                                         *  spx=<string>
-                                         *  sc=<string>
-                                         *  inline=<bool>
-                                         *  zoom=<usize> [only for images]
-                                         *  x=<int> [only for images]
-                                         *  y=<int> [only for images]
-                                         *  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
+      --no-linenumbers                   changes the format of codeblock in the markdown viewer
       --delete-images                    deletes all the images, even ones that are not in the scrollview.. currently only works in kitty
       --report                           reports image / video dimensions when drawing images. along with reporting more info when not drawing images
       --silent                           removes loading bars
@@ -168,6 +157,26 @@ Options:
       --fetch-ffmpeg                     download and prepare ffmpeg
       --fetch-clean                      Clean up the local binaries
       --generate <generate-completions>  Generate shell completions [possible values: bash, zsh, fish, powershell]
+      --opts <inline-options>            Options for --output inline:
+                                         *  center=<bool>
+                                         *  inline=<bool>
+                                         *  width=<string>       [only for images]
+                                         *  height=<string>      [only for images]
+                                         *  scale=<f32>
+                                         *  spx=<string>
+                                         *  sc=<string>
+                                         *  zoom=<usize>         [only for images]
+                                         *  x=<int>              [only for images]
+                                         *  y=<int>              [only for images]
+                                         *  exmp: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
+      --ls-opts <ls-options>             Options for the ls command:
+                                         *  x_padding=<string>
+                                         *  y_padding=<string>
+                                         *  min_width=<string>
+                                         *  max_width=<string>
+                                         *  height=<string>
+                                         *  items_per_row=<usize>
+                                         *  exmp: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c,max_width=16c,height=8%,items_per_row=12'
   -h, --help                             Print help
   -V, --version                          Print version
 ```
