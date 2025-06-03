@@ -124,11 +124,6 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .action(clap::ArgAction::SetTrue)
                 .help("concat images horizontal instead of vertical"))
         .arg(
-            Arg::new("inline-options")
-                .long("opts")
-                .help("options for the --output inline\n*  center=<bool>\n*  width=<string> [only for images]\n*  height=<string> [only for images]\n*  scale=<f32>\n*  spx=<string>\n*  sc=<string>\n*  inline=<bool>\n*  zoom=<usize> [only for images]\n*  x=<int> [only for images]\n*  y=<int> [only for images]\n*  exmp: --inline-options 'center=false,width=80%,height=20c,inline=true,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n")
-        )
-        .arg(
             Arg::new("no-linenumbers")
                 .long("no-linenumbers")
                 .help("changes the format of codeblock in the markdown viewer")
@@ -174,6 +169,38 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .long("generate")
                 .help("Generate shell completions")
                 .value_parser(["bash", "zsh", "fish", "powershell"])
+        )
+        .arg(
+            Arg::new("inline-options")
+                .long("opts")
+                .help(
+                    "Options for --output inline:\n\
+                     *  center=<bool>\n\
+                     *  inline=<bool>\n\
+                     *  width=<string>       [only for images]\n\
+                     *  height=<string>      [only for images]\n\
+                     *  scale=<f32>\n\
+                     *  spx=<string>\n\
+                     *  sc=<string>\n\
+                     *  zoom=<usize>         [only for images]\n\
+                     *  x=<int>              [only for images]\n\
+                     *  y=<int>              [only for images]\n\
+                     *  exmp: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n"
+                )
+        )
+        .arg(
+            Arg::new("ls-options")
+                .long("ls-opts")
+                .help(
+                    "Options for the ls command:\n\
+                     *  x_padding=<string>\n\
+                     *  y_padding=<string>\n\
+                     *  min_width=<string>\n\
+                     *  max_width=<string>\n\
+                     *  height=<string>\n\
+                     *  items_per_row=<usize>\n\
+                     *  exmp: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c,max_width=16c,height=8%,items_per_row=12'\n"
+                )
         )
 }
 
@@ -234,6 +261,7 @@ fn main() {
     let hori = *opts.get_one::<bool>("horizontal").unwrap();
     let inline = opts.get_flag("inline");
     let inline_options = opts.get_one::<String>("inline-options").map(|s| s.as_str());
+    let ls_options = opts.get_one::<String>("ls-options").map(|s| s.as_str());
     let no_line_numbers = opts.get_flag("no-linenumbers");
 
     let encoder = EncoderForce {
@@ -271,7 +299,12 @@ fn main() {
         if is_tmux {
             rasteroid::set_tmux_passthrough(true);
         }
-        converter::lsix(input, &mut out, inline_encoder, hidden).unwrap_or_exit();
+        let lsix_ctx = converter::LsixContext::from_string(
+            ls_options.unwrap_or_default(),
+            inline_encoder,
+            hidden,
+        );
+        converter::lsix(input, &mut out, lsix_ctx).unwrap_or_exit();
         std::process::exit(0);
     }
 
@@ -504,6 +537,13 @@ fn report_and_leave() {
     let winsize = term_misc::get_wininfo();
     let tmux = winsize.is_tmux;
     let inline = winsize.needs_inline;
+    let os = env.data.get("OS").map(|f| f.as_str()).unwrap_or("Unknown");
+    let term = env
+        .data
+        .get("TERM")
+        .map(|f| f.as_str())
+        .unwrap_or("Unknonwn");
+    let ver = env!("CARGO_PKG_VERSION");
 
     // Print header with fancy box
     println!("┌────────────────────────────────────────────────────┐");
@@ -564,8 +604,15 @@ fn report_and_leave() {
     println!("│   Height:       {:<34} │", winsize.sc_height);
     println!("│   Pixel Width:  {:<34} │", winsize.spx_width);
     println!("│   Pixel Height: {:<34} │", winsize.spx_height);
+
+    // Others
+    println!("├────────────────────────────────────────────────────┤");
+    println!("│ Others:                                            │");
     println!("│   Tmux:         {:<43} │", format_info(tmux));
     println!("│   Inline:       {:<43} │", format_info(inline));
+    println!("│   OS:           {:<34} │", os);
+    println!("│   TERM:         {:<34} │", term);
+    println!("│   Version:      {:<34} │", ver);
 
     // Print footer
     println!("└────────────────────────────────────────────────────┘");

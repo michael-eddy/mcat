@@ -7,8 +7,9 @@
 - [ ] added an optional config file; allowing users to have a config file instead of aliasing 
 - [ ] improved GP support auto detetion; especially in tmux
 - [ ] the ls command now combines images by row to fix bugs from quick image printing
-- [ ] the `--report` flag now shows more info
-- [ ] fixed an issue where the interactive selector had special visible in windows
+- [x] added `--ls-opts` flag; allows to configure the ls command
+- [x] the `--report` flag now shows more info
+- [x] fixed an issue where the interactive selector had special visible in windows
 - [ ] ascii video play now blinks less to none
 - [-] now renders images inside the markdown viewer
 - [-] added a `-p --playback` flag for watching videos in the terminal with sound

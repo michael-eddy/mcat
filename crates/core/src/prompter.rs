@@ -115,20 +115,16 @@ fn format_file_list(paths: &[PathBuf], base: &Path) -> Vec<String> {
 }
 
 fn encode_invisible_id(id: usize) -> String {
-    id.to_string()
-        .chars()
-        .map(|c| match c {
-            '0' => '\u{200B}', // Zero-width space
-            '1' => '\u{200C}', // Zero-width non-joiner
-            '2' => '\u{200D}', // Zero-width joiner
-            '3' => '\u{2060}', // Word joiner
-            '4' => '\u{FEFF}', // BOM / zero-width no-break
-            '5' => '\u{2061}', // Function application
-            '6' => '\u{2062}', // Invisible times
-            '7' => '\u{2063}', // Invisible separator
-            '8' => '\u{2064}', // Invisible plus
-            '9' => '\u{206A}', // Inhibit symmetric swapping (deprecated but invisible)
-            _ => ' ',
-        })
-        .collect()
+    let charset = ['\u{200B}', '\u{200C}', '\u{200D}', '\u{2060}'];
+    let mut encoded = String::new();
+    let mut n = id;
+    if n == 0 {
+        encoded.push(charset[0]);
+    } else {
+        while n > 0 {
+            encoded.push(charset[n % 4]);
+            n /= 4;
+        }
+    }
+    encoded
 }

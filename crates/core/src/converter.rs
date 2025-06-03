@@ -9,13 +9,20 @@ use ignore::WalkBuilder;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use rasteroid::{Frame, image_extended::InlineImage};
+use rasteroid::{
+    Frame,
+    image_extended::InlineImage,
+    term_misc::{self, SizeDirection},
+};
 use regex::Regex;
 use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
-use std::io::{Write, stdout};
+use std::{
+    collections::HashMap,
+    io::{Write, stdout},
+};
 use std::{
     error,
     fs::{self},
@@ -239,17 +246,17 @@ fn truncate_filename(name: String, width: u16) -> String {
     format!("{}{}", front_part, ext)
 }
 
-fn calculate_items_per_row(terminal_width: u16) -> usize {
-    const MIN_ITEM_WIDTH: u16 = 4;
-    const MAX_ITEM_WIDTH: u16 = 16;
-    const MAX_ITEMS_PER_ROW: usize = 10;
+fn calculate_items_per_row(terminal_width: u16, ctx: &LsixContext) -> Result<usize, String> {
+    let min_item_width: u16 = term_misc::dim_to_cells(&ctx.min_width, SizeDirection::Width)? as u16;
+    let max_item_width: u16 = term_misc::dim_to_cells(&ctx.max_width, SizeDirection::Width)? as u16;
+    let max_items_per_row: usize = ctx.max_items_per_row;
 
-    let min_items = ((terminal_width + MAX_ITEM_WIDTH - 1) / MAX_ITEM_WIDTH) as usize;
-    let max_items = (terminal_width / MIN_ITEM_WIDTH) as usize;
+    let min_items = ((terminal_width + max_item_width - 1) / max_item_width) as usize;
+    let max_items = (terminal_width / min_item_width) as usize;
     let mut items = min_items;
     items = items.min(max_items);
-    items = items.min(MAX_ITEMS_PER_ROW);
-    items.max(1)
+    items = items.min(max_items_per_row);
+    Ok(items.max(1))
 }
 
 #[rustfmt::skip]
@@ -309,27 +316,78 @@ fn ext_to_svg(ext: &str) -> &'static str {
     svg
 }
 
+pub struct LsixContext<'a> {
+    pub inline_encoder: &'a rasteroid::InlineEncoder,
+    pub hidden: bool,
+    pub x_padding: &'a str,
+    pub y_padding: &'a str,
+    pub min_width: &'a str,
+    pub max_width: &'a str,
+    pub height: &'a str,
+    pub max_items_per_row: usize,
+}
+
+impl<'a> LsixContext<'a> {
+    pub fn from_string(
+        s: &'a str,
+        inline_encoder: &'a rasteroid::InlineEncoder,
+        hidden: bool,
+    ) -> Self {
+        let defaults = (
+            "4c",  // x_padding
+            "2c",  // y_padding
+            "4c",  // min_width
+            "16c", // max_width
+            "8%",  // height
+            12,    // max_items_per_row
+        );
+
+        let map: HashMap<_, _> = s
+            .split(',')
+            .filter_map(|pair| {
+                let mut split = pair.splitn(2, '=');
+                let key = split.next()?.trim();
+                let value = split.next()?.trim();
+                Some((key, value))
+            })
+            .collect();
+
+        LsixContext {
+            inline_encoder,
+            hidden,
+            x_padding: map.get("x_padding").copied().unwrap_or(defaults.0),
+            y_padding: map.get("y_padding").copied().unwrap_or(defaults.1),
+            min_width: map.get("min_width").copied().unwrap_or(defaults.2),
+            max_width: map.get("max_width").copied().unwrap_or(defaults.3),
+            height: map.get("height").copied().unwrap_or(defaults.4),
+            max_items_per_row: map
+                .get("items_per_row")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(defaults.5),
+        }
+    }
+}
+
 pub fn lsix(
     input: impl AsRef<str>,
     out: &mut impl Write,
-    inline_encoder: &rasteroid::InlineEncoder,
-    hidden: bool,
+    ctx: LsixContext,
 ) -> Result<(), Box<dyn error::Error>> {
     let dir_path = Path::new(input.as_ref());
     let walker = WalkBuilder::new(dir_path)
-        .standard_filters(!hidden)
-        .hidden(!hidden)
+        .standard_filters(!ctx.hidden)
+        .hidden(!ctx.hidden)
         .max_depth(Some(1))
         .follow_links(true)
         .build();
-    let resize_for_ascii = matches!(inline_encoder, rasteroid::InlineEncoder::Ascii);
+    let resize_for_ascii = matches!(ctx.inline_encoder, rasteroid::InlineEncoder::Ascii);
     let ts = rasteroid::term_misc::get_wininfo();
-    let items_per_row = calculate_items_per_row(ts.sc_width);
-    let x_padding = 4;
-    let y_padding = 2;
+    let items_per_row = calculate_items_per_row(ts.sc_width, &ctx)?;
+    let x_padding = term_misc::dim_to_cells(&ctx.x_padding, SizeDirection::Width)? as u16;
+    let y_padding = term_misc::dim_to_cells(&ctx.y_padding, SizeDirection::Height)? as u16;
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
-    let height = format!("{}c", ts.sc_height / 12);
+    let height = ctx.height;
 
     // Collect all valid paths first
     let mut paths: Vec<_> = walker
@@ -427,7 +485,7 @@ pub fn lsix(
                 write!(out, "\x1b[{h}S")?;
                 current_y -= h as u16;
             }
-            match inline_encoder {
+            match ctx.inline_encoder {
                 rasteroid::InlineEncoder::Kitty => {
                     rasteroid::kitty_encoder::encode_image(
                         img,
