@@ -1,18 +1,16 @@
 use chromiumoxide::{Browser, BrowserConfig, BrowserFetcher, BrowserFetcherOptions};
-use crossterm::{
-    cursor::{self},
-    tty::IsTty,
-};
+use crossterm::tty::IsTty;
 use ffmpeg_sidecar::event::OutputVideoFrame;
 use futures::{lock::Mutex, stream::StreamExt};
 use ignore::WalkBuilder;
-use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
+use image::{DynamicImage, GenericImage, ImageBuffer, ImageFormat, Rgba, RgbaImage};
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use rasteroid::{
     Frame,
     image_extended::InlineImage,
-    term_misc::{self, SizeDirection},
+    inline_an_image,
+    term_misc::{self, SizeDirection, dim_to_px},
 };
 use regex::Regex;
 use resvg::{
@@ -21,6 +19,7 @@ use resvg::{
 };
 use std::{
     collections::HashMap,
+    fs::File,
     io::{Write, stdout},
 };
 use std::{
@@ -217,9 +216,9 @@ fn truncate_filename(name: String, width: u16) -> String {
     let (base, ext) = match dot_pos {
         Some(pos) => {
             let (b, e) = name.split_at(pos);
-            (b, e)
+            (b.into(), format!(".{}", e))
         }
-        None => (name.as_str(), ""),
+        None => (name, "".into()),
     };
 
     let ext_len = ext.len();
@@ -237,8 +236,8 @@ fn truncate_filename(name: String, width: u16) -> String {
     let available_base_width = width - ext_len;
 
     let front_part = if available_base_width < base_len {
-        let b = &base[..available_base_width - 1];
-        &format!("{b}.")
+        let b = &base[..available_base_width];
+        format!("{b}")
     } else {
         base
     };
@@ -336,10 +335,10 @@ impl<'a> LsixContext<'a> {
         let defaults = (
             "4c",  // x_padding
             "2c",  // y_padding
-            "4c",  // min_width
+            "2c",  // min_width
             "16c", // max_width
-            "8%",  // height
-            12,    // max_items_per_row
+            "2c",  // height
+            20,    // max_items_per_row
         );
 
         let map: HashMap<_, _> = s
@@ -388,6 +387,7 @@ pub fn lsix(
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
     let height = ctx.height;
+    let px_x_padding = dim_to_px(&format!("{x_padding}c"), SizeDirection::Width)?;
 
     // Collect all valid paths first
     let mut paths: Vec<_> = walker
@@ -460,79 +460,63 @@ pub fn lsix(
         })
         .collect();
 
-    let (_, y) = cursor::position()?;
-    let mut current_y = y + y_padding;
+    let mut buf = Vec::new();
     for chunk in &images.into_iter().chunks(items_per_row as usize) {
-        let mut current_x = x_padding;
-        let mut max_height = 0;
         let items: Vec<_> = chunk.collect();
-        for (img, _, _, h) in items.iter() {
-            let h = match resize_for_ascii {
-                true => Ok(*h / 2),
-                false => {
-                    let h = format!("{h}px");
-                    rasteroid::term_misc::dim_to_cells(
-                        &h,
-                        rasteroid::term_misc::SizeDirection::Height,
-                    )
-                }
-            }?;
-            if h > max_height {
-                max_height = h;
-            }
-            if current_y + h as u16 >= ts.sc_height {
-                let h = h + 1;
-                write!(out, "\x1b[{h}S")?;
-                current_y -= h as u16;
-            }
-            match ctx.inline_encoder {
-                rasteroid::InlineEncoder::Kitty => {
-                    rasteroid::kitty_encoder::encode_image(
-                        img,
-                        &mut *out,
-                        None,
-                        Some((current_x, current_y)),
-                    )?;
-                }
-                rasteroid::InlineEncoder::Iterm => {
-                    rasteroid::iterm_encoder::encode_image(
-                        img,
-                        &mut *out,
-                        None,
-                        Some((current_x, current_y)),
-                    )?;
-                }
-                rasteroid::InlineEncoder::Sixel => {
-                    rasteroid::sixel_encoder::encode_image(
-                        img,
-                        &mut *out,
-                        None,
-                        Some((current_x, current_y)),
-                    )?;
-                }
-                rasteroid::InlineEncoder::Ascii => {
-                    rasteroid::ascii_encoder::encode_image(
-                        img,
-                        &mut *out,
-                        None,
-                        Some((current_x, current_y)),
-                    )?;
-                }
-            }
-            current_x += width + x_padding;
-        }
-        current_y += max_height as u16 + 1;
-        current_x = x_padding;
-        for (_, path, _, _) in items.iter() {
-            let tpath = truncate_filename((*path).clone(), width);
-            write!(out, "\x1b[{current_y};{current_x}H{}", tpath)?;
-            current_x += width + x_padding;
-        }
-        current_y += y_padding;
+        let images: Vec<DynamicImage> = items
+            .iter()
+            .map(|f| image::load_from_memory(&f.0))
+            .flatten()
+            .collect();
+        let image = combine_images_into_row(images, px_x_padding as u32)?;
+        inline_an_image(&image, &mut buf, None, None, ctx.inline_encoder)?;
+        let names: Vec<String> = items
+            .iter()
+            .map(|f| {
+                let tpath = truncate_filename((*f.1).clone(), width);
+                tpath
+            })
+            .collect();
+        let pad_x = " ".repeat(x_padding as usize);
+        let pad_y = "\n".repeat(y_padding as usize);
+        let names_combined = names.join(&pad_x);
+        write!(buf, "\n{pad_x}{names_combined}{pad_x}{pad_y}")?;
     }
-    write!(out, "\x1b[{y_padding}S")?;
+
+    out.write_all(&buf)?;
     out.flush()?;
     Ok(())
+}
+
+fn combine_images_into_row(
+    images: Vec<DynamicImage>,
+    padding: u32,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let background = Rgba([0, 0, 0, 0]);
+    if images.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let max_height = images.iter().map(|img| img.height()).max().unwrap_or(0);
+    let total_image_width: u32 = images.iter().map(|img| img.width()).sum();
+
+    // Total width = left padding + images + padding between images
+    let total_width = padding + total_image_width + padding * (images.len() as u32 - 1);
+    let mut output = RgbaImage::from_pixel(total_width, max_height, background);
+
+    let mut x_offset = padding;
+    for img in images {
+        let img_height = img.height();
+        let y_offset = (max_height - img_height) / 2;
+        output.copy_from(&img, x_offset, y_offset)?;
+        x_offset += img.width() + padding;
+    }
+
+    let img = DynamicImage::ImageRgba8(output);
+    let mut buffer = Vec::new();
+    let mut cursor = Cursor::new(&mut buffer);
+    img.write_to(&mut cursor, image::ImageFormat::Png)?;
+    Ok(buffer)
 }
 
 ///width and height only needed for ascii videos atm

@@ -1,3 +1,6 @@
+# V0.3.2 (Not Released)
+- [-] added a `-p --playback` flag for watching videos in the terminal with sound
+
 ## V0.3.1 (Not Released)
 - [x] fixed an issue that tmux passthrough won't be enabled on the ls command
 - [x] made the interactive image viewer blink less ~ to none -- making it easier to the eye
@@ -11,8 +14,6 @@
 - [x] the `--report` flag now shows more info
 - [x] fixed an issue where the interactive selector had special visible in windows
 - [x] ascii video play now doesn't blink
-- [-] now renders images inside the markdown viewer
-- [-] added a `-p --playback` flag for watching videos in the terminal with sound
 
 ## V0.3.0
 #### New Features:
