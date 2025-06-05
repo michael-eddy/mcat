@@ -1,7 +1,7 @@
 use crossterm::{
     cursor::MoveTo,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-    execute,
+    execute, queue,
     style::Print,
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
@@ -50,8 +50,18 @@ pub fn show_help_prompt(
     Ok(())
 }
 
-pub fn clear_screen(stdout: &mut impl std::io::Write) -> std::io::Result<()> {
-    execute!(stdout, Clear(ClearType::All), MoveTo(0, 0))?;
+pub fn clear_screen(
+    stdout: &mut impl std::io::Write,
+    addon: Option<Vec<u8>>,
+) -> std::io::Result<()> {
+    let mut buffer: Vec<u8> = Vec::new();
+    queue!(buffer, Clear(ClearType::All), MoveTo(0, 0))?;
+    match addon {
+        Some(val) => buffer.extend_from_slice(&val),
+        None => {}
+    }
+
+    stdout.write_all(&buffer)?;
     Ok(())
 }
 

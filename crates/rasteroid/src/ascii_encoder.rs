@@ -1,5 +1,10 @@
+use crossterm::cursor::position;
+
 use crate::{Frame, term_misc};
-use std::{io::Write, time::Duration};
+use std::{
+    io::{BufRead, Write},
+    time::Duration,
+};
 
 /// Renders an image as colored ASCII in the terminal using upper/lower half-blocks.
 ///
@@ -246,13 +251,6 @@ pub fn encode_frames(
 
         let mut buffer = Vec::new();
 
-        let n = img.height();
-        if !start {
-            clear_pre_frame(&mut out, n)?;
-        } else {
-            start = false;
-        }
-
         encode_image(
             data,
             &mut buffer,
@@ -260,10 +258,12 @@ pub fn encode_frames(
             None,
         )?;
 
-        out.write_all(&buffer)?;
+        clear_write_frame(&mut out, &buffer, start)?;
+        start = false;
+
         out.flush()?;
 
-        frame_outputs.push((buffer, target_delay, n));
+        frame_outputs.push((buffer, target_delay));
         std::thread::sleep(target_delay);
     }
 
@@ -273,9 +273,8 @@ pub fn encode_frames(
 
     if cycle {
         loop {
-            for (output, delay, n) in &frame_outputs {
-                clear_pre_frame(&mut out, *n)?;
-                out.write_all(output)?;
+            for (output, delay) in &frame_outputs {
+                clear_write_frame(&mut out, output, false)?;
                 out.flush()?;
                 std::thread::sleep(*delay);
             }
@@ -285,15 +284,30 @@ pub fn encode_frames(
     }
 }
 
-fn clear_pre_frame(mut out: impl Write, height: u32) -> Result<(), Box<dyn std::error::Error>> {
-    write!(out, "\x1B[{}A", height)?;
-    // Clear each line (from cursor to end)
-    for _ in 0..height {
-        write!(out, "\x1B[2K")?; // Clear line
-        write!(out, "\x1B[1B")?; // Move down (optional: if not overwriting)
+fn clear_write_frame(
+    mut out: impl Write,
+    val: &Vec<u8>,
+    start: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut buf = Vec::new();
+
+    if start {
+        let (_, row) = position()?;
+        let term_height = term_misc::get_wininfo().sc_height;
+        let image_height = val.lines().count();
+        let diff = (row as i16 + image_height as i16) - term_height as i16;
+        if diff > 0 {
+            write!(buf, "\x1b[{diff}S")?;
+            write!(buf, "\x1B[{diff}A")?;
+        }
+        buf.extend_from_slice(b"\x1b[s");
+    } else {
+        buf.extend_from_slice(b"\x1b[u");
+        buf.extend_from_slice(b"\x1b[s");
     }
-    // Move cursor back up to start position
-    write!(out, "\x1B[{}A", height)?;
+    buf.extend_from_slice(val);
+
+    out.write_all(&buf)?;
 
     Ok(())
 }

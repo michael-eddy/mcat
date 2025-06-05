@@ -336,9 +336,8 @@ fn interact_with_image(
                 opts.encoder,
             )
             .ok()?;
-            clear_screen(out).ok()?;
-            out.write_all(&buf).ok()?;
-            show_help_prompt(out, tinfo.sc_width, tinfo.sc_height, vp).ok()?;
+            show_help_prompt(&mut buf, tinfo.sc_width, tinfo.sc_height, vp).ok()?;
+            clear_screen(out, Some(buf)).ok()?;
             out.flush().ok()?;
             if should_disable_raw_mode {
                 enable_raw_mode().ok()?;
@@ -347,7 +346,7 @@ fn interact_with_image(
             Some(())
         },
     )?;
-    clear_screen(out)?;
+    clear_screen(out, None)?;
     Ok(())
 }
 
