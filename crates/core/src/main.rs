@@ -270,15 +270,15 @@ fn main() {
         sixel,
         ascii,
     };
-    let env = term_misc::EnvIdentifiers::new();
+    let mut env = term_misc::EnvIdentifiers::new();
     let inline_encoder = &rasteroid::InlineEncoder::auto_detect(
         encoder.kitty,
         encoder.iterm,
         encoder.sixel,
         encoder.ascii,
-        &env,
+        &mut env,
     );
-    let is_tmux = rasteroid::is_tmux(&env);
+    let is_tmux = env.is_tmux();
 
     let is_ls = input.get(0).unwrap_or(&"".to_owned()).to_lowercase() == "ls";
 
@@ -529,20 +529,26 @@ fn expand_tilde(path: &str) -> String {
 fn report_and_leave() {
     let is_chromium_installed = fetch_manager::is_chromium_installed();
     let is_ffmpeg_installed = fetch_manager::is_ffmpeg_installed();
-    let env = term_misc::EnvIdentifiers::new();
-    let kitty = rasteroid::kitty_encoder::is_kitty_capable(&env);
-    let iterm = rasteroid::iterm_encoder::is_iterm_capable(&env);
-    let sixel = rasteroid::sixel_encoder::is_sixel_capable(&env);
+    let mut env = term_misc::EnvIdentifiers::new();
+    let kitty = rasteroid::kitty_encoder::is_kitty_capable(&mut env);
+    let iterm = rasteroid::iterm_encoder::is_iterm_capable(&mut env);
+    let sixel = rasteroid::sixel_encoder::is_sixel_capable(&mut env);
     let ascii = true; //not sure what doesn't support it
     let winsize = term_misc::get_wininfo();
     let tmux = winsize.is_tmux;
     let inline = winsize.needs_inline;
     let os = env.data.get("OS").map(|f| f.as_str()).unwrap_or("Unknown");
-    let term = env
-        .data
-        .get("TERM")
-        .map(|f| f.as_str())
-        .unwrap_or("Unknonwn");
+    let term = if tmux {
+        env.data
+            .get("TMUX_ORIGINAL_TERM")
+            .map(|f| f.as_str())
+            .unwrap_or("Unknonwn")
+    } else {
+        env.data
+            .get("TERM")
+            .map(|f| f.as_str())
+            .unwrap_or("Unknonwn")
+    };
     let ver = env!("CARGO_PKG_VERSION");
 
     // Print header with fancy box

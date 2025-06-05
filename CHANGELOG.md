@@ -5,7 +5,7 @@
 - [x] raw text from stdin now defaults to markdown instead of txt in the markdown viewer
 - [ ] improved rendering of images in tmux by moving the cursor after the image
 - [ ] added an optional config file, allowing users to have a config file instead of aliasing 
-- [ ] improved GP support auto detetion -- especially in tmux
+- [x] improved GP support auto detetion -- especially in tmux
 - [ ] the ls command now combines images by row to fix bugs from quick image printing
 - [x] added `--ls-opts` flag, allowing users to configure the ls command
 - [x] the `--report` flag now shows more info

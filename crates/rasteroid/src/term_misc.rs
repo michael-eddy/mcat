@@ -9,6 +9,8 @@ use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
 
+use crate::get_tmux_terminal_name;
+
 pub struct Wininfo {
     pub sc_width: u16,
     pub sc_height: u16,
@@ -324,7 +326,16 @@ impl EnvIdentifiers {
 
         result.insert("OS".to_string(), env::consts::OS.to_string());
 
-        EnvIdentifiers { data: result }
+        let mut env = EnvIdentifiers { data: result };
+        env.check_tmux_term();
+        env
+    }
+
+    pub fn check_tmux_term(&mut self) {
+        if self.is_tmux() {
+            let term_name = get_tmux_terminal_name().unwrap_or_default();
+            self.data.insert("TMUX_ORIGINAL_TERM".into(), term_name);
+        }
     }
 
     pub fn has_key(&self, key: &str) -> bool {
@@ -342,10 +353,15 @@ impl EnvIdentifiers {
 
     /// all values are normalized into lowercase
     /// pass the term as lowercase
-    pub fn term_contains(&self, term: &str) -> bool {
-        ["TERM_PROGRAM", "TERM", "LC_TERMINAL"]
+    pub fn term_contains(&mut self, term: &str) -> bool {
+        ["TERM_PROGRAM", "TERM", "LC_TERMINAL", "TMUX_ORIGINAL_TERM"]
             .iter()
             .any(|key| self.contains(key, term))
+    }
+
+    /// checks if the current terminal is a tmux terminal
+    pub fn is_tmux(&mut self) -> bool {
+        self.term_contains("tmux") || self.has_key("TMUX")
     }
 }
 

@@ -60,7 +60,7 @@ impl InlineEncoder {
         force_iterm: bool,
         force_sixel: bool,
         force_ascii: bool,
-        env: &EnvIdentifiers,
+        env: &mut EnvIdentifiers,
     ) -> Self {
         if force_kitty {
             return Self::Kitty;
@@ -75,13 +75,13 @@ impl InlineEncoder {
             return Self::Ascii;
         }
 
-        if kitty_encoder::is_kitty_capable(&env) {
+        if kitty_encoder::is_kitty_capable(env) {
             return Self::Kitty;
         }
-        if iterm_encoder::is_iterm_capable(&env) {
+        if iterm_encoder::is_iterm_capable(env) {
             return Self::Iterm;
         }
-        if sixel_encoder::is_sixel_capable(&env) {
+        if sixel_encoder::is_sixel_capable(env) {
             return Self::Sixel;
         }
 
@@ -89,24 +89,19 @@ impl InlineEncoder {
     }
 }
 
-/// checks if the current terminal is a tmux terminal
-/// # example:
-/// ```
-///  use rasteroid::is_tmux;
-///
-/// let env = rasteroid::term_misc::EnvIdentifiers::new();
-/// let tmux = is_tmux(&env);
-/// println!("Tmux: {}", tmux);
-/// ```
-pub fn is_tmux(env: &EnvIdentifiers) -> bool {
-    env.term_contains("tmux") || env.has_key("TMUX")
-}
-
 pub fn set_tmux_passthrough(enabled: bool) {
     let status = if enabled { "on" } else { "off" };
     let _ = Command::new("tmux")
         .args(["set", "-g", "allow-passthrough", status])
         .status();
+}
+
+fn get_tmux_terminal_name() -> Result<String, std::io::Error> {
+    let output = Command::new("tmux")
+        .args(["display-message", "-p", "#{client_termname}"])
+        .output()?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 pub trait Frame {

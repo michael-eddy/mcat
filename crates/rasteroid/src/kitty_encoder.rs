@@ -562,6 +562,6 @@ pub fn delete_single_image(id: u32, out: &mut impl Write) -> Result<(), std::io:
 /// let is_capable = is_kitty_capable(&env);
 /// println!("Kitty: {}", is_capable);
 /// ```
-pub fn is_kitty_capable(env: &EnvIdentifiers) -> bool {
-    env.has_key("KITTY_WINDOW_ID") || env.term_contains("kitty") || env.term_contains("ghostty")
+pub fn is_kitty_capable(env: &mut EnvIdentifiers) -> bool {
+    env.term_contains("kitty") || env.term_contains("ghostty")
 }
