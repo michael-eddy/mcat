@@ -28,7 +28,7 @@ const SIXEL_MIN: u8 = 0x3f; // '?'
 /// the option offset just offsets the image to the right by the amount of cells you specify
 pub fn encode_image(
     img: &[u8],
-    mut out: impl Write,
+    out: &mut impl Write,
     offset: Option<u16>,
     print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {

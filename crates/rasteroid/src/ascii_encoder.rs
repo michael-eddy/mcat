@@ -1,6 +1,7 @@
-use crossterm::cursor::position;
-
-use crate::{Frame, term_misc};
+use crate::{
+    Frame,
+    term_misc::{self, ensure_space},
+};
 use std::{
     io::{BufRead, Write},
     time::Duration,
@@ -37,7 +38,7 @@ use std::{
 /// ```
 pub fn encode_image(
     img: &[u8],
-    mut out: impl Write,
+    out: &mut impl Write,
     offset: Option<u16>,
     print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -290,16 +291,9 @@ fn clear_write_frame(
     start: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buf = Vec::new();
-
     if start {
-        let (_, row) = position()?;
-        let term_height = term_misc::get_wininfo().sc_height;
         let image_height = val.lines().count();
-        let diff = (row as i16 + image_height as i16) - term_height as i16;
-        if diff > 0 {
-            write!(buf, "\x1b[{diff}S")?;
-            write!(buf, "\x1B[{diff}A")?;
-        }
+        ensure_space(&mut buf, image_height as u16)?;
         buf.extend_from_slice(b"\x1b[s");
     } else {
         buf.extend_from_slice(b"\x1b[u");

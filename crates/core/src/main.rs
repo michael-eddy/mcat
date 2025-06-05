@@ -549,6 +549,14 @@ fn report_and_leave() {
             .map(|f| f.as_str())
             .unwrap_or("Unknonwn")
     };
+    let tmux_spec = if tmux {
+        env.data
+            .get("TMUX_ORIGINAL_SPEC")
+            .map(|f| f.as_str())
+            .unwrap_or("Unknown")
+    } else {
+        ""
+    };
     let ver = env!("CARGO_PKG_VERSION");
 
     // Print header with fancy box
@@ -606,19 +614,22 @@ fn report_and_leave() {
     // Print terminal dimensions
     println!("├────────────────────────────────────────────────────┤");
     println!("│ Terminal Info:                                     │");
-    println!("│   Width:        {:<34} │", winsize.sc_width);
-    println!("│   Height:       {:<34} │", winsize.sc_height);
-    println!("│   Pixel Width:  {:<34} │", winsize.spx_width);
-    println!("│   Pixel Height: {:<34} │", winsize.spx_height);
+    println!("│   Width:          {:<32} │", winsize.sc_width);
+    println!("│   Height:         {:<32} │", winsize.sc_height);
+    println!("│   Pixel Width:    {:<32} │", winsize.spx_width);
+    println!("│   Pixel Height:   {:<32} │", winsize.spx_height);
 
     // Others
     println!("├────────────────────────────────────────────────────┤");
     println!("│ Others:                                            │");
-    println!("│   Tmux:         {:<43} │", format_info(tmux));
-    println!("│   Inline:       {:<43} │", format_info(inline));
-    println!("│   OS:           {:<34} │", os);
-    println!("│   TERM:         {:<34} │", term);
-    println!("│   Version:      {:<34} │", ver);
+    println!("│   Tmux:       {:<45} │", format_info(tmux));
+    println!("│   Inline:     {:<45} │", format_info(inline));
+    println!("│   OS:         {:<36} │", os);
+    println!("│   TERM:       {:<36} │", term);
+    if tmux {
+        println!("│   TERMTYPE:   {:<36} │", tmux_spec);
+    }
+    println!("│   Version:    {:<36} │", ver);
 
     // Print footer
     println!("└────────────────────────────────────────────────────┘");

@@ -24,7 +24,7 @@ use std::io::Write;
 /// the print at is the same just absolute position
 pub fn encode_image(
     img: &[u8],
-    mut out: impl Write,
+    out: &mut impl Write,
     offset: Option<u16>,
     print_at: Option<(u16, u16)>,
 ) -> Result<(), Box<dyn std::error::Error>> {

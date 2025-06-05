@@ -1,11 +1,15 @@
 use std::{
     collections::HashMap,
     env, f32,
+    io::Write,
     sync::{Arc, OnceLock, atomic::AtomicBool},
 };
 
 use base64::{Engine, engine::general_purpose};
-use crossterm::terminal::{size, window_size};
+use crossterm::{
+    cursor::position,
+    terminal::{disable_raw_mode, enable_raw_mode, size, window_size},
+};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
 
@@ -333,8 +337,11 @@ impl EnvIdentifiers {
 
     pub fn check_tmux_term(&mut self) {
         if self.is_tmux() {
-            let term_name = get_tmux_terminal_name().unwrap_or_default();
-            self.data.insert("TMUX_ORIGINAL_TERM".into(), term_name);
+            let (term_type, term_name) = get_tmux_terminal_name().unwrap_or_default();
+            self.data
+                .insert("TMUX_ORIGINAL_TERM".into(), term_name.to_lowercase());
+            self.data
+                .insert("TMUX_ORIGINAL_SPEC".into(), term_type.to_lowercase());
         }
     }
 
@@ -354,15 +361,28 @@ impl EnvIdentifiers {
     /// all values are normalized into lowercase
     /// pass the term as lowercase
     pub fn term_contains(&mut self, term: &str) -> bool {
-        ["TERM_PROGRAM", "TERM", "LC_TERMINAL", "TMUX_ORIGINAL_TERM"]
-            .iter()
-            .any(|key| self.contains(key, term))
+        [
+            "TERM_PROGRAM",
+            "TERM",
+            "LC_TERMINAL",
+            "TMUX_ORIGINAL_TERM",
+            "TMUX_ORIGINAL_SPEC",
+        ]
+        .iter()
+        .any(|key| self.contains(key, term))
     }
 
     /// checks if the current terminal is a tmux terminal
     pub fn is_tmux(&mut self) -> bool {
         self.term_contains("tmux") || self.has_key("TMUX")
     }
+}
+
+/// makes sure you have enough lines below your cursor to at least insert a `height`
+pub fn ensure_space(out: &mut impl Write, height: u16) -> Result<(), Box<dyn std::error::Error>> {
+    write!(out, "{}", "\n".repeat(height as usize))?;
+    write!(out, "\x1B[{height}A")?;
+    Ok(())
 }
 
 pub fn break_size_string(s: &str) -> Result<Size, Box<dyn std::error::Error>> {

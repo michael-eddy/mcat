@@ -1,6 +1,10 @@
-use std::{io::Write, process::Command};
+use std::{
+    io::{self, Write},
+    process::Command,
+};
 
-use term_misc::EnvIdentifiers;
+use image::load_from_memory;
+use term_misc::{EnvIdentifiers, ensure_space};
 
 pub mod ascii_encoder;
 pub mod image_extended;
@@ -37,12 +41,29 @@ pub fn inline_an_image(
     print_at: Option<(u16, u16)>,
     inline_encoder: &InlineEncoder,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let is_tmux = term_misc::get_wininfo().is_tmux;
+    let self_handle = match inline_encoder {
+        InlineEncoder::Iterm | InlineEncoder::Sixel => true,
+        InlineEncoder::Kitty | InlineEncoder::Ascii => false,
+    } && is_tmux;
+    let mut img_cells = 0;
+    if self_handle {
+        let img_px = load_from_memory(img)?.height();
+        img_cells =
+            term_misc::dim_to_cells(&format!("{img_px}px"), term_misc::SizeDirection::Height)?;
+        ensure_space(out, img_cells as u16)?;
+    }
     match inline_encoder {
         InlineEncoder::Kitty => kitty_encoder::encode_image(img, out, offset, print_at),
         InlineEncoder::Iterm => iterm_encoder::encode_image(img, out, offset, print_at),
         InlineEncoder::Sixel => sixel_encoder::encode_image(img, out, offset, print_at),
         InlineEncoder::Ascii => ascii_encoder::encode_image(img, out, offset, print_at),
+    }?;
+    if self_handle {
+        write!(out, "\x1B[{img_cells}B")?;
     }
+
+    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -96,12 +117,26 @@ pub fn set_tmux_passthrough(enabled: bool) {
         .status();
 }
 
-fn get_tmux_terminal_name() -> Result<String, std::io::Error> {
+fn get_tmux_terminal_name() -> Result<(String, String), io::Error> {
     let output = Command::new("tmux")
-        .args(["display-message", "-p", "#{client_termname}"])
+        .args([
+            "display-message",
+            "-p",
+            "#{client_termtype}|||#{client_termname}",
+        ])
         .output()?;
 
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = output_str.trim().split("|||").collect();
+
+    if parts.len() == 2 {
+        Ok((parts[0].to_string(), parts[1].to_string()))
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to parse tmux output",
+        ))
+    }
 }
 
 pub trait Frame {
