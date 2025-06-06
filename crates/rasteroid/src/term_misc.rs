@@ -6,10 +6,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose};
-use crossterm::{
-    cursor::position,
-    terminal::{disable_raw_mode, enable_raw_mode, size, window_size},
-};
+use crossterm::terminal::{size, window_size};
 use signal_hook::consts::signal::*;
 use signal_hook::flag;
 
@@ -203,13 +200,13 @@ pub fn dim_to_px(dim: &str, direction: SizeDirection) -> Result<u32, String> {
         }
     } else if dim.ends_with("c") {
         if let Ok(num) = dim.trim_end_matches("c").parse::<u16>() {
-            let value = width / height * num;
+            let value = (width as f32 / height as f32 * num as f32).ceil() as u32;
             return Ok(value.into());
         }
     } else if dim.ends_with("%") {
         if let Ok(num) = dim.trim_end_matches("%").parse::<f32>() {
             let normalized_percent = num / 100.0;
-            let value = (width as f32 * normalized_percent).round() as u32;
+            let value = (width as f32 * normalized_percent).ceil() as u32;
             return Ok(value);
         }
     }
@@ -245,13 +242,13 @@ pub fn dim_to_cells(dim: &str, direction: SizeDirection) -> Result<u32, String> 
             if sc == 0 || spx == 0 {
                 return Err("Invalid screen size for px to cell conversion".into());
             }
-            let value = (px as f32 / (spx as f32 / sc as f32)).round() as u32;
+            let value = (px as f32 / (spx as f32 / sc as f32)).ceil() as u32;
             return Ok(value);
         }
     } else if dim.ends_with("%") {
         if let Ok(percent) = dim.trim_end_matches("%").parse::<f32>() {
             let normalized = percent / 100.0;
-            let value = (sc as f32 * normalized).round() as u32;
+            let value = (sc as f32 * normalized).ceil() as u32;
             return Ok(value);
         }
     }

@@ -1,5 +1,5 @@
-# V0.3.2 (Not Released)
-- [-] added a `-p --playback` flag for watching videos in the terminal with sound
+## V0.3.2 (Not Released)
+- [ ] added a `-p --playback` flag for watching videos in the terminal with sound
 
 ## V0.3.1 (Not Released)
 - [x] fixed an issue that tmux passthrough won't be enabled on the ls command
@@ -9,7 +9,7 @@
 - [x] improved rendering of images in tmux by moving the cursor after the image
 - [ ] added an optional config file, allowing users to have a config file instead of aliasing 
 - [x] improved GP support auto detetion -- especially in tmux
-- [ ] the ls command now combines images by row to fix bugs from quick image printing
+- [x] the ls command now combines images by row to fix bugs from quick image printing
 - [x] added `--ls-opts` flag, allowing users to configure the ls command
 - [x] the `--report` flag now shows more info
 - [x] fixed an issue where the interactive selector had special visible in windows

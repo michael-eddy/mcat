@@ -19,7 +19,6 @@ use resvg::{
 };
 use std::{
     collections::HashMap,
-    fs::File,
     io::{Write, stdout},
 };
 use std::{
@@ -333,11 +332,11 @@ impl<'a> LsixContext<'a> {
         hidden: bool,
     ) -> Self {
         let defaults = (
-            "4c",  // x_padding
+            "3c",  // x_padding
             "2c",  // y_padding
             "2c",  // min_width
             "16c", // max_width
-            "2c",  // height
+            "6%",  // height
             20,    // max_items_per_row
         );
 
