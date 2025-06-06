@@ -17,7 +17,7 @@ use std::io::Write;
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// encode_image(&bytes, &stdout, None, None).unwrap();
+/// encode_image(&bytes, &mut stdout, None, None).unwrap();
 /// stdout.flush().unwrap();
 /// ```
 /// the option offset just offsets the image to the right by the amount of cells you specify
@@ -51,10 +51,10 @@ pub fn encode_image(
 /// checks if the current terminal supports Iterm graphic protocol
 /// # example:
 /// ```
-///  use rasteroid::iterm_encoder::is_iterm_capable;
+/// use rasteroid::iterm_encoder::is_iterm_capable;
 ///
-/// let env = rasteroid::term_misc::EnvIdentifiers::new();
-/// let is_capable = is_iterm_capable(&env);
+/// let mut env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_capable = is_iterm_capable(&mut env);
 /// println!("Iterm: {}", is_capable);
 /// ```
 pub fn is_iterm_capable(env: &mut EnvIdentifiers) -> bool {

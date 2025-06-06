@@ -104,7 +104,6 @@ impl Wininfo {
 /// ```
 /// use rasteroid::term_misc::init_wininfo;
 /// use rasteroid::term_misc::Size;
-/// use rasteroid::is_tmux;
 ///
 /// let spx = Size {
 ///     width: 1920,  // width in pixels
@@ -116,8 +115,8 @@ impl Wininfo {
 ///     height: 20,   // height in cells
 ///     force: false, // use that instead of checking
 /// };
-/// let env = rasteroid::term_misc::EnvIdentifiers::new();
-/// let is_tmux = is_tmux(&env);
+/// let mut env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_tmux = env.is_tmux();
 /// // inline is for kitty to put a placeholder for images / videos so they can be placed in apps
 /// // that don't understand kitty gp and have them scroll with the buffer; e.g vim, tmux
 /// let inline = false;

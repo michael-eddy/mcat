@@ -460,6 +460,7 @@ pub fn lsix(
         .collect();
 
     let mut buf = Vec::new();
+    buf.write_all(b"\n")?;
     for chunk in &images.into_iter().chunks(items_per_row as usize) {
         let items: Vec<_> = chunk.collect();
         let images: Vec<DynamicImage> = items

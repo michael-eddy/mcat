@@ -556,10 +556,10 @@ pub fn delete_single_image(id: u32, out: &mut impl Write) -> Result<(), std::io:
 /// checks if the current terminal supports Kitty's graphic protocol
 /// # example:
 /// ```
-///  use rasteroid::kitty_encoder::is_kitty_capable;
+/// use rasteroid::kitty_encoder::is_kitty_capable;
 ///
-/// let env = rasteroid::term_misc::EnvIdentifiers::new();
-/// let is_capable = is_kitty_capable(&env);
+/// let mut env = rasteroid::term_misc::EnvIdentifiers::new();
+/// let is_capable = is_kitty_capable(&mut env);
 /// println!("Kitty: {}", is_capable);
 /// ```
 pub fn is_kitty_capable(env: &mut EnvIdentifiers) -> bool {

@@ -28,8 +28,8 @@ pub mod term_misc;
 ///     Err(e) => return,
 /// };
 /// let mut stdout = std::io::stdout();
-/// let env = EnvIdentifiers::new();
-/// let encoder = InlineEncoder::auto_detect(true, false, false, false, &env); // force kitty as fallback
+/// let mut env = EnvIdentifiers::new();
+/// let encoder = InlineEncoder::auto_detect(true, false, false, false, &mut env); // force kitty as fallback
 /// inline_an_image(&bytes, &mut stdout, None, None, &encoder).unwrap();
 /// stdout.flush().unwrap();
 /// ```
