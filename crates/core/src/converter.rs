@@ -17,10 +17,7 @@ use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
-use std::{
-    collections::HashMap,
-    io::{Write, stdout},
-};
+use std::io::{Write, stdout};
 use std::{
     error,
     fs::{self},
@@ -30,7 +27,7 @@ use std::{
 };
 use tokio::sync::oneshot;
 
-use crate::{catter, fetch_manager};
+use crate::{catter, config::LsixOptions, fetch_manager};
 
 pub fn svg_to_image(
     mut reader: impl Read,
@@ -244,7 +241,7 @@ fn truncate_filename(name: String, width: u16) -> String {
     format!("{}{}", front_part, ext)
 }
 
-fn calculate_items_per_row(terminal_width: u16, ctx: &LsixContext) -> Result<usize, String> {
+fn calculate_items_per_row(terminal_width: u16, ctx: &LsixOptions) -> Result<usize, String> {
     let min_item_width: u16 = term_misc::dim_to_cells(&ctx.min_width, SizeDirection::Width)? as u16;
     let max_item_width: u16 = term_misc::dim_to_cells(&ctx.max_width, SizeDirection::Width)? as u16;
     let max_items_per_row: usize = ctx.max_items_per_row;
@@ -314,71 +311,21 @@ fn ext_to_svg(ext: &str) -> &'static str {
     svg
 }
 
-pub struct LsixContext<'a> {
-    pub inline_encoder: &'a rasteroid::InlineEncoder,
-    pub hidden: bool,
-    pub x_padding: &'a str,
-    pub y_padding: &'a str,
-    pub min_width: &'a str,
-    pub max_width: &'a str,
-    pub height: &'a str,
-    pub max_items_per_row: usize,
-}
-
-impl<'a> LsixContext<'a> {
-    pub fn from_string(
-        s: &'a str,
-        inline_encoder: &'a rasteroid::InlineEncoder,
-        hidden: bool,
-    ) -> Self {
-        let defaults = (
-            "3c",  // x_padding
-            "2c",  // y_padding
-            "2c",  // min_width
-            "16c", // max_width
-            "6%",  // height
-            20,    // max_items_per_row
-        );
-
-        let map: HashMap<_, _> = s
-            .split(',')
-            .filter_map(|pair| {
-                let mut split = pair.splitn(2, '=');
-                let key = split.next()?.trim();
-                let value = split.next()?.trim();
-                Some((key, value))
-            })
-            .collect();
-
-        LsixContext {
-            inline_encoder,
-            hidden,
-            x_padding: map.get("x_padding").copied().unwrap_or(defaults.0),
-            y_padding: map.get("y_padding").copied().unwrap_or(defaults.1),
-            min_width: map.get("min_width").copied().unwrap_or(defaults.2),
-            max_width: map.get("max_width").copied().unwrap_or(defaults.3),
-            height: map.get("height").copied().unwrap_or(defaults.4),
-            max_items_per_row: map
-                .get("items_per_row")
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(defaults.5),
-        }
-    }
-}
-
 pub fn lsix(
     input: impl AsRef<str>,
     out: &mut impl Write,
-    ctx: LsixContext,
+    ctx: &LsixOptions,
+    hidden: bool,
+    inline_encoder: &rasteroid::InlineEncoder,
 ) -> Result<(), Box<dyn error::Error>> {
     let dir_path = Path::new(input.as_ref());
     let walker = WalkBuilder::new(dir_path)
-        .standard_filters(!ctx.hidden)
-        .hidden(!ctx.hidden)
+        .standard_filters(!hidden)
+        .hidden(!hidden)
         .max_depth(Some(1))
         .follow_links(true)
         .build();
-    let resize_for_ascii = matches!(ctx.inline_encoder, rasteroid::InlineEncoder::Ascii);
+    let resize_for_ascii = matches!(inline_encoder, rasteroid::InlineEncoder::Ascii);
     let ts = rasteroid::term_misc::get_wininfo();
     let items_per_row = calculate_items_per_row(ts.sc_width, &ctx)?;
     let x_padding = term_misc::dim_to_cells(&ctx.x_padding, SizeDirection::Width)? as u16;
@@ -469,7 +416,7 @@ pub fn lsix(
             .flatten()
             .collect();
         let image = combine_images_into_row(images, px_x_padding as u32)?;
-        inline_an_image(&image, &mut buf, None, None, ctx.inline_encoder)?;
+        inline_an_image(&image, &mut buf, None, None, inline_encoder)?;
         let names: Vec<String> = items
             .iter()
             .map(|f| {
