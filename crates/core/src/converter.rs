@@ -415,7 +415,14 @@ pub fn lsix(
             .map(|f| image::load_from_memory(&f.0))
             .flatten()
             .collect();
-        let image = combine_images_into_row(images, px_x_padding as u32)?;
+        let image = combine_images_into_row(
+            images,
+            if resize_for_ascii {
+                x_padding as u32
+            } else {
+                px_x_padding
+            },
+        )?;
         inline_an_image(&image, &mut buf, None, None, inline_encoder)?;
         let names: Vec<String> = items
             .iter()

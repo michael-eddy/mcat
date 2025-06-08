@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env};
 
 use clap::ArgMatches;
 use rasteroid::{InlineEncoder, term_misc};
@@ -148,6 +148,7 @@ pub struct McatConfig<'a> {
     pub style_html: bool,
     pub theme: &'a str,
     pub fn_and_leave: Option<FnAndLeave>,
+    encoder_force: String,
 }
 
 pub enum FnAndLeave {
@@ -170,13 +171,14 @@ impl<'a> Default for McatConfig<'a> {
             ls_options: LsixOptions::default(),
             inline_options: InlineOptions::default(),
             silent: false,
-            hidden: true,
+            hidden: false,
             report: false,
             no_linenumbers: false,
             horizontal_image_stacking: false,
             style_html: false,
             theme: "dark",
             fn_and_leave: None,
+            encoder_force: "".into(),
         }
     }
 }
@@ -191,14 +193,21 @@ impl<'a> McatConfig<'a> {
         self.is_ls = self.input.get(0).unwrap_or(&"".to_owned()).to_lowercase() == "ls";
 
         // encoder
-        let kitty = opts.get_flag("kitty");
-        let iterm = opts.get_flag("iterm");
-        let sixel = opts.get_flag("sixel");
-        let ascii = opts.get_flag("ascii");
+        let mut kitty = opts.get_flag("kitty");
+        let mut iterm = opts.get_flag("iterm");
+        let mut sixel = opts.get_flag("sixel");
+        let mut ascii = opts.get_flag("ascii");
+        match self.encoder_force.as_ref() {
+            "kitty" => kitty = true,
+            "iterm" => iterm = true,
+            "sixel" => sixel = true,
+            "ascii" => ascii = true,
+            _ => {}
+        }
         let mut env = term_misc::EnvIdentifiers::new();
+        self.is_tmux = env.is_tmux();
         self.inline_encoder =
             rasteroid::InlineEncoder::auto_detect(kitty, iterm, sixel, ascii, &mut env);
-        self.is_tmux = env.is_tmux();
 
         // fn and leave
         if let Some(shell) = opts.get_one::<String>("generate-completions") {
@@ -237,30 +246,21 @@ impl<'a> McatConfig<'a> {
         if let Some(inline_options) = opts.get_one::<String>("inline-options") {
             self.inline_options.extend_from_string(&inline_options);
         }
-        self.silent = opts
-            .get_one::<bool>("silent")
-            .copied()
-            .unwrap_or(self.silent);
-        self.hidden = opts
-            .get_one::<bool>("hidden")
-            .copied()
-            .unwrap_or(self.hidden);
-        self.no_linenumbers = opts
-            .get_one::<bool>("no-linenumbers")
-            .copied()
-            .unwrap_or(self.no_linenumbers);
-        self.no_linenumbers = opts
-            .get_one::<bool>("no-linenumbers")
-            .copied()
-            .unwrap_or(self.no_linenumbers);
-        self.horizontal_image_stacking = opts
-            .get_one::<bool>("horizontal")
-            .copied()
-            .unwrap_or(self.horizontal_image_stacking);
-        self.style_html = opts
-            .get_one::<bool>("style-html")
-            .copied()
-            .unwrap_or(self.style_html);
+        if opts.get_flag("silent") {
+            self.silent = true;
+        }
+        if opts.get_flag("hidden") {
+            self.hidden = true;
+        }
+        if opts.get_flag("no-linenumbers") {
+            self.no_linenumbers = true;
+        }
+        if opts.get_flag("horizontal") {
+            self.horizontal_image_stacking = true;
+        }
+        if opts.get_flag("style-html") {
+            self.style_html = true;
+        }
         self.theme = opts
             .get_one::<String>("theme")
             .map(|v| v.as_ref())
@@ -273,6 +273,56 @@ impl<'a> McatConfig<'a> {
         } else {
             opts.get_one::<String>("output").map(|v| v.as_ref())
         };
+
+        self
+    }
+    pub fn extend_from_env(&mut self) -> &mut Self {
+        match env::var("MCAT_ENCODER") {
+            Ok(v) => {
+                self.encoder_force = v.to_lowercase();
+            }
+            Err(_) => {}
+        }
+        match env::var("MCAT_THEME") {
+            Ok(v) => self.theme = Box::leak(v.into_boxed_str()),
+            Err(_) => {}
+        }
+        match env::var("MCAT_INLINE_OPTS") {
+            Ok(v) => {
+                _ = self
+                    .inline_options
+                    .extend_from_string(Box::leak(v.into_boxed_str()))
+            }
+            Err(_) => {}
+        }
+        match env::var("MCAT_LS_OPTS") {
+            Ok(v) => {
+                _ = self
+                    .ls_options
+                    .extend_from_string(Box::leak(v.into_boxed_str()))
+            }
+            Err(_) => {}
+        }
+        match env::var("MCAT_SILENT") {
+            Ok(v) => {
+                self.silent = if v == "1" || v.eq_ignore_ascii_case("true") {
+                    true
+                } else {
+                    self.silent
+                }
+            }
+            Err(_) => {}
+        }
+        match env::var("MCAT_NO_LINENUMBERS") {
+            Ok(v) => {
+                self.no_linenumbers = if v == "1" || v.eq_ignore_ascii_case("true") {
+                    true
+                } else {
+                    self.no_linenumbers
+                }
+            }
+            Err(_) => {}
+        }
 
         self
     }

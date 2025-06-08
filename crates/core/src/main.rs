@@ -69,9 +69,8 @@ fn build_cli(stdin_streamed: bool) -> Command {
             Arg::new("theme")
                 .long("theme")
                 .short('t')
-                .help("the theme to use")
+                .help("the theme to use [default: dark]")
                 .value_parser(["dark", "light", "catppuccin", "nord", "monokai", "dracula", "gruvbox", "one_dark", "solarized", "tokyo_night"])
-                .default_value("dark")
         )
         .arg(
             Arg::new("style-html")
@@ -210,6 +209,7 @@ fn main() {
     let opts = build_cli(stdin_streamed).get_matches();
 
     let mut config = McatConfig::default();
+    config.extend_from_env();
     config.extend_from_args(&opts);
 
     // setting the winsize
