@@ -122,64 +122,53 @@ mcat part1.mp4 anothervideo.mp4 -o video > save.mp4
 ```
 
 ## 🛐 Dependencies
-Mcat tries to have as little dependencies as possible.
-#### chromium (for rendering HTML to image):
-1. exists on every windows machine through msedge. and other machines that have chrome/msedge/chromium
-2. can be installed by doing `mcat --fetch-chromium`
-#### ffmpeg (for videos)
-1. if your machine has it 🫠.
-2. can be installed by doing `mcat --fetch-ffmpeg`
+Mcat tries to have as few dependencies as possible.
+<details>
+<summary><strong>Chromium (for rendering HTML to image)</strong></summary>
 
-## 🆘 Help
-```txt
-mcat --help
-Usage: mcat [OPTIONS] [input]...
-
-Arguments:
-  [input]...  file / dir / url
-
-Options:
-  -o, --output <output>                  the format to output [possible values: html, md, image, video, inline, interactive]
-  -t, --theme <theme>                    the theme to use [default: dark] [possible values: dark, light, catppuccin, nord, monokai, dracula, gruvbox, one_dark, solarized, tokyo_night]
-  -s, --style-html                       add style to html too (when html is the output)
-  -a, --hidden                           include hidden files
-      --kitty                            makes the inline image encoded to kitty
-      --iterm                            makes the inline image encoded to iterm
-      --sixel                            makes the inline image encoded to sixel
-      --ascii                            makes the inline image encoded to ascii
-  -i                                     shortcut for putting --output inline
-      --hori                             concat images horizontal instead of vertical
-      --no-linenumbers                   changes the format of codeblock in the markdown viewer
-      --delete-images                    deletes all the images, even ones that are not in the scrollview.. currently only works in kitty
-      --report                           reports image / video dimensions when drawing images. along with reporting more info when not drawing images
-      --silent                           removes loading bars
-      --fetch-chromium                   download and prepare chromium
-      --fetch-ffmpeg                     download and prepare ffmpeg
-      --fetch-clean                      Clean up the local binaries
-      --generate <generate-completions>  Generate shell completions [possible values: bash, zsh, fish, powershell]
-      --opts <inline-options>            Options for --output inline:
-                                         *  center=<bool>
-                                         *  inline=<bool>
-                                         *  width=<string>       [only for images]
-                                         *  height=<string>      [only for images]
-                                         *  scale=<f32>
-                                         *  spx=<string>
-                                         *  sc=<string>
-                                         *  zoom=<usize>         [only for images]
-                                         *  x=<int>              [only for images]
-                                         *  y=<int>              [only for images]
-                                         *  exmp: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'
-      --ls-opts <ls-options>             Options for the ls command:
-                                         *  x_padding=<string>
-                                         *  y_padding=<string>
-                                         *  min_width=<string>
-                                         *  max_width=<string>
-                                         *  height=<string>
-                                         *  items_per_row=<usize>
-                                         *  exmp: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c,max_width=16c,height=8%,items_per_row=12'
-  -h, --help                             Print help
-  -V, --version                          Print version
+```md
+1. Available by default on most Windows machines via Microsoft Edge.
+2. Also works with any installed Chrome, Edge, or Chromium.
+3. You can install it manually via `mcat --fetch-chromium`
 ```
+</details>
+
+<details>
+<summary><strong>FFmpeg (for videos)</strong></summary>
+
+```md
+1. If it's already on your machine 🫠.
+2. Otherwise, you can install it with `mcat --fetch-ffmpeg`
+```
+</details>
+
+## ⚙️ Configuring
+<details>
+<summary><strong>Using Flags</strong></summary>
+
+```md
+the main flags for configuring are:
+* `--opts` for inline image printing
+* `--ls-opts` for the ls command
+
+run `mcat --help` for full detail, and other flags. 
+```
+</details>
+
+<details>
+<summary><strong>Using Environment Variables</strong></summary>
+
+```md
+each variable mimicks its corresponding flag alternative.
+* `MCAT_ENCODER`, Options: kitty,iterm,sixel,ascii. e.g. MCAT_ENCODER=kitty is the same as doing `--kitty`
+* `MCAT_THEME`, <str> same as the `--theme` flag
+* `MCAT_INLINE_OPTS`, <str> same as the `--opts` flag
+* `MCAT_LS_OPTS`, <str> same as the `--ls-opts` flag
+* `MCAT_SILENT`, <bool> same as the `--silent` flag
+* `MCAT_NO_LINENUMBERS`, <bool> same as the `--no-linenumbers` flag
+```
+</details>
+
 
 ## 🚧 Roadmap
 - [ ] mcat.nvim: a neovim plugin to use mcat inside neovim
