@@ -100,19 +100,29 @@ This starts at an HTML file and directly converts it into a PNG image.
 
 ## 🏋️ Example Usage
 ```sh
-# View a document at the terminal
+#------------------------------------#
+#  View a documents in the terminal  #
+#------------------------------------#
+
 mcat resume.pdf
 mcat project.docx -t monokai                        # With a different theme
 mcat "https://realpdfs.com/file.pdf"                # From a url
 cat file.pptx | mcat                                # From stdin
 mcat .                                              # Select files interactively
 
-# Convert files
+#-----------------# 
+#  Convert files  #
+#-----------------#
+
 mcat archive.zip > README.md                        # Into Markdown
 mcat src/main.rs src/lib.rs -o html > index.html    # Into HTML
 mcat index.html -o image > page.png                 # Into image
 
-# View Images and Videos in the terminal
+#--------------------------#
+#  View Images and Videos  #
+#  in the terminal         #
+#--------------------------#
+
 mcat img.png                                        # Image
 mcat video.mp4                                      # Video
 mcat "https://giphy.com/gifs/..."                   # From a URL
@@ -120,7 +130,10 @@ mcat README.md -i                                   # Converts to image and then
 mcat ls                                             # ls command with images
 mcat massive_image.png -o interactive               # zoom and pan the image interactively in the terminal
 
-# What i use it the most for?
+#--------------------------#
+#  What I use it most for  #
+#--------------------------#
+
 mcat ls                                             # To find the image i was looking for
 mcat . | scb                                        # Selects files, concat them, and copy to clipboard ~ for AI prompts
 mcat index.html -o image > save.png                 # Render HTML into images
