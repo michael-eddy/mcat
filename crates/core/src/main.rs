@@ -117,6 +117,47 @@ fn build_cli(stdin_streamed: bool) -> Command {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("pager")
+                .long("pager")
+                .help("modify the default pager used [default: 'less -r']")
+        )
+        .arg(
+            Arg::new("paging")
+                .long("paging")
+                .help("disable / enable paging forcefully [default: auto]")
+                .value_parser(["never", "always", "auto"])
+        )
+        .arg(
+            Arg::new("paging-never")
+                .short('P')
+                .help("shortcut for putting --paging never")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("paging-always")
+                .short('p')
+                .help("shortcut for putting --paging always")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("color")
+                .long("color")
+                .help("disable / enable ANSI formatting forcefully [default: auto]")
+                .value_parser(["never", "always", "auto"])
+        )
+        .arg(
+            Arg::new("color-never")
+                .short('C')
+                .help("shortcut for putting --color never")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("color-always")
+                .short('c')
+                .help("shortcut for putting --color always")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("horizontal")
                 .long("hori")
                 .action(clap::ArgAction::SetTrue)
@@ -204,7 +245,7 @@ fn build_cli(stdin_streamed: bool) -> Command {
 
 fn main() {
     let stdin_streamed = !std::io::stdin().is_tty();
-    let stdout = std::io::stdout();
+    let stdout = std::io::stdout().lock();
     let mut out = BufWriter::new(stdout);
     let opts = build_cli(stdin_streamed).get_matches();
 

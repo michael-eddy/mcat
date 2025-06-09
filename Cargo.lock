@@ -2217,7 +2217,7 @@ dependencies = [
 
 [[package]]
 name = "mcat"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chromiumoxide",
  "clap",
@@ -2240,6 +2240,7 @@ dependencies = [
  "reqwest",
  "resvg",
  "scraper",
+ "shell-words",
  "strip-ansi-escapes",
  "syntect",
  "tempfile",

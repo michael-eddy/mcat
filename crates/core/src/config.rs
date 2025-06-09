@@ -124,14 +124,6 @@ impl<'a> LsixOptions<'a> {
     }
 }
 
-// values only in the args
-// output: Option<&'a str>,
-// delete_all_images: bool,
-// report: bool,
-// fetch_chromium: bool,
-// fetch_ffmpeg: bool,
-// fetch_clean: bool,
-// generate_completions: bool,
 pub struct McatConfig<'a> {
     pub input: Vec<String>,
     pub output: Option<&'a str>,
@@ -148,7 +140,33 @@ pub struct McatConfig<'a> {
     pub style_html: bool,
     pub theme: &'a str,
     pub fn_and_leave: Option<FnAndLeave>,
+    pub pager: &'a str,
+    pub color: AlwaysOrNever,
+    pub paging: AlwaysOrNever,
     encoder_force: String,
+}
+
+pub enum AlwaysOrNever {
+    Always,
+    Never,
+    Auto,
+}
+
+impl AlwaysOrNever {
+    pub fn from_string(s: &str) -> AlwaysOrNever {
+        match s.to_lowercase().as_ref() {
+            "always" => return AlwaysOrNever::Always,
+            "never" => return AlwaysOrNever::Never,
+            _ => return AlwaysOrNever::Always,
+        }
+    }
+    pub fn should_use(&self, other: bool) -> bool {
+        match self {
+            AlwaysOrNever::Always => true,
+            AlwaysOrNever::Never => false,
+            AlwaysOrNever::Auto => other,
+        }
+    }
 }
 
 pub enum FnAndLeave {
@@ -179,6 +197,9 @@ impl<'a> Default for McatConfig<'a> {
             theme: "dark",
             fn_and_leave: None,
             encoder_force: "".into(),
+            pager: "less -r",
+            color: AlwaysOrNever::Auto,
+            paging: AlwaysOrNever::Auto,
         }
     }
 }
@@ -265,6 +286,30 @@ impl<'a> McatConfig<'a> {
             .get_one::<String>("theme")
             .map(|v| v.as_ref())
             .unwrap_or(self.theme);
+        // paging
+        self.pager = opts
+            .get_one::<String>("pager")
+            .map(|v| v.as_ref())
+            .unwrap_or(self.pager);
+        if let Some(paging) = opts.get_one::<String>("paging") {
+            self.paging = AlwaysOrNever::from_string(paging);
+        }
+        if opts.get_flag("paging-always") {
+            self.paging = AlwaysOrNever::Always
+        }
+        if opts.get_flag("paging-never") {
+            self.paging = AlwaysOrNever::Never
+        }
+        // color
+        if let Some(color) = opts.get_one::<String>("color") {
+            self.color = AlwaysOrNever::from_string(color);
+        }
+        if opts.get_flag("color-always") {
+            self.color = AlwaysOrNever::Always
+        }
+        if opts.get_flag("color-never") {
+            self.color = AlwaysOrNever::Never
+        }
 
         // output
         let inline = opts.get_flag("inline");
@@ -280,6 +325,12 @@ impl<'a> McatConfig<'a> {
         match env::var("MCAT_ENCODER") {
             Ok(v) => {
                 self.encoder_force = v.to_lowercase();
+            }
+            Err(_) => {}
+        }
+        match env::var("MCAT_PAGER") {
+            Ok(v) => {
+                self.pager = Box::leak(v.into_boxed_str());
             }
             Err(_) => {}
         }

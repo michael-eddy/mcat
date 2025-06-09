@@ -1,5 +1,4 @@
 use std::{
-    env,
     error::Error,
     fs::{self, File},
     io::{Write, stdout},
@@ -182,19 +181,24 @@ pub fn cat(
         ("md", _) => {
             //default for md
             let res = string_result.unwrap();
-            if stdout().is_tty() {
-                let ansi = markdown::md_to_ansi(&res, Some(opts.theme), opts.no_linenumbers);
-                if ansi.lines().count() > term_misc::get_wininfo().sc_height as usize {
-                    let pager = Pager::new();
-                    if pager.page(&ansi).is_err() {
-                        out.write_all(ansi.as_bytes())?;
+            let is_tty = stdout().is_tty();
+            let use_color = opts.color.should_use(is_tty);
+            let content = match use_color {
+                true => markdown::md_to_ansi(&res, Some(opts.theme), opts.no_linenumbers),
+                false => res,
+            };
+            let use_pager = opts.paging.should_use(is_tty && content.lines().count() > term_misc::get_wininfo().sc_height as usize);
+            if use_pager {
+                if let Some(pager) = Pager::new(opts.pager) {
+                    if pager.page(&content).is_err() {
+                        out.write_all(content.as_bytes())?;
                     }
                 } else {
-                    out.write_all(ansi.as_bytes())?;
+                    out.write_all(content.as_bytes())?;
                 }
                 Ok(CatType::Pretty)
             } else {
-                out.write_all(res.as_bytes())?;
+                out.write_all(content.as_bytes())?;
                 return Ok(CatType::Markdown)
             }
         },
@@ -316,59 +320,36 @@ pub fn is_video(ext: &str) -> bool {
 }
 
 pub struct Pager {
-    command: Option<(String, Vec<String>)>,
+    command: String,
+    args: Vec<String>,
 }
 
 impl Pager {
-    pub fn new() -> Self {
-        let command = Self::find_pager();
-        Self { command }
+    pub fn command_and_args_from_string(full: &str) -> Option<(String, Vec<String>)> {
+        let parts = shell_words::split(full).ok()?;
+        let (cmd, args) = parts.split_first()?;
+        return Some((cmd.clone(), args.to_vec()));
     }
-
-    fn find_pager() -> Option<(String, Vec<String>)> {
-        // Check MCATPAGER first, then PAGER
-        if let Ok(pager_env) = env::var("MCATPAGER").or_else(|_| env::var("PAGER")) {
-            let pager_name = pager_env.split_whitespace().next()?;
-
-            // Only support known pagers that handle ANSI codes well
-            match pager_name {
-                "less" => {
-                    if which::which("less").is_ok() {
-                        return Some(("less".to_string(), vec!["-r".to_string()]));
-                    }
-                }
-                "moar" => {
-                    if which::which("moar").is_ok() {
-                        return Some(("moar".to_string(), vec!["--no-linenumbers".to_string()]));
-                    }
-                }
-                _ => {} // Ignore unsupported pagers
-            }
+    pub fn new(def_command: &str) -> Option<Self> {
+        let (command, args) = Pager::command_and_args_from_string(def_command)?;
+        if which::which(&command).is_ok() {
+            return Some(Self { command, args });
         }
-
-        // Try default pagers
-        if which::which("less").is_ok() {
-            Some(("less".to_string(), vec!["-r".to_string()]))
-        } else if which::which("moar").is_ok() {
-            Some(("moar".to_string(), vec!["--no-linenumbers".to_string()]))
-        } else {
-            None
-        }
+        None
     }
 
     pub fn page(&self, content: &str) -> Result<(), Box<dyn Error>> {
-        if let Some((cmd, args)) = &self.command {
-            let mut child = Command::new(cmd).args(args).stdin(Stdio::piped()).spawn()?;
+        let mut child = Command::new(&self.command)
+            .args(&self.args)
+            .stdin(Stdio::piped())
+            .spawn()?;
 
-            if let Some(stdin) = child.stdin.as_mut() {
-                // ignoring cuz the pipe will break when the user quits most likely
-                let _ = stdin.write_all(content.as_bytes());
-            }
-
-            child.wait()?;
-        } else {
-            return Err("no pager was found in the system".into());
+        if let Some(stdin) = child.stdin.as_mut() {
+            // ignoring cuz the pipe will break when the user quits most likely
+            let _ = stdin.write_all(content.as_bytes());
         }
+
+        child.wait()?;
 
         Ok(())
     }
