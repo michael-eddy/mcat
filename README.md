@@ -49,9 +49,9 @@ or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/l
    
 ---
 
-+---------+  
-|  input  |  
-+---------+  
+
+| Input |
+|-------|
 
 Inputs can be:
 1. local file
@@ -60,9 +60,8 @@ Inputs can be:
 
 The type of each input is inferred automatically, and it continues through the pipeline until it reaches the output format the user requested.
 
-+-------------------+  
-|  in the pipeline  |  
-+-------------------+  
+| In the pipeline |
+|-----------------|
 
 For example, if the user runs:
 
@@ -85,10 +84,8 @@ mcat file.html -o image > image.png
 
 This starts at an HTML file and directly converts it into a PNG image.
    
-+-----------------+  
-|  explanation   |  
-|  of the blocks  |  
-+-----------------+
+| Explanation of the blocks |  
+|---------------------------|
 
 * **`markdown`** - set when `-o md` or when the stdout isn't the terminal (piped)
 * **`pretty terminal`** is markdown with ANSI formatting, and is the **default** for any non video / image file. (you can force it by adding the `-c` flag)
