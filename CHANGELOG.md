@@ -1,8 +1,8 @@
-## V0.3.2 (Planned)
+## V0.3.2
 - fixed a bug where the names of files in the ls command won't show in windows
 - made the interactive selector prettier -- now with icons, colors and more ANSI formatting
 - added `--paging, -p, -P` flags to disable / enable paging forcefully
-- added `--pager` flag to modify the pager used
+- added `--pager` flag and MCAT_PAGER env, to modify the pager used
 - added `--color -c -C` flags to enable / disable ANSI formatting forcefully
 
 ## V0.3.1
