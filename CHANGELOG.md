@@ -1,5 +1,9 @@
 ## V0.3.2 (Planned)
-- [ ] added a `-p --playback` flag for watching videos in the terminal with sound
+- [x] fixed a bug where the names of files in the ls command won't show in windows
+- [x] made the interactive selector prettier -- now with icons, colors and more ANSI formatting
+- added `--paging, -p, -P` flags to disable / enable paging forcefully
+- added `--pager` flag to modify the pager used
+- added `--color -c -C` flags to enable / disable ANSI formatting forcefully
 
 ## V0.3.1
 - fixed an issue that tmux passthrough won't be enabled on the ls command

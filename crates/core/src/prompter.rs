@@ -3,6 +3,8 @@ use inquire::MultiSelect;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use crate::markdown::get_lang_icon_and_color;
+
 pub fn prompt_for_files(
     dir: &Path,
     hidden: bool,
@@ -81,11 +83,24 @@ fn collect_gitignored_paths(dir: &Path, hidden: bool) -> Result<Vec<PathBuf>, St
 
 fn format_file_list(paths: &[PathBuf], base: &Path) -> Vec<String> {
     let mut formatted = vec![];
+    let reset = "\x1b[0m";
+    let bold = "\x1b[1m";
+    let blue = "\x1b[34m";
+    let yellow = "\x1b[33m";
+    let dir_color = &format!("{bold}{yellow}");
+    let link_color = &format!("{blue}");
 
     for (i, path) in paths.iter().enumerate() {
         let rel = path.strip_prefix(base).unwrap_or(path);
         let depth = rel.components().count().saturating_sub(1);
         let name = path.file_name().unwrap_or_default().to_string_lossy();
+        let ext = path
+            .extension()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
+        let is_dir = path.is_dir();
+        let is_link = path.is_symlink();
 
         let mut line = String::new();
         if depth > 0 {
@@ -98,11 +113,24 @@ fn format_file_list(paths: &[PathBuf], base: &Path) -> Vec<String> {
                 })
                 .unwrap_or(true);
             line.push_str(if is_last { "└── " } else { "├── " });
+            line.push_str(&reset);
         }
 
-        line.push_str(&name);
-        if path.is_dir() {
-            line.push('/');
+        let name_color = if is_link {
+            link_color
+        } else if is_dir {
+            dir_color
+        } else {
+            ""
+        };
+        if is_dir {
+            line.push_str(&format!("{name_color}\u{f024b} {name}/{reset}"));
+        } else {
+            if let Some((icon, color)) = get_lang_icon_and_color(&ext) {
+                line.push_str(&format!("{color}{icon}{reset} {name_color}{name}{reset}"));
+            } else {
+                line.push_str(&format!("{name_color}{name}{reset}"));
+            }
         }
 
         // Add invisible unique suffix to make each label distinct

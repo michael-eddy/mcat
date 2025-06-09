@@ -10,7 +10,7 @@ use rasteroid::{
     Frame,
     image_extended::InlineImage,
     inline_an_image,
-    term_misc::{self, SizeDirection, dim_to_px},
+    term_misc::{self, SizeDirection, dim_to_cells, dim_to_px, ensure_space},
 };
 use regex::Regex;
 use resvg::{
@@ -423,7 +423,16 @@ pub fn lsix(
                 px_x_padding
             },
         )?;
+        let height = dim_to_cells(height, SizeDirection::Height)?;
+        ensure_space(&mut buf, height as u16)?;
+        // windows for some reason doesn't handle newlines as expected..
+        if cfg!(windows) {
+            buf.write_all(b"\x1b[s")?;
+        }
         inline_an_image(&image, &mut buf, None, None, inline_encoder)?;
+        if cfg!(windows) {
+            buf.write_all(format!("\x1b[u\x1b[{height}B").as_bytes())?;
+        }
         let names: Vec<String> = items
             .iter()
             .map(|f| {

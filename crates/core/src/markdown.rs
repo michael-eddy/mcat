@@ -556,8 +556,9 @@ fn string_len(str: &str) -> usize {
     strip_ansi_escapes::strip_str(&str).chars().count()
 }
 
-fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
+pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
     let map: HashMap<&str, (&str, &str)> = [
+        // code
         ("python", ("\u{e235}", "\x1b[38;5;214m")), // Python yellow-orange
         ("py", ("\u{e235}", "\x1b[38;5;214m")),
         ("rust", ("\u{e7a8}", "\x1b[38;5;166m")), // Rust orange
@@ -598,9 +599,10 @@ fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
         ("tsx", ("\u{e7ba}", "\x1b[38;5;81m")),
         ("vue", ("\u{fd42}", "\x1b[38;5;83m")),   // Vue green
         ("json", ("\u{e60b}", "\x1b[38;5;185m")), // JSON yellow
-        ("yaml", ("\u{f481}", "\x1b[38;5;167m")), // YAML orange-red
-        ("yml", ("\u{f481}", "\x1b[38;5;167m")),
-        ("toml", ("\u{e60b}", "\x1b[38;5;67m")), // TOML blue
+        ("yaml", ("\u{f0c5}", "\x1b[38;5;167m")), // YAML orange-red
+        ("yml", ("\u{f0c5}", "\x1b[38;5;167m")),
+        ("toml", ("\u{e6b2}", "\x1b[38;5;131m")),
+        ("svg", ("\u{f0721}", "\x1b[38;5;178m")),
         ("xml", ("\u{e619}", "\x1b[38;5;172m")), // XML orange
         ("md", ("\u{f48a}", "\x1b[38;5;255m")),  // Markdown white
         ("markdown", ("\u{f48a}", "\x1b[38;5;255m")),
@@ -611,8 +613,8 @@ fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
         ("text", ("\u{f15c}", "\x1b[38;5;248m")),
         ("log", ("\u{f18d}", "\x1b[38;5;242m")), // Log dark gray
         ("ini", ("\u{f17a}", "\x1b[38;5;172m")), // INI orange
-        ("conf", ("\u{f17a}", "\x1b[38;5;172m")), // Config orange
-        ("config", ("\u{f17a}", "\x1b[38;5;172m")),
+        ("conf", ("\u{f0ad}", "\x1b[38;5;172m")), // Config orange
+        ("config", ("\u{f0ad}", "\x1b[38;5;172m")),
         ("env", ("\u{f462}", "\x1b[38;5;227m")), // Environment yellow
         ("dockerfile", ("\u{f308}", "\x1b[38;5;39m")), // Docker cyan
         ("docker", ("\u{f308}", "\x1b[38;5;39m")),
@@ -635,6 +637,54 @@ fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
         ("matlab", ("\u{f799}", "\x1b[38;5;202m")), // MATLAB orange
         ("m", ("\u{f799}", "\x1b[38;5;202m")),
         ("octave", ("\u{f799}", "\x1b[38;5;202m")), // Octave orange
+        ("zig", ("\u{e6a9}", "\x1b[38;5;214m")),
+        ("h", ("\u{e61e}", "\x1b[38;5;110m")),
+        ("lock", ("\u{f023}", "\x1b[38;5;244m")),
+        // images
+        ("png", ("\u{f1c5}", "\x1b[38;5;117m")),
+        ("jpg", ("\u{f1c5}", "\x1b[38;5;110m")),
+        ("jpeg", ("\u{f1c5}", "\x1b[38;5;110m")),
+        ("gif", ("\u{f1c5}", "\x1b[38;5;213m")),
+        ("bmp", ("\u{f1c5}", "\x1b[38;5;103m")),
+        ("webp", ("\u{f1c5}", "\x1b[38;5;149m")),
+        ("tiff", ("\u{f1c5}", "\x1b[38;5;144m")),
+        ("ico", ("\u{f1c5}", "\x1b[38;5;221m")),
+        // videos
+        ("mp4", ("\u{f03d}", "\x1b[38;5;203m")),
+        ("mkv", ("\u{f03d}", "\x1b[38;5;132m")),
+        ("webm", ("\u{f03d}", "\x1b[38;5;111m")),
+        ("mov", ("\u{f03d}", "\x1b[38;5;173m")),
+        ("avi", ("\u{f03d}", "\x1b[38;5;167m")),
+        ("flv", ("\u{f03d}", "\x1b[38;5;131m")),
+        // audio
+        ("mp3", ("\u{f001}", "\x1b[38;5;215m")),
+        ("ogg", ("\u{f001}", "\x1b[38;5;109m")),
+        ("flac", ("\u{f001}", "\x1b[38;5;113m")),
+        ("wav", ("\u{f001}", "\x1b[38;5;123m")),
+        ("m4a", ("\u{f001}", "\x1b[38;5;174m")),
+        // archive
+        ("zip", ("\u{f410}", "\x1b[38;5;180m")),
+        ("tar", ("\u{f410}", "\x1b[38;5;180m")),
+        ("gz", ("\u{f410}", "\x1b[38;5;180m")),
+        ("rar", ("\u{f410}", "\x1b[38;5;180m")),
+        ("7z", ("\u{f410}", "\x1b[38;5;180m")),
+        ("xz", ("\u{f410}", "\x1b[38;5;180m")),
+        // documents
+        ("pdf", ("\u{f1c1}", "\x1b[38;5;196m")),
+        ("doc", ("\u{f1c2}", "\x1b[38;5;33m")),
+        ("docx", ("\u{f1c2}", "\x1b[38;5;33m")),
+        ("xls", ("\u{f1c3}", "\x1b[38;5;70m")),
+        ("xlsx", ("\u{f1c3}", "\x1b[38;5;70m")),
+        ("ppt", ("\u{f1c4}", "\x1b[38;5;166m")),
+        ("pptx", ("\u{f1c4}", "\x1b[38;5;166m")),
+        ("odt", ("\u{f1c2}", "\x1b[38;5;33m")),
+        ("epub", ("\u{f02d}", "\x1b[38;5;135m")),
+        ("csv", ("\u{f1c3}", "\x1b[38;5;190m")),
+        // fonts
+        ("ttf", ("\u{f031}", "\x1b[38;5;98m")),
+        ("otf", ("\u{f031}", "\x1b[38;5;98m")),
+        ("woff", ("\u{f031}", "\x1b[38;5;98m")),
+        ("woff2", ("\u{f031}", "\x1b[38;5;98m")),
     ]
     .into();
 
