@@ -18,8 +18,8 @@
 
 <img src="https://i.imgur.com/qSSM6Iy.png" width="128"/>
 
-parse, convert and preview files  
-***in your terminal***
+Parse, Convert and Preview files  
+***In your Terminal***
 
 ![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)  
 
