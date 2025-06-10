@@ -86,9 +86,9 @@ fn format_file_list(paths: &[PathBuf], base: &Path) -> Vec<String> {
     let reset = "\x1b[0m";
     let bold = "\x1b[1m";
     let blue = "\x1b[34m";
-    let yellow = "\x1b[33m";
-    let dir_color = &format!("{bold}{yellow}");
-    let link_color = &format!("{blue}");
+    let purple = "\x1b[35m";
+    let dir_color = &format!("{bold}{blue}");
+    let link_color = &format!("{purple}");
 
     for (i, path) in paths.iter().enumerate() {
         let rel = path.strip_prefix(base).unwrap_or(path);

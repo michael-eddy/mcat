@@ -1,3 +1,7 @@
+## Src
+- changed the colors in the interactive selector
+- added line wrapping for the markdown viewer
+
 ## V0.3.2
 - fixed a bug where the names of files in the ls command won't show in windows
 - made the interactive selector prettier -- now with icons, colors and more ANSI formatting

@@ -96,7 +96,12 @@ pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> Str
     };
     format_ast_node(root, &mut ctx);
 
-    ctx.output
+    let lines: Vec<String> =
+        textwrap::wrap(&ctx.output, term_misc::get_wininfo().sc_width as usize)
+            .into_iter()
+            .map(|cow| cow.into_owned())
+            .collect();
+    lines.join("\n")
 }
 
 fn comrak_options<'a>() -> ComrakOptions<'a> {
