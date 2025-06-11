@@ -1,6 +1,6 @@
-## Src
+## V0.3.3
 - changed the colors in the interactive selector
-- added line wrapping for the markdown viewer
+- added line wrapping for the markdown viewer -- doesn't skip lines in less now
 
 ## V0.3.2
 - fixed a bug where the names of files in the ls command won't show in windows
