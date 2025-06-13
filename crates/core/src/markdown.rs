@@ -444,7 +444,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::Text(literal) => ctx.write(literal),
         NodeValue::SoftBreak => ctx.write(" "),
-        NodeValue::LineBreak => ctx.write("\n"),
+        NodeValue::LineBreak => {} // already handles line breaks globally
         NodeValue::Math(NodeMath { literal, .. }) => ctx.write(literal),
         NodeValue::Strong => {
             let content = ctx.collect(node);
