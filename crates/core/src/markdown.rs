@@ -218,7 +218,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 comrak::nodes::ListType::Bullet => 0,
                 comrak::nodes::ListType::Ordered => node_list.start as i32,
             };
-            let bullet = if node_list.is_task_list { "" } else { "⬤" };
+            let bullet = if node_list.is_task_list { "" } else { "●" };
             let content = ctx.collect(node);
 
             let mut pre_offset = 0;
@@ -301,10 +301,11 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 lang
             };
 
+            let indent = data.sourcepos.start.column;
             if ctx.hide_line_numbers {
                 format_code_simple(code, lang, ctx);
             } else {
-                format_code(code, lang, ctx);
+                format_code(code, lang, ctx, indent);
             }
         }
         NodeValue::HtmlBlock(node_html_block) => {
@@ -344,15 +345,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.collect_and_write(node);
         }
         NodeValue::Heading(node_heading) => {
-            let prefix = match node_heading.level {
-                1 => "㊀",
-                2 => "㊁",
-                3 => "㊂",
-                4 => "㊃",
-                5 => "㊄",
-                6 => "㊅",
-                _ => "",
-            };
+            let prefix = "∙".repeat(node_heading.level as usize);
             let content = ctx.collect(node);
             ctx.write(&format!("{BOLD}{FG_BLUE}{prefix} {content}{RESET}"));
         }
@@ -474,8 +467,9 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::Code(node_code) => {
             let surface = ctx.theme.surface.bg.clone();
+            let fg_surface = ctx.theme.surface.fg.clone();
             ctx.write(&format!(
-                "{surface}{FG_GREEN} {} {RESET}",
+                "{fg_surface}{FG_GREEN}{surface}{}{RESET}{fg_surface}{RESET}",
                 node_code.literal
             ));
         }
@@ -739,7 +733,7 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext) {
     }
     ctx.write(&bottom);
 }
-fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext) {
+fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
         .ps
@@ -754,7 +748,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext) {
 
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;
-    let term_width = term_misc::get_wininfo().sc_width;
+    let term_width = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
     let color = FG_BRIGHT_BLACK;
 
     let top_header = format!(
@@ -808,7 +802,7 @@ pub struct ThemeColor {
     value: String,
     color: Color,
     bg: String,
-    _fg: String,
+    fg: String,
 }
 
 impl From<&str> for ThemeColor {
@@ -820,7 +814,7 @@ impl From<&str> for ThemeColor {
             value: hex_color.to_owned(),
             color,
             bg: format!("\x1b[48;2;{};{};{}m", r, g, b),
-            _fg: format!("\x1b[38;2;{};{};{}m", r, g, b),
+            fg: format!("\x1b[38;2;{};{};{}m", r, g, b),
         }
     }
 }
