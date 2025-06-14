@@ -339,12 +339,10 @@ fn main() {
                 std::process::exit(1);
             }
             if path.is_dir() {
-                path_bufs.clear();
                 let mut selected_files =
                     prompter::prompt_for_files(path, config.hidden).unwrap_or_exit();
                 selected_files.sort();
                 path_bufs.extend_from_slice(&selected_files);
-                break;
             } else {
                 path_bufs.push((path.to_path_buf(), None));
             }
