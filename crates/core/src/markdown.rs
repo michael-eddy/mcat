@@ -754,13 +754,13 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let top_header = format!(
         "{color}{}┬{}{RESET}",
         "─".repeat(num_width),
-        "-".repeat(term_width as usize - num_width - 1)
+        "─".repeat(term_width as usize - num_width - 1)
     );
     let middle_header = format!("{color}{}│ {header}{RESET}", " ".repeat(num_width),);
     let bottom_header = format!(
         "{color}{}┼{}{RESET}",
         "─".repeat(num_width),
-        "-".repeat(term_width as usize - num_width - 1)
+        "─".repeat(term_width as usize - num_width - 1)
     );
     ctx.write(&top_header);
     ctx.cr();
@@ -788,7 +788,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let last_border = format!(
         "{color}{}┴{}{RESET}",
         "─".repeat(num_width),
-        "-".repeat(term_width as usize - num_width - 1)
+        "─".repeat(term_width as usize - num_width - 1)
     );
     ctx.write(&last_border);
 }

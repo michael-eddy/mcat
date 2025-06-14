@@ -1,6 +1,7 @@
 ## Src
-- fixing double linebreaks problem in the markdown viewer
+- fixed double linebreaks problem in the markdown viewer
 - fixed codeblocks inside indented blocks being wider then the screen.
+- fixed an inconsistent box drawing character in codeblock (markdown viewer)
 
 ## V0.3.3
 - changed the colors in the interactive selector
