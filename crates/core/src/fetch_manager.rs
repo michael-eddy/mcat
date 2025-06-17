@@ -1,22 +1,23 @@
-use std::{error, fs, path::PathBuf};
-
-use chromiumoxide::{
-    BrowserConfig, BrowserFetcher, BrowserFetcherOptions,
-    detection::{DetectionOptions, default_executable},
+use std::{
+    env, error,
+    fs::{self, File},
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
 };
+
 use ffmpeg_sidecar::{
     command::FfmpegCommand,
     download::{download_ffmpeg_package, ffmpeg_download_url, unpack_ffmpeg},
 };
+use tokio::runtime::Builder;
+use zip::ZipArchive;
 
 pub fn is_chromium_installed() -> bool {
-    let cache_path = get_cache_path();
-    let download_path = cache_path.join("chromium");
-    if download_path.join("installed.txt").exists() {
-        return true;
+    let cr = ChromeRevision::default();
+    match cr {
+        Some(cr) => cr.exists(),
+        None => false,
     }
-
-    default_executable(DetectionOptions::default()).is_ok()
 }
 pub fn is_ffmpeg_installed() -> bool {
     let cache_path = get_cache_path();
@@ -31,33 +32,11 @@ pub fn is_ffmpeg_installed() -> bool {
 }
 
 pub fn fetch_chromium() -> Result<(), Box<dyn error::Error>> {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-
-    rt.block_on(async {
-        let cache_path = get_cache_path();
-        eprintln!("downloading chromium, it may take a while..");
-        let download_path = cache_path.join("chromium");
-        if !download_path.exists() {
-            fs::create_dir_all(download_path.clone())?;
-        }
-        let fetcher = BrowserFetcher::new(
-            BrowserFetcherOptions::builder()
-                .with_path(&download_path)
-                .build()?,
-        );
-        let info = fetcher.fetch().await?;
-        BrowserConfig::builder()
-            .chrome_executable(info.executable_path)
-            .new_headless_mode()
-            .build()?;
-
-        let ind = download_path.join("installed.txt");
-        fs::File::create(ind)?;
-        eprintln!("done!");
-        Ok(())
-    })
+    let cr = ChromeRevision::default();
+    match cr {
+        Some(cr) => cr.download(),
+        None => Err("Platform isn't supported for fetching chromium".into()),
+    }
 }
 
 pub fn fetch_ffmpeg() -> Result<(), Box<dyn error::Error>> {
@@ -109,4 +88,278 @@ pub fn get_ffmpeg() -> Option<FfmpegCommand> {
         return Some(FfmpegCommand::new_with_path(ffmpeg_path));
     }
     None
+}
+
+pub struct BrowserConfig {
+    pub path: PathBuf,
+}
+
+impl BrowserConfig {
+    pub fn default() -> Option<Self> {
+        let path = BrowserConfig::auto_detect_path()?;
+        Some(BrowserConfig { path })
+    }
+
+    fn auto_detect_path() -> Option<PathBuf> {
+        if let Some(path) = get_by_env_var() {
+            return Some(path);
+        }
+
+        if let Some(path) = get_by_name() {
+            return Some(path);
+        }
+
+        #[cfg(windows)]
+        if let Some(path) = get_by_registry() {
+            return Some(path);
+        }
+
+        if let Some(path) = get_by_path() {
+            return Some(path);
+        }
+
+        let cr = ChromeRevision::default()?;
+        let p = cr.path();
+        if p.exists() {
+            return Some(p);
+        }
+
+        None
+    }
+}
+
+fn get_by_env_var() -> Option<PathBuf> {
+    if let Ok(path) = env::var("CHROME") {
+        if Path::new(&path).exists() {
+            return Some(path.into());
+        }
+    }
+
+    None
+}
+
+fn get_by_name() -> Option<PathBuf> {
+    let default_apps = [
+        ("chrome"),
+        ("chrome-browser"),
+        ("google-chrome-stable"),
+        ("google-chrome-beta"),
+        ("google-chrome-dev"),
+        ("google-chrome-unstable"),
+        ("chromium"),
+        ("chromium-browser"),
+        ("msedge"),
+        ("microsoft-edge"),
+        ("microsoft-edge-stable"),
+        ("microsoft-edge-beta"),
+        ("microsoft-edge-dev"),
+    ];
+    for app in default_apps {
+        if let Ok(path) = which::which(app) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[allow(unused_variables)]
+fn get_by_path() -> Option<PathBuf> {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let default_paths: [&str; 2] = ["/opt/chromium.org/chromium", "/opt/google/chrome"];
+    #[cfg(windows)]
+    let default_paths = [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"];
+    #[cfg(target_os = "macos")]
+    let default_paths = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta",
+        "/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev",
+        "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        "/Applications/Microsoft Edge Beta.app/Contents/MacOS/Microsoft Edge Beta",
+        "/Applications/Microsoft Edge Dev.app/Contents/MacOS/Microsoft Edge Dev",
+        "/Applications/Microsoft Edge Canary.app/Contents/MacOS/Microsoft Edge Canary",
+    ];
+
+    for path in default_paths {
+        if Path::new(path).exists() {
+            return Some(path.into());
+        }
+    }
+
+    None
+}
+
+#[cfg(windows)]
+fn get_by_registry() -> Option<PathBuf> {
+    winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
+        .or_else(|_| {
+            winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe")
+        })
+        .and_then(|key| key.get_value::<String, _>(""))
+        .map(PathBuf::from)
+        .ok()
+}
+
+struct ChromeRevision {
+    revision: u32,
+    platform: Platform,
+    host: String,
+}
+
+impl ChromeRevision {
+    pub fn default() -> Option<Self> {
+        Some(ChromeRevision {
+            revision: 1045629,
+            platform: Platform::current()?,
+            host: "https://storage.googleapis.com".to_owned(),
+        })
+    }
+    pub fn download(&self) -> Result<(), Box<dyn error::Error>> {
+        let url = self.platform.as_url(&self.host, self.revision);
+        eprintln!("Downloading {url}");
+
+        let cache_path = get_cache_path();
+        let mut folder_path = cache_path.join("chromium");
+        folder_path.push(self.platform.as_folder(self.revision));
+        let archive_path = folder_path.with_extension("zip");
+        eprintln!("Location: {}", archive_path.display());
+        if !folder_path.exists() {
+            fs::create_dir_all(&folder_path)?;
+        }
+
+        // Create Archive
+        let file = File::create(&archive_path).map_err(|_| "Failed to create archive file")?;
+        let mut file = BufWriter::new(file);
+
+        // Download and Unzip
+        let url = url
+            .parse::<reqwest::Url>()
+            .map_err(|_| "Invalid archive url")?;
+        let rt = Builder::new_current_thread().enable_all().build()?;
+        rt.block_on(async {
+            // Download
+            let mut res = reqwest::get(url)
+                .await
+                .map_err(|_| "Failed to send request to host")?;
+            if res.status() != reqwest::StatusCode::OK {
+                return Err("Invalid archive url".into());
+            }
+
+            while let Some(chunk) = res
+                .chunk()
+                .await
+                .map_err(|_| "Failed to read response chunk")?
+            {
+                file.write(&chunk)
+                    .map_err(|_| "Failed to write to archive file")?;
+            }
+            file.flush().map_err(|_| "Failed to flush to disk")?;
+            eprintln!("Finished Downloading!");
+
+            // Unzip
+            eprintln!("Unziping");
+            fs::create_dir_all(&folder_path).map_err(|_| "Failed to create folder")?;
+            let file = fs::File::open(&archive_path).map_err(|_| "Failed to open archive")?;
+            let mut archive = ZipArchive::new(file).map_err(|_| "Failed to unzip archive")?;
+            archive.extract(folder_path)?;
+            let _ = fs::remove_file(archive_path);
+
+            eprintln!("Done!");
+            Ok(())
+        })
+    }
+    pub fn exists(&self) -> bool {
+        self.path().exists()
+    }
+    pub fn path(&self) -> PathBuf {
+        let cache_path = get_cache_path();
+        let mut download_path = cache_path.join("chromium");
+        download_path.push(self.platform.as_folder(self.revision));
+        download_path.push(self.platform.as_archive(self.revision));
+        self.platform.as_executable(&download_path)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Platform {
+    Linux,
+    Mac,
+    MacArm,
+    Win32,
+    Win64,
+}
+
+impl Platform {
+    pub fn current() -> Option<Self> {
+        let os = env::consts::OS;
+        let arch = env::consts::ARCH;
+
+        match (os, arch) {
+            ("linux", "x86_64") => Some(Self::Linux),
+            ("macos", "x86_64") => Some(Self::Mac),
+            ("macos", "aarch64") => Some(Self::MacArm),
+            ("windows", "x86") => Some(Self::Win32),
+            ("windows", "x86_64") => Some(Self::Win64),
+            _ => None,
+        }
+    }
+
+    fn as_archive(&self, revision: u32) -> String {
+        match self {
+            Self::Linux => "chrome-linux".to_string(),
+            Self::Mac | Self::MacArm => "chrome-mac".to_string(),
+            Self::Win32 | Self::Win64 => {
+                if revision > 591_479 {
+                    "chrome-win".to_string()
+                } else {
+                    "chrome-win32".to_string()
+                }
+            }
+        }
+    }
+
+    pub fn as_executable(&self, folder_path: &Path) -> PathBuf {
+        let mut path = folder_path.to_path_buf();
+        match self {
+            Self::Linux => path.push("chrome"),
+            Self::Mac | Self::MacArm => {
+                path.push("Chromium.app");
+                path.push("Contents");
+                path.push("MacOS");
+                path.push("Chromium")
+            }
+            Self::Win32 | Self::Win64 => path.push("chrome.exe"),
+        }
+        path
+    }
+
+    pub fn as_url(&self, host: &str, revision: u32) -> String {
+        let name = match self {
+            Self::Linux => "Linux_x64",
+            Self::Mac => "Mac",
+            Self::MacArm => "Mac_Arm",
+            Self::Win32 => "Win",
+            Self::Win64 => "Win_x64",
+        };
+        let archive = self.as_archive(revision);
+        format!(
+            "{}/chromium-browser-snapshots/{}/{}/{}.zip",
+            host, name, revision, archive
+        )
+    }
+
+    pub fn as_folder(&self, revision: u32) -> String {
+        let platform = match self {
+            Self::Linux => "linux",
+            Self::Mac => "mac",
+            Self::MacArm => "mac_arm",
+            Self::Win32 => "win32",
+            Self::Win64 => "win64",
+        };
+        format!("{platform}-{revision}")
+    }
 }

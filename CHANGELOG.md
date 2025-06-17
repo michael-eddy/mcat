@@ -1,9 +1,10 @@
 ## Src
-- fixed double linebreaks problem in the markdown viewer
-- fixed codeblocks inside indented blocks being wider then the screen.
-- fixed an inconsistent box drawing character in codeblock (markdown viewer)
-- now allows selection from the interactive selector along with other inputs
-- fixed weird spacing when turning html to image in linux
+- 🌟 now allows selection from the interactive selector along with other inputs
+- 🌟 optimized build time
+- 🐛 fixed double linebreaks problem in the markdown viewer
+- 🐛 fixed codeblocks inside indented blocks being wider then the screen.
+- 🐛 fixed an inconsistent box drawing character in codeblock (markdown viewer)
+- 🐛 fixed weird spacing when turning html to image in linux
 
 ## V0.3.3
 - changed the colors in the interactive selector
