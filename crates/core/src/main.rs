@@ -354,9 +354,13 @@ fn main() {
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
-            let path_bufs = concater::assign_names(&path_bufs);
-            let tmp = concater::concat_text(path_bufs);
-            catter::cat(tmp.path(), &mut out, &config).unwrap_or_exit();
+            if path_bufs.len() == 1 {
+                catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
+            } else {
+                let path_bufs = concater::assign_names(&path_bufs);
+                let tmp = concater::concat_text(path_bufs);
+                catter::cat(tmp.path(), &mut out, &config).unwrap_or_exit();
+            }
         }
         "video" => {
             match config.inline_encoder {
@@ -370,7 +374,7 @@ fn main() {
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
             } else {
-                #[allow(unused_variables)] //for lifetime
+                #[allow(unused_variables)]
                 let (dir, path) = concater::concat_video(&path_bufs).unwrap_or_exit();
                 catter::cat(&path, &mut out, &config).unwrap_or_exit();
             }

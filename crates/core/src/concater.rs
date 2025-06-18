@@ -1,8 +1,4 @@
-use std::{
-    fs::{self, File},
-    io::Write,
-    path::PathBuf,
-};
+use std::{fs::File, io::Write, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{GenericImage, ImageFormat};
@@ -13,22 +9,6 @@ use tempfile::{NamedTempFile, TempDir};
 use crate::{catter, converter};
 
 pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
-    if paths.len() == 1 {
-        let (path, _) = paths[0];
-        let ext = path
-            .extension()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-        let content = fs::read(path).unwrap_or_default();
-        let mut tmp_file =
-            NamedTempFile::with_suffix(format!(".{ext}")).expect("failed to create tmp file");
-        tmp_file
-            .write_all(&content)
-            .expect("failed writing to tmp file");
-        return tmp_file;
-    }
-
     let mut chunks: Vec<(usize, String)> = paths
         .into_par_iter()
         .enumerate()
