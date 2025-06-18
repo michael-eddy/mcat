@@ -23,12 +23,12 @@ Parse, Convert and Preview files
 
 ![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)  
 
-[Installation](#%EF%B8%8F-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANGELOG](./CHANGELOG.md)
+[Installation](#-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANGELOG](./CHANGELOG.md)
 
 ![mcat_demo](https://github.com/Skardyy/assets/blob/main/mcat_opt.gif)
 </div>
 
-## ⬇️ Installation
+## 🚀 Installation
 ```sh
 cargo install mcat
 ```
@@ -40,7 +40,7 @@ cargo install --path ./crates/core
 ```
 or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/latest)
 
-## ⚙️ How it works
+## 🤔 How it works
 
 ![mcat-pipeline](https://github.com/user-attachments/assets/fbf4617d-453a-45e8-bbd5-5dfdac2b8086)
 
@@ -110,41 +110,42 @@ This starts at an HTML file and directly converts it into a PNG image.
 #------------------------------------#
 
 mcat resume.pdf
-mcat project.docx -t monokai                        # With a different theme
-mcat "https://realpdfs.com/file.pdf"                # From a url
-cat file.pptx | mcat                                # From stdin
-mcat .                                              # Select files interactively
+mcat project.docx -t monokai              # With a different theme
+mcat "https://realpdfs.com/file.pdf"      # From a url
+cat file.pptx | mcat                      # From stdin
+mcat .                                    # Select files interactively
 
 #-----------------# 
 #  Convert files  #
 #-----------------#
 
-mcat archive.zip > README.md                        # Into Markdown
-mcat src/main.rs src/lib.rs -o html > index.html    # Into HTML
-mcat index.html -o image > page.png                 # Into image
+mcat archive.zip > README.md              # Into Markdown
+mcat main.rs lib.rs -o html > index.html  # Into HTML
+mcat index.html -o image > page.png       # Into image
 
 #--------------------------#
 #  View Images and Videos  #
 #  in the terminal         #
 #--------------------------#
 
-mcat img.png                                        # Image
-mcat video.mp4                                      # Video
-mcat "https://giphy.com/gifs/..."                   # From a URL
-mcat README.md -i                                   # Converts to image and then shows it
-mcat ls                                             # ls command with images
-mcat massive_image.png -o interactive               # zoom and pan the image interactively in the terminal
+mcat img.png                              # Image
+mcat video.mp4                            # Video
+mcat "https://giphy.com/gifs/..."         # From a URL
+mcat README.md -i                         # Converts to image and then shows it
+mcat ls                                   # ls command with images
+mcat massive_image.png -o interactive     # zoom and pan the image interactively in the terminal
 
 #--------------------------#
 #  What I use it most for  #
 #--------------------------#
 
-mcat ls                                             # To find the image i was looking for
-mcat . | scb                                        # Selects files, concat them, and copy to clipboard ~ for AI prompts
-mcat index.html -o image > save.png                 # Render HTML into images
+mcat ls                                   # To find the image i was looking for
+mcat . | scb                              # Selects files, concat them, and copy to clipboard ~ for AI prompts
+mcat index.html -o image > save.png       # Render HTML into images
 ```
 
-## 🛐 Dependencies (Optional)
+## 📦 Optional Dependencies
+> Mcat will continue working without them
 <details>
 <summary><strong>Chromium (for rendering HTML to image)</strong></summary>
 
@@ -152,6 +153,16 @@ mcat index.html -o image > save.png                 # Render HTML into images
 1. Available by default on most Windows machines via Microsoft Edge.
 2. Also works with any installed Chrome, Edge, or Chromium.
 3. You can install it manually via `mcat --fetch-chromium`
+---
+</details>
+
+<details>
+<summary><strong>pdftocairo/pdftoppm (for rendering PDF to image)</strong></summary>
+
+---
+1. Is included by default in most major distros
+2. Windwos users can install from [poppler-windows](https://github.com/oschwartz10612/poppler-windows)
+3. if not installed, mcat will fallback into converting the pdf to markdown and then screenshot using chromium
 ---
 </details>
 
