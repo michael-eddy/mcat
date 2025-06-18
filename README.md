@@ -144,7 +144,7 @@ mcat . | scb                                        # Selects files, concat them
 mcat index.html -o image > save.png                 # Render HTML into images
 ```
 
-## 🛐 Dependencies
+## 🛐 Dependencies (Optional)
 <details>
 <summary><strong>Chromium (for rendering HTML to image)</strong></summary>
 
