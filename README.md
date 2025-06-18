@@ -161,8 +161,8 @@ mcat index.html -o image > save.png       # Render HTML into images
 
 ---
 1. Is included by default in most major distros
-2. Windwos users can install from [poppler-windows](https://github.com/oschwartz10612/poppler-windows)
-3. if not installed, mcat will fallback into converting the pdf to markdown and then screenshot using chromium
+2. Windows users can install from [poppler-windows](https://github.com/oschwartz10612/poppler-windows)
+3. If not installed, mcat will fallback into converting the PDF to Markdown and then screenshot using chromium
 ---
 </details>
 
