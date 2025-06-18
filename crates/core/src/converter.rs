@@ -15,12 +15,16 @@ use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
 };
-use std::io::{Write, stdout};
 use std::{
     error,
     fs::{self},
     io::{BufRead, Cursor, Read},
     path::Path,
+    process::Stdio,
+};
+use std::{
+    io::{Write, stdout},
+    process::Command,
 };
 
 use crate::{catter, cdp::ChromeHeadless, config::LsixOptions, fetch_manager};
@@ -91,6 +95,44 @@ pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> 
         let img_data = browser.capture_screenshot().await?;
         Ok(img_data)
     })
+}
+pub fn pdf_to_image(
+    pdf_path: &str,
+    page_number: usize,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let tool = which::which("pdftocairo")
+        .map(|_| "pdftocairo")
+        .or_else(|_| which::which("pdftoppm").map(|_| "pdftoppm"))
+        .map_err(|_| "Neither pdftocairo nor pdftoppm found in PATH".to_string())?;
+
+    let output = Command::new(tool)
+        .args(&[
+            "-jpeg",
+            "-singlefile",
+            "-f",
+            &page_number.to_string(),
+            "-l",
+            &page_number.to_string(),
+            "-r",
+            "300",
+            pdf_path,
+            "-",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("{} failed to execute: {}", tool, e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "{} error: {}",
+            tool,
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+
+    Ok(output.stdout)
 }
 
 pub struct VideoFrames {

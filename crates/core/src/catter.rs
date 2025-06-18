@@ -76,6 +76,47 @@ pub fn cat(
         )?;
         return Ok(CatType::InlineVideo);
     }
+    // pdf to images
+    if ext == "pdf" && matches!(to, "inline" | "image") {
+        // tries if pdftoppm or pdftocairo is installed, if not comes back to normal pdf parsing..
+        if let Ok(img_data) = converter::pdf_to_image(&path.to_string_lossy().to_owned(), 1) {
+            match to {
+                "inline" => {
+                    let dyn_img = image::load_from_memory(&img_data)?;
+                    let dyn_img = apply_pan_zoom_once(dyn_img, &opts);
+                    let (img, center, _, _) = dyn_img.resize_plus(
+                        opts.inline_options.width,
+                        opts.inline_options.height,
+                        resize_for_ascii,
+                        false,
+                    )?;
+                    if opts.report {
+                        rasteroid::term_misc::report_size(
+                            opts.inline_options.width.unwrap_or_default(),
+                            opts.inline_options.height.unwrap_or_default(),
+                        );
+                    }
+                    rasteroid::inline_an_image(
+                        &img,
+                        out,
+                        if opts.inline_options.center {
+                            Some(center)
+                        } else {
+                            None
+                        },
+                        None,
+                        &opts.inline_encoder,
+                    )?;
+                    return Ok(CatType::InlineImage);
+                }
+                "image" => {
+                    out.write_all(&img_data)?;
+                    return Ok(CatType::Image);
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
     //svg
     (image_result, from) = if ext == "svg" {
         let file = File::open(path)?;
