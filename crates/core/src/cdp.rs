@@ -3,16 +3,19 @@ use base64::engine::general_purpose;
 use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
+use crate::UnwrapOrExit;
 use crate::fetch_manager::BrowserConfig;
 
 pub struct ChromeHeadless {
-    process: Child,
+    process: Arc<Mutex<Child>>,
     port: u16,
 }
 
@@ -39,6 +42,7 @@ impl ChromeHeadless {
                 "--disable-features=TranslateUI",
                 "--disable-features=VizDisplayCompositor",
                 // UI/UX optimizations
+                "--hide-scrollbars",
                 "--no-first-run",
                 "--disable-popup-blocking",
                 "--disable-prompt-on-repost",
@@ -58,8 +62,23 @@ impl ChromeHeadless {
             .stderr(Stdio::null())
             .spawn()?;
 
+        // make sure the process is always killed 100% (windows suck)
+        let shutdown = rasteroid::term_misc::setup_signal_handler();
+        let pc_arc = Arc::new(Mutex::new(process));
+        let shutdown_arc = pc_arc.clone();
+        tokio::spawn(async move {
+            loop {
+                if shutdown.load(Ordering::SeqCst) {
+                    let mut process = shutdown_arc.lock().unwrap_or_exit();
+                    process.kill().unwrap_or_exit();
+                    std::process::exit(1);
+                };
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        });
+
         let instance = Self {
-            process,
+            process: pc_arc,
             port: 9222,
         };
 
@@ -70,7 +89,7 @@ impl ChromeHeadless {
     async fn wait_for_server(&self) -> Result<(), Box<dyn std::error::Error>> {
         loop {
             match timeout(
-                Duration::from_millis(100),
+                Duration::from_millis(2000),
                 TcpStream::connect(format!("127.0.0.1:{}", self.port)),
             )
             .await
@@ -90,13 +109,13 @@ impl ChromeHeadless {
         let (mut ws_stream, _) = tokio_tungstenite::connect_async(&endpoint).await?;
 
         // Get the page ready
-        self.send_command(&mut ws_stream, 1, "Page.enable", json!({}))
+        self.send_command(&mut ws_stream, 1, "Page.enable", None)
             .await?;
         self.wait_for_load_event(&mut ws_stream).await?;
 
         //  Get layout metrics
         let metrics = self
-            .send_command(&mut ws_stream, 2, "Page.getLayoutMetrics", json!({}))
+            .send_command(&mut ws_stream, 2, "Page.getLayoutMetrics", None)
             .await?;
         let width = metrics["contentSize"]["width"].as_f64().unwrap();
         let height = metrics["contentSize"]["height"].as_f64().unwrap();
@@ -106,12 +125,12 @@ impl ChromeHeadless {
             &mut ws_stream,
             3,
             "Emulation.setDeviceMetricsOverride",
-            json!({
+            Some(json!({
                 "mobile": false,
                 "width": width,
                 "height": height,
                 "deviceScaleFactor": 1
-            }),
+            })),
         )
         .await?;
 
@@ -121,9 +140,9 @@ impl ChromeHeadless {
                 &mut ws_stream,
                 4,
                 "Page.captureScreenshot",
-                json!({
+                Some(json!({
                     "format": "png",
-                }),
+                })),
             )
             .await?;
 
@@ -137,18 +156,19 @@ impl ChromeHeadless {
         // shouldn't really go over 1 and even
         let max_attempts = 10;
         for _ in 1..=max_attempts {
-            let url = format!("http://localhost:{}/json", self.port);
+            let url = format!("http://127.0.0.1:{}/json", self.port);
             let body = reqwest::get(&url).await?.text().await?;
             let json: Value = serde_json::from_str(&body)?;
-            match json[0]["webSocketDebuggerUrl"].as_str() {
-                Some(s) => return Ok(s.to_owned()),
-                None => {
-                    // sometimes its too early I guess
-                    tokio::time::sleep(Duration::from_millis(10)).await;
+            if let Some(arr) = json.as_array() {
+                if let Some(page) = arr.iter().find(|entry| entry["type"] == "page") {
+                    if let Some(ws_url) = page["webSocketDebuggerUrl"].as_str() {
+                        return Ok(ws_url.to_owned());
+                    }
                 }
-            };
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        Err("Failed to get wesocket for headless chrome".into())
+        Err("Failed to get websocket for headless chrome".into())
     }
 
     async fn send_command(
@@ -156,13 +176,19 @@ impl ChromeHeadless {
         ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
         id: u64,
         method: &str,
-        params: Value,
+        params: Option<Value>,
     ) -> Result<Value, Box<dyn std::error::Error>> {
-        let command = json!({
-            "id": id,
-            "method": method,
-            "params": params
-        });
+        let command = match params {
+            Some(params) => json!({
+                "id": id,
+                "method": method,
+                "params": params
+            }),
+            None => json!({
+                "id": id,
+                "method": method
+            }),
+        };
 
         ws_stream
             .send(Message::Text(command.to_string().into()))
@@ -188,7 +214,22 @@ impl ChromeHeadless {
         &self,
         ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        use futures::stream::StreamExt;
+        // perhaps it was already loaded..
+        let ready_state = self
+            .send_command(
+                ws_stream,
+                100,
+                "Runtime.evaluate",
+                Some(json!({
+                "expression": "document.readyState"
+                })),
+            )
+            .await?;
+        if let Some(state) = ready_state["result"]["value"].as_str() {
+            if state == "complete" {
+                return Ok(());
+            }
+        }
 
         while let Some(msg) = ws_stream.next().await {
             let msg = msg?;
@@ -207,6 +248,7 @@ impl ChromeHeadless {
 
 impl Drop for ChromeHeadless {
     fn drop(&mut self) {
-        let _ = self.process.kill();
+        let mut process = self.process.lock().unwrap_or_exit();
+        let _ = process.kill();
     }
 }

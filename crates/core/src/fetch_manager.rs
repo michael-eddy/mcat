@@ -13,11 +13,7 @@ use tokio::runtime::Builder;
 use zip::ZipArchive;
 
 pub fn is_chromium_installed() -> bool {
-    let cr = ChromeRevision::default();
-    match cr {
-        Some(cr) => cr.exists(),
-        None => false,
-    }
+    BrowserConfig::default().is_some()
 }
 pub fn is_ffmpeg_installed() -> bool {
     let cache_path = get_cache_path();
@@ -163,7 +159,6 @@ fn get_by_name() -> Option<PathBuf> {
     None
 }
 
-#[allow(unused_variables)]
 fn get_by_path() -> Option<PathBuf> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let default_paths: [&str; 2] = ["/opt/chromium.org/chromium", "/opt/google/chrome"];
@@ -271,9 +266,6 @@ impl ChromeRevision {
             eprintln!("Done!");
             Ok(())
         })
-    }
-    pub fn exists(&self) -> bool {
-        self.path().exists()
     }
     pub fn path(&self) -> PathBuf {
         let cache_path = get_cache_path();
