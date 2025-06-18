@@ -1,4 +1,4 @@
-## Src
+## V0.3.4
 - 🎉 now allows selection from the interactive selector along with other inputs
 - 🎉 optimized build time
 - 🎉 now converts PDF to images using pdftoppm/pdftocairo (if not installed fallback to markdown parsing)
