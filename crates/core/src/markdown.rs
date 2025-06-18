@@ -26,18 +26,6 @@ const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
 const FAINT: &str = "\x1b[2m";
 
-const FG_RED: &str = "\x1B[31m";
-const FG_GREEN: &str = "\x1B[32m";
-const FG_YELLOW: &str = "\x1B[33m";
-const FG_BLUE: &str = "\x1B[34m";
-const FG_CYAN: &str = "\x1B[36m";
-const FG_BRIGHT_BLACK: &str = "\x1B[90m";
-const FG_BRIGHT_RED: &str = "\x1B[91m";
-const FG_BRIGHT_GREEN: &str = "\x1B[92m";
-const FG_BRIGHT_YELLOW: &str = "\x1B[93m";
-const FG_BRIGHT_BLUE: &str = "\x1B[94m";
-const FG_BRIGHT_CYAN: &str = "\x1B[96m";
-
 struct AnsiContext {
     ps: SyntaxSet,
     theme: CustomTheme,
@@ -78,6 +66,18 @@ impl AnsiContext {
     fn collect_and_write<'a>(&mut self, node: &'a AstNode<'a>) {
         let text = self.collect(node);
         self.write(&text);
+    }
+    fn ensure_cr_before(&mut self) {
+        if !self
+            .output
+            .lines()
+            .last()
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            self.cr();
+        }
     }
 }
 pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> String {
@@ -204,12 +204,14 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::BlockQuote => {
             let block_content = ctx.collect(node);
+            let color = ctx.theme.guide.fg.clone();
+            let comment = ctx.theme.comment.fg.clone();
 
             for (i, line) in block_content.lines().enumerate() {
                 if i != 0 {
                     ctx.cr();
                 }
-                ctx.write(&format!("{FG_YELLOW}▌ {RESET}{}", line));
+                ctx.write(&format!("{color}▌{RESET} {comment}{}{RESET}", line));
             }
         }
         NodeValue::List(node_list) => {
@@ -287,8 +289,9 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::Item(_) => {
             let content = ctx.collect(node);
+            let yellow = &ctx.theme.yellow.fg;
             ctx.write(&format!(
-                "{}{FG_YELLOW}\0 {content}",
+                "{}{yellow}\0 {content}",
                 " ".repeat(data.sourcepos.start.column - 1)
             ));
         }
@@ -302,7 +305,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             };
 
             let indent = data.sourcepos.start.column;
-            if ctx.hide_line_numbers {
+            if ctx.hide_line_numbers || code.lines().count() < 10 {
                 format_code_simple(code, lang, ctx);
             } else {
                 format_code(code, lang, ctx, indent);
@@ -319,9 +322,10 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let right_padding = padding - left_padding;
                 let surface = ctx.theme.surface.bg.clone();
                 let block = &format!("{surface}{}{RESET}\n", " ".repeat(width as usize));
+                let fg_yellow = ctx.theme.yellow.fg.clone();
                 ctx.write(&block);
                 ctx.write(&format!(
-                    "{surface}{}{FG_YELLOW}{BOLD}{title}{surface}{}{RESET}\n",
+                    "{surface}{}{fg_yellow}{BOLD}{title}{surface}{}{RESET}\n",
                     " ".repeat(left_padding),
                     " ".repeat(right_padding)
                 ));
@@ -345,13 +349,38 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.collect_and_write(node);
         }
         NodeValue::Heading(node_heading) => {
-            let prefix = "∙".repeat(node_heading.level as usize);
             let content = ctx.collect(node);
-            ctx.write(&format!("{BOLD}{FG_BLUE}{prefix} {content}{RESET}"));
+            let main_color = ctx.theme.keyword.fg.clone();
+            let border = ctx.theme.border.fg.clone();
+            match node_heading.level {
+                0 | 1 => {
+                    let l = string_len(&content);
+                    let sep_len = (l + 6).min(term_misc::get_wininfo().sc_width as usize);
+                    let sep = "-".repeat(sep_len);
+                    ctx.write(&format!(
+                        "{border}{sep}\n   {RESET}{BOLD}{main_color}{content}{RESET}\n{border}{sep}{RESET}"
+                    ));
+                }
+                2 => {
+                    let l = string_len(&content);
+                    let sep_len = (l + 4).min(term_misc::get_wininfo().sc_width as usize);
+                    let sep = "-".repeat(sep_len);
+                    ctx.write(&format!(
+                        "{BOLD}{main_color}  {content}{RESET}\n{border}{sep}{RESET}"
+                    ));
+                }
+                3 => {
+                    ctx.write(&format!("→ {BOLD}{main_color}{content}{RESET}"));
+                }
+                4.. => {
+                    ctx.write(&format!("▸ {main_color}{content}{RESET}"));
+                }
+            }
         }
         NodeValue::ThematicBreak => {
             let br = br();
-            ctx.write(&format!("{FG_BRIGHT_BLACK}{br}{RESET}"));
+            let border = ctx.theme.border.fg.clone();
+            ctx.write(&format!("{border}{br}{RESET}"));
         }
         NodeValue::FootnoteDefinition(_) => {}
         NodeValue::Table(table) => {
@@ -380,7 +409,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 }
             }
 
-            let color = FG_BLUE;
+            let color = &ctx.theme.border.fg.clone();
             if !rows.is_empty() {
                 let cols = column_widths.len();
 
@@ -453,15 +482,19 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::Link(node_link) => {
             let content = ctx.collect(node);
+            let cyan = ctx.theme.cyan.fg.clone();
+            let comment = ctx.theme.comment.fg.clone();
             ctx.write(&format!(
-                "{UNDERLINE}{FG_CYAN}\u{eb01} {}{RESET} {FG_BRIGHT_BLACK}({}){RESET}",
+                "{UNDERLINE}{cyan}\u{eb01} {}{RESET} {comment}({}){RESET}",
                 content, node_link.url
             ));
         }
         NodeValue::Image(node_link) => {
             let content = ctx.collect(node);
+            let cyan = ctx.theme.cyan.fg.clone();
+            let comment = ctx.theme.comment.fg.clone();
             ctx.write(&format!(
-                "{UNDERLINE}{FG_CYAN}\u{f03e} {}{RESET} {FG_BRIGHT_BLACK}({}){RESET}",
+                "{UNDERLINE}{cyan}\u{f03e} {}{RESET} {comment}({}){RESET}",
                 content, node_link.url
             ));
         }
@@ -469,17 +502,19 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             let surface = ctx.theme.surface.bg.clone();
             let fg_surface = ctx.theme.surface.fg.clone();
             ctx.write(&format!(
-                "{fg_surface}{FG_GREEN}{surface}{}{RESET}{fg_surface}{RESET}",
+                "{fg_surface}{RESET}{surface}{}{RESET}{fg_surface}{RESET}",
                 node_code.literal
             ));
         }
         NodeValue::TaskItem(task) => {
             let offset = " ".repeat(data.sourcepos.start.column - 1);
             let checked = task.unwrap_or_default().to_lowercase().to_string() == "x";
+            let green = ctx.theme.green.fg.clone();
+            let red = ctx.theme.red.fg.clone();
             let checkbox = if checked {
-                format!("{offset}{FG_GREEN}\u{f4a7}{RESET}  ")
+                format!("{offset}{green}\u{f4a7}{RESET}  ")
             } else {
-                format!("{offset}{FG_RED}\u{e640}{RESET}  ")
+                format!("{offset}{red}\u{e640}{RESET}  ")
             };
 
             let content = ctx.collect(node);
@@ -487,7 +522,8 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.write(&format!("{}{}", checkbox, content));
         }
         NodeValue::HtmlInline(html) => {
-            ctx.write(&format!("{FG_BLUE}{html}{RESET}"));
+            let string_color = ctx.theme.string.fg.clone();
+            ctx.write(&format!("{string_color}{html}{RESET}"));
         }
         NodeValue::Raw(str) => {
             ctx.write(str);
@@ -497,43 +533,53 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::MultilineBlockQuote(node_multi_line) => {
             let content = ctx.collect(node);
+            let guide = ctx.theme.guide.fg.clone();
+            let comment = ctx.theme.comment.fg.clone();
             for (i, line) in content.lines().enumerate() {
                 if i != 0 {
                     ctx.cr();
                 }
                 let offset = " ".repeat(node_multi_line.fence_offset + 1);
-                ctx.write(&format!("{FG_GREEN}▌{offset}{line}"));
+                ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"));
             }
         }
         NodeValue::WikiLink(node_wiki_link) => {
             let content = ctx.collect(node);
+            let cyan = ctx.theme.cyan.fg.clone();
+            let comment = ctx.theme.comment.fg.clone();
             ctx.write(&format!(
-                "{FG_CYAN}\u{f15d6} {}{RESET} {FG_BRIGHT_BLACK}({}){RESET}",
+                "{cyan}\u{f15d6} {}{RESET} {comment}({}){RESET}",
                 content, node_wiki_link.url
             ));
         }
         NodeValue::SpoileredText => {
             let content = ctx.collect(node);
-            ctx.write(&format!("{FAINT}{FG_BRIGHT_BLACK}{content}{RESET}"));
+            let comment = ctx.theme.comment.fg.clone();
+            ctx.write(&format!("{FAINT}{comment}{content}{RESET}"));
         }
         NodeValue::Alert(node_alert) => {
             let kind = &node_alert.alert_type;
+            let blue = ctx.theme.blue.fg.clone();
+            let red = ctx.theme.red.fg.clone();
+            let green = ctx.theme.green.fg.clone();
+            let cyan = ctx.theme.cyan.fg.clone();
+            let yellow = ctx.theme.yellow.fg.clone();
 
             let (prefix, color) = match kind {
-                comrak::nodes::AlertType::Note => ("\u{f05d6} NOTE", FG_BRIGHT_BLUE),
-                comrak::nodes::AlertType::Tip => ("\u{f400} TIP", FG_BRIGHT_GREEN),
-                comrak::nodes::AlertType::Important => ("\u{f017e} INFO", FG_BRIGHT_CYAN),
-                comrak::nodes::AlertType::Warning => ("\u{ea6c} WARNING", FG_BRIGHT_YELLOW),
-                comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", FG_BRIGHT_RED),
+                comrak::nodes::AlertType::Note => ("\u{f05d6} NOTE", blue),
+                comrak::nodes::AlertType::Tip => ("\u{f400} TIP", green),
+                comrak::nodes::AlertType::Important => ("\u{f017e} INFO", cyan),
+                comrak::nodes::AlertType::Warning => ("\u{ea6c} WARNING", yellow),
+                comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", red),
             };
 
-            ctx.write(&format!("{}│ {BOLD}{}{RESET}\n", color, prefix));
+            ctx.write(&format!("{}▌ {BOLD}{}{RESET}", color, prefix));
 
             for child in node.children() {
                 let alert_content = ctx.collect(child);
 
                 for line in alert_content.lines() {
-                    ctx.write(&format!("{}│ {}", color, line));
+                    ctx.write(&format!("\n{}▌{RESET} {}", color, line));
                 }
             }
         }
@@ -691,32 +737,13 @@ pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str
 }
 
 fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext) {
-    let full_width = term_misc::get_wininfo().sc_width as usize;
-    let box_width = (full_width as f32 / 2.5) as usize;
-
-    let (mut title, color) = match get_lang_icon_and_color(lang) {
+    let (title, color) = match get_lang_icon_and_color(lang) {
         Some((icon, color)) => (format!("{color}{icon} {lang}"), color),
         None => (lang.to_owned(), ""),
     };
 
-    if string_len(&title) > box_width.saturating_sub(2) {
-        if let Some((icon, color)) = get_lang_icon_and_color(lang) {
-            title = format!("{color}{icon}");
-        }
-    }
-
-    let visible_len = string_len(&title);
-    let padding = box_width.saturating_sub(visible_len) - 2;
-    let left_pad = padding / 2;
-    let right_pad = padding - left_pad;
-
-    let top = format!(
-        "{color}{}{RESET} {}{RESET} {color}{}{RESET}\n",
-        "─".repeat(left_pad),
-        title,
-        "─".repeat(right_pad)
-    );
-    let bottom = format!("{color}{}{RESET}", "─".repeat(box_width));
+    ctx.ensure_cr_before();
+    let top = format!("{color}[ {} ]{RESET}\n", title);
 
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
@@ -729,9 +756,8 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext) {
     for line in LinesWithEndings::from(code) {
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-        ctx.write(&highlighted);
+        ctx.write(&format!("  {highlighted}"));
     }
-    ctx.write(&bottom);
 }
 fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let ts = ctx.theme.to_syntect_theme();
@@ -749,7 +775,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;
     let term_width = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
-    let color = FG_BRIGHT_BLACK;
+    let color = ctx.theme.border.fg.clone();
 
     let top_header = format!(
         "{color}{}┬{}{RESET}",
@@ -832,6 +858,19 @@ pub struct CustomTheme {
     pub background: ThemeColor,
     pub surface: ThemeColor,
     pub border: ThemeColor,
+
+    red: ThemeColor,
+    green: ThemeColor,
+    blue: ThemeColor,
+    cyan: ThemeColor,
+    yellow: ThemeColor,
+
+    #[allow(dead_code)]
+    magenta: ThemeColor,
+    #[allow(dead_code)]
+    white: ThemeColor,
+    #[allow(dead_code)]
+    black: ThemeColor,
 }
 
 fn hex_to_rgba(hex: &str) -> Color {
@@ -854,8 +893,17 @@ impl CustomTheme {
             foreground: "#FFFFFF".into(),
             guide: "#2D3640".into(),
             background: "#14161f".into(),
-            surface: "#20202b".into(),
-            border: "#2D3640".into(),
+            surface: "#2a2a38".into(),
+            border: "#5C6773".into(),
+
+            red: "#FF5555".into(),
+            green: "#95FB79".into(),
+            blue: "#82AAFF".into(),
+            cyan: "#66D9EF".into(),
+            magenta: "#FF77FF".into(),
+            yellow: "#FFEE99".into(),
+            white: "#FFFFFF".into(),
+            black: "#14161f".into(),
         }
     }
     pub fn light() -> Self {
@@ -871,126 +919,207 @@ impl CustomTheme {
             background: "#f8f8fc".into(),
             surface: "#ebebf4".into(),
             border: "#7e8a9e".into(),
+
+            red: "#E35043".into(),
+            green: "#51A150".into(),
+            blue: "#3D76F3".into(),
+            cyan: "#00BFCF".into(),
+            magenta: "#AB31A9".into(),
+            yellow: "#FFCC00".into(),
+            white: "#FFFFFF".into(),
+            black: "#000000".into(),
         }
     }
     pub fn monokai() -> Self {
         CustomTheme {
-            keyword: "#F92672".into(),    // Magenta
-            function: "#A6E22E".into(),   // Green
-            string: "#E6DB74".into(),     // Yellow
-            module: "#66D9EF".into(),     // Cyan
-            constant: "#AE81FF".into(),   // Purple
-            comment: "#75715E".into(),    // Brown/Gray
-            foreground: "#F8F8F2".into(), // Off-white
-            guide: "#3E3D32".into(),      // Dark gray
-            background: "#272822".into(), // Dark green-gray
-            surface: "#3E3D32".into(),    // Slightly lighter
-            border: "#49483E".into(),     // Border gray
+            keyword: "#F92672".into(),
+            function: "#A6E22E".into(),
+            string: "#E6DB74".into(),
+            module: "#66D9EF".into(),
+            constant: "#AE81FF".into(),
+            comment: "#75715E".into(),
+            foreground: "#F8F8F2".into(),
+            guide: "#3E3D32".into(),
+            background: "#272822".into(),
+            surface: "#3E3D32".into(),
+            border: "#49483E".into(),
+
+            red: "#F92672".into(),
+            green: "#A6E22E".into(),
+            blue: "#66D9EF".into(),
+            cyan: "#66D9EF".into(),
+            magenta: "#AE81FF".into(),
+            yellow: "#E6DB74".into(),
+            white: "#F8F8F2".into(),
+            black: "#272822".into(),
         }
     }
     pub fn catppuccin() -> Self {
         CustomTheme {
-            keyword: "#CBA6F7".into(),    // Mauve
-            function: "#89B4FA".into(),   // Blue
-            string: "#A6E3A1".into(),     // Green
-            module: "#89DCEB".into(),     // Sky
-            constant: "#F38BA8".into(),   // Pink
-            comment: "#6C7086".into(),    // Overlay0
-            foreground: "#CDD6F4".into(), // Text
-            guide: "#45475A".into(),      // Surface1
-            background: "#1E1E2E".into(), // Base
-            surface: "#313244".into(),    // Surface0
-            border: "#45475A".into(),     // Surface1
+            keyword: "#CBA6F7".into(),
+            function: "#89B4FA".into(),
+            string: "#A6E3A1".into(),
+            module: "#89DCEB".into(),
+            constant: "#F38BA8".into(),
+            comment: "#6C7086".into(),
+            foreground: "#CDD6F4".into(),
+            guide: "#45475A".into(),
+            background: "#1E1E2E".into(),
+            surface: "#313244".into(),
+            border: "#45475A".into(),
+
+            red: "#F38BA8".into(),
+            green: "#A6E3A1".into(),
+            blue: "#89B4FA".into(),
+            cyan: "#89DCEB".into(),
+            magenta: "#CBA6F7".into(),
+            yellow: "#F9E2AF".into(),
+            white: "#CDD6F4".into(),
+            black: "#1E1E2E".into(),
         }
     }
     pub fn tokyo_night() -> Self {
         CustomTheme {
-            keyword: "#BB9AF7".into(),    // Purple
-            function: "#7AA2F7".into(),   // Blue
-            string: "#9ECE6A".into(),     // Green
-            module: "#2AC3DE".into(),     // Cyan
-            constant: "#FF9E64".into(),   // Orange
-            comment: "#565F89".into(),    // Comment
-            foreground: "#C0CAF5".into(), // Foreground
-            guide: "#3B4261".into(),      // Line highlight
-            background: "#1A1B26".into(), // Background
-            surface: "#24283B".into(),    // Background highlight
-            border: "#414868".into(),     // Border
+            keyword: "#BB9AF7".into(),
+            function: "#7AA2F7".into(),
+            string: "#9ECE6A".into(),
+            module: "#2AC3DE".into(),
+            constant: "#FF9E64".into(),
+            comment: "#565F89".into(),
+            foreground: "#C0CAF5".into(),
+            guide: "#3B4261".into(),
+            background: "#1A1B26".into(),
+            surface: "#24283B".into(),
+            border: "#414868".into(),
+
+            red: "#F7768E".into(),
+            green: "#9ECE6A".into(),
+            blue: "#7AA2F7".into(),
+            cyan: "#2AC3DE".into(),
+            magenta: "#BB9AF7".into(),
+            yellow: "#E0AF68".into(),
+            white: "#C0CAF5".into(),
+            black: "#1A1B26".into(),
         }
     }
     pub fn dracula() -> Self {
         CustomTheme {
-            keyword: "#FF79C6".into(),    // Pink
-            function: "#50FA7B".into(),   // Green
-            string: "#F1FA8C".into(),     // Yellow
-            module: "#8BE9FD".into(),     // Cyan
-            constant: "#BD93F9".into(),   // Purple
-            comment: "#6272A4".into(),    // Comment
-            foreground: "#F8F8F2".into(), // Foreground
-            guide: "#44475A".into(),      // Current line
-            background: "#282A36".into(), // Background
-            surface: "#44475A".into(),    // Selection
-            border: "#6272A4".into(),     // Comment (used as border)
+            keyword: "#FF79C6".into(),
+            function: "#50FA7B".into(),
+            string: "#F1FA8C".into(),
+            module: "#8BE9FD".into(),
+            constant: "#BD93F9".into(),
+            comment: "#6272A4".into(),
+            foreground: "#F8F8F2".into(),
+            guide: "#44475A".into(),
+            background: "#282A36".into(),
+            surface: "#44475A".into(),
+            border: "#44475a".into(),
+
+            red: "#FF5555".into(),
+            green: "#50FA7B".into(),
+            blue: "#8badfd".into(),
+            cyan: "#8BE9FD".into(),
+            magenta: "#FF79C6".into(),
+            yellow: "#F1FA8C".into(),
+            white: "#F8F8F2".into(),
+            black: "#282A36".into(),
         }
     }
     pub fn nord() -> Self {
         CustomTheme {
-            keyword: "#81A1C1".into(),    // Nord9 (blue)
-            function: "#88C0D0".into(),   // Nord8 (cyan)
-            string: "#A3BE8C".into(),     // Nord14 (green)
-            module: "#8FBCBB".into(),     // Nord7 (cyan)
-            constant: "#B48EAD".into(),   // Nord15 (purple)
-            comment: "#616E88".into(),    // Nord3 (bright black)
-            foreground: "#D8DEE9".into(), // Nord4 (white)
-            guide: "#434C5E".into(),      // Nord1 (dark gray)
-            background: "#2E3440".into(), // Nord0 (black)
-            surface: "#3B4252".into(),    // Nord1 (dark gray)
-            border: "#434C5E".into(),     // Nord2 (gray)
+            keyword: "#81A1C1".into(),
+            function: "#88C0D0".into(),
+            string: "#A3BE8C".into(),
+            module: "#8FBCBB".into(),
+            constant: "#B48EAD".into(),
+            comment: "#616E88".into(),
+            foreground: "#D8DEE9".into(),
+            guide: "#434C5E".into(),
+            background: "#2E3440".into(),
+            surface: "#3B4252".into(),
+            border: "#434C5E".into(),
+
+            red: "#BF616A".into(),
+            green: "#A3BE8C".into(),
+            blue: "#81A1C1".into(),
+            cyan: "#88C0D0".into(),
+            magenta: "#B48EAD".into(),
+            yellow: "#EBCB8B".into(),
+            white: "#D8DEE9".into(),
+            black: "#2E3440".into(),
         }
     }
     pub fn gruvbox() -> Self {
         CustomTheme {
-            keyword: "#FB4934".into(),    // Red
-            function: "#FABD2F".into(),   // Yellow
-            string: "#B8BB26".into(),     // Green
-            module: "#83A598".into(),     // Blue
-            constant: "#D3869B".into(),   // Purple
-            comment: "#928374".into(),    // Gray
-            foreground: "#EBDBB2".into(), // Light cream
-            guide: "#504945".into(),      // Dark gray
-            background: "#282828".into(), // Dark background
-            surface: "#3C3836".into(),    // Dark gray
-            border: "#665C54".into(),     // Medium gray
+            keyword: "#FB4934".into(),
+            function: "#FABD2F".into(),
+            string: "#B8BB26".into(),
+            module: "#83A598".into(),
+            constant: "#D3869B".into(),
+            comment: "#928374".into(),
+            foreground: "#EBDBB2".into(),
+            guide: "#504945".into(),
+            background: "#282828".into(),
+            surface: "#3C3836".into(),
+            border: "#665C54".into(),
+
+            red: "#FB4934".into(),
+            green: "#B8BB26".into(),
+            blue: "#83A598".into(),
+            cyan: "#8EC07C".into(),
+            magenta: "#D3869B".into(),
+            yellow: "#FABD2F".into(),
+            white: "#EBDBB2".into(),
+            black: "#282828".into(),
         }
     }
     pub fn solarized() -> Self {
         CustomTheme {
-            keyword: "#268BD2".into(),    // Blue
-            function: "#B58900".into(),   // Yellow
-            string: "#2AA198".into(),     // Cyan
-            module: "#859900".into(),     // Green
-            constant: "#D33682".into(),   // Magenta
-            comment: "#586E75".into(),    // Base01
-            foreground: "#839496".into(), // Base0
-            guide: "#073642".into(),      // Base02
-            background: "#002B36".into(), // Base03
-            surface: "#073642".into(),    // Base02
-            border: "#586E75".into(),     // Base01
+            keyword: "#268BD2".into(),
+            function: "#B58900".into(),
+            string: "#2AA198".into(),
+            module: "#859900".into(),
+            constant: "#D33682".into(),
+            comment: "#586E75".into(),
+            foreground: "#839496".into(),
+            guide: "#073642".into(),
+            background: "#002B36".into(),
+            surface: "#073642".into(),
+            border: "#586E75".into(),
+
+            red: "#DC322F".into(),
+            green: "#859900".into(),
+            blue: "#268BD2".into(),
+            cyan: "#2AA198".into(),
+            magenta: "#D33682".into(),
+            yellow: "#B58900".into(),
+            white: "#EEE8D5".into(),
+            black: "#002B36".into(),
         }
     }
     pub fn one_dark() -> Self {
         CustomTheme {
-            keyword: "#C678DD".into(),    // Purple
-            function: "#61AFEF".into(),   // Blue
-            string: "#98C379".into(),     // Green
-            module: "#56B6C2".into(),     // Cyan
-            constant: "#E06C75".into(),   // Red
-            comment: "#5C6370".into(),    // Gray
-            foreground: "#ABB2BF".into(), // Light gray
-            guide: "#3E4451".into(),      // Dark gray
-            background: "#282C34".into(), // Dark background
-            surface: "#21252B".into(),    // Darker background
-            border: "#3E4451".into(),     // Border gray
+            keyword: "#C678DD".into(),
+            function: "#61AFEF".into(),
+            string: "#98C379".into(),
+            module: "#56B6C2".into(),
+            constant: "#E06C75".into(),
+            comment: "#5C6370".into(),
+            foreground: "#ABB2BF".into(),
+            guide: "#3E4451".into(),
+            background: "#282C34".into(),
+            surface: "#21252B".into(),
+            border: "#3E4451".into(),
+
+            red: "#E06C75".into(),
+            green: "#98C379".into(),
+            blue: "#61AFEF".into(),
+            cyan: "#56B6C2".into(),
+            magenta: "#C678DD".into(),
+            yellow: "#E5C07B".into(),
+            white: "#ABB2BF".into(),
+            black: "#282C34".into(),
         }
     }
 

@@ -1,7 +1,11 @@
+## Src
+- 🎉 markdown viewer now uses the theme colors and not terminal colors
+- 📈 improved the markdown viewer -- less clutter
+
 ## V0.3.4
 - 🎉 now allows selection from the interactive selector along with other inputs
-- 🎉 optimized build time
 - 🎉 now converts PDF to images using pdftoppm/pdftocairo (if not installed fallback to markdown parsing)
+- 📈 optimized build time
 - 🐛 fixed double linebreaks problem in the markdown viewer
 - 🐛 fixed codeblocks inside indented blocks being wider then the screen (markdown viewer).
 - 🐛 fixed an inconsistent box drawing character in codeblock (markdown viewer)
