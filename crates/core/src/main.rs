@@ -70,8 +70,24 @@ fn build_cli(stdin_streamed: bool) -> Command {
             Arg::new("theme")
                 .long("theme")
                 .short('t')
-                .help("the theme to use [default: dark]")
-                .value_parser(["dark", "light", "catppuccin", "nord", "monokai", "dracula", "gruvbox", "one_dark", "solarized", "tokyo_night"])
+                .help("the theme to use [default: makurai_mage]")
+                .value_parser([
+                    "catppuccin", 
+                    "nord", 
+                    "monokai", 
+                    "dracula", 
+                    "gruvbox", 
+                    "one_dark", 
+                    "solarized", 
+                    "tokyo_night",
+                    "makurai_healer",
+                    "makurai_mage", 
+                    "ayu",         
+                    "ayu_mirage", 
+                    "github",    
+                    "synthwave", 
+                    "material"  
+                ])
         )
         .arg(
             Arg::new("style-html")

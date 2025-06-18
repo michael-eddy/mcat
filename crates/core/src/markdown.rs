@@ -139,8 +139,14 @@ fn get_theme(s: Option<&str>) -> CustomTheme {
         "one_dark" => CustomTheme::one_dark(),
         "solarized" => CustomTheme::solarized(),
         "tokyo_night" => CustomTheme::tokyo_night(),
-        "light" => CustomTheme::light(),
-        _ => CustomTheme::dark(),
+        "makurai_healer" => CustomTheme::makurai_healer(),
+        "makurai_mage" => CustomTheme::makurai_mage(),
+        "ayu" => CustomTheme::ayu(),
+        "ayu_mirage" => CustomTheme::ayu_mirage(),
+        "github" => CustomTheme::github(),
+        "synthwave" => CustomTheme::synthwave(),
+        "material" => CustomTheme::material(),
+        _ => CustomTheme::makurai_mage(),
     }
 }
 
@@ -870,7 +876,7 @@ fn hex_to_rgba(hex: &str) -> Color {
 }
 
 impl CustomTheme {
-    pub fn dark() -> Self {
+    pub fn makurai_mage() -> Self {
         CustomTheme {
             keyword: "#FF7733".into(),
             function: "#FFEE99".into(),
@@ -894,7 +900,7 @@ impl CustomTheme {
             black: "#14161f".into(),
         }
     }
-    pub fn light() -> Self {
+    pub fn makurai_healer() -> Self {
         CustomTheme {
             keyword: "#E35043".into(),
             function: "#3D76F3".into(),
@@ -949,7 +955,7 @@ impl CustomTheme {
             string: "#A6E3A1".into(),
             module: "#89DCEB".into(),
             constant: "#F38BA8".into(),
-            comment: "#6C7086".into(),
+            comment: "#7F849C".into(),
             foreground: "#CDD6F4".into(),
             guide: "#45475A".into(),
             background: "#1E1E2E".into(),
@@ -1002,11 +1008,11 @@ impl CustomTheme {
             guide: "#44475A".into(),
             background: "#282A36".into(),
             surface: "#44475A".into(),
-            border: "#44475a".into(),
+            border: "#44475A".into(),
 
             red: "#FF5555".into(),
             green: "#50FA7B".into(),
-            blue: "#8badfd".into(),
+            blue: "#8BE9FD".into(),
             cyan: "#8BE9FD".into(),
             magenta: "#FF79C6".into(),
             yellow: "#F1FA8C".into(),
@@ -1097,7 +1103,7 @@ impl CustomTheme {
             foreground: "#ABB2BF".into(),
             guide: "#3E4451".into(),
             background: "#282C34".into(),
-            surface: "#21252B".into(),
+            surface: "#3E4451".into(),
             border: "#3E4451".into(),
 
             red: "#E06C75".into(),
@@ -1108,6 +1114,126 @@ impl CustomTheme {
             yellow: "#E5C07B".into(),
             white: "#ABB2BF".into(),
             black: "#282C34".into(),
+        }
+    }
+    pub fn github() -> Self {
+        CustomTheme {
+            keyword: "#FF7B72".into(),
+            function: "#D2A8FF".into(),
+            string: "#A5D6FF".into(),
+            module: "#FFA657".into(),
+            constant: "#79C0FF".into(),
+            comment: "#8B949E".into(),
+            foreground: "#F0F6FC".into(),
+            guide: "#30363D".into(),
+            background: "#0D1117".into(),
+            surface: "#161B22".into(),
+            border: "#30363D".into(),
+
+            red: "#F85149".into(),
+            green: "#56D364".into(),
+            blue: "#58A6FF".into(),
+            cyan: "#39D0D6".into(),
+            magenta: "#BC8CFF".into(),
+            yellow: "#E3B341".into(),
+            white: "#F0F6FC".into(),
+            black: "#0D1117".into(),
+        }
+    }
+    pub fn material() -> Self {
+        CustomTheme {
+            keyword: "#C792EA".into(),
+            function: "#82AAFF".into(),
+            string: "#C3E88D".into(),
+            module: "#FFCB6B".into(),
+            constant: "#F78C6C".into(),
+            comment: "#546E7A".into(),
+            foreground: "#EEFFFF".into(),
+            guide: "#37474F".into(),
+            background: "#263238".into(),
+            surface: "#2E3C43".into(),
+            border: "#37474F".into(),
+
+            red: "#F07178".into(),
+            green: "#C3E88D".into(),
+            blue: "#82AAFF".into(),
+            cyan: "#89DDFF".into(),
+            magenta: "#C792EA".into(),
+            yellow: "#FFCB6B".into(),
+            white: "#EEFFFF".into(),
+            black: "#263238".into(),
+        }
+    }
+    pub fn ayu() -> Self {
+        CustomTheme {
+            keyword: "#FF8F40".into(),
+            function: "#FFB454".into(),
+            string: "#AAD94C".into(),
+            module: "#59C2FF".into(),
+            constant: "#D2A6FF".into(),
+            comment: "#ACB6BF8C".into(),
+            foreground: "#BFBDB6".into(),
+            guide: "#1F2430".into(),
+            background: "#0A0E14".into(),
+            surface: "#11151C".into(),
+            border: "#1F2430".into(),
+
+            red: "#F28779".into(),
+            green: "#AAD94C".into(),
+            blue: "#59C2FF".into(),
+            cyan: "#95E6CB".into(),
+            magenta: "#D2A6FF".into(),
+            yellow: "#FFB454".into(),
+            white: "#BFBDB6".into(),
+            black: "#0A0E14".into(),
+        }
+    }
+    pub fn ayu_mirage() -> Self {
+        CustomTheme {
+            keyword: "#FFA759".into(),
+            function: "#FFD580".into(),
+            string: "#BAE67E".into(),
+            module: "#73D0FF".into(),
+            constant: "#D4BFFF".into(),
+            comment: "#5C6773".into(),
+            foreground: "#CBCCC6".into(),
+            guide: "#242936".into(),
+            background: "#1F2430".into(),
+            surface: "#242936".into(),
+            border: "#343B4C".into(),
+
+            red: "#FF6666".into(),
+            green: "#BAE67E".into(),
+            blue: "#73D0FF".into(),
+            cyan: "#95E6CB".into(),
+            magenta: "#D4BFFF".into(),
+            yellow: "#FFD580".into(),
+            white: "#CBCCC6".into(),
+            black: "#1F2430".into(),
+        }
+    }
+    pub fn synthwave() -> Self {
+        CustomTheme {
+            keyword: "#FF7EDB".into(),
+            function: "#36F9F6".into(),
+            string: "#E6DB74".into(),
+            module: "#FE4450".into(),
+            constant: "#FF8CC8".into(),
+            comment: "#848077".into(),
+            foreground: "#F8F8F2".into(),
+            guide: "#2A2139".into(),
+            background: "#262335".into(),
+            surface: "#34294F".into(),
+            border: "#495495".into(),
+
+            red: "#FE4450".into(),
+            green: "#72F1B8".into(),
+            blue: "#36F9F6".into(),
+            cyan: "#36F9F6".into(),
+            magenta: "#FF7EDB".into(),
+            yellow: "#FEE715".into(),
+            white: "#F8F8F2".into(),
+            black: "#262335".into(),
         }
     }
 

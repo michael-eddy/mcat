@@ -1,5 +1,6 @@
 ## Src
 - 🎉 markdown viewer now uses the theme colors and not terminal colors
+- 🎉 added ayu, ayu_mirage, github, synthwave, material themes!
 - 📈 improved the markdown viewer -- less clutter
 
 ## V0.3.4
