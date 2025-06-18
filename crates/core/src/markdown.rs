@@ -480,23 +480,15 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             let content = ctx.collect(node);
             ctx.write(&format!("{STRIKETHROUGH}{content}{RESET}"));
         }
-        NodeValue::Link(node_link) => {
+        NodeValue::Link(_) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            let comment = ctx.theme.comment.fg.clone();
-            ctx.write(&format!(
-                "{UNDERLINE}{cyan}\u{eb01} {}{RESET} {comment}({}){RESET}",
-                content, node_link.url
-            ));
+            ctx.write(&format!("{UNDERLINE}{cyan}\u{eb01} {}{RESET}", content));
         }
-        NodeValue::Image(node_link) => {
+        NodeValue::Image(_) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            let comment = ctx.theme.comment.fg.clone();
-            ctx.write(&format!(
-                "{UNDERLINE}{cyan}\u{f03e} {}{RESET} {comment}({}){RESET}",
-                content, node_link.url
-            ));
+            ctx.write(&format!("{UNDERLINE}{cyan}\u{f03e} {}{RESET}", content));
         }
         NodeValue::Code(node_code) => {
             let surface = ctx.theme.surface.bg.clone();
@@ -543,14 +535,10 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"));
             }
         }
-        NodeValue::WikiLink(node_wiki_link) => {
+        NodeValue::WikiLink(_) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            let comment = ctx.theme.comment.fg.clone();
-            ctx.write(&format!(
-                "{cyan}\u{f15d6} {}{RESET} {comment}({}){RESET}",
-                content, node_wiki_link.url
-            ));
+            ctx.write(&format!("{cyan}\u{f15d6} {}{RESET}", content));
         }
         NodeValue::SpoileredText => {
             let content = ctx.collect(node);
