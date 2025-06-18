@@ -22,7 +22,7 @@ markdownify = { version = "0.1.8", path = "../markdownify" }
 rasteroid = { version = "0.1.5", path = "../rasteroid" }
 strip-ansi-escapes = "0.2.1"
 clap_complete = "4.5.50"
-which = "7.0.3"
+which = "8.0.0"
 rayon = "1.10.0"
 itertools = "0.14.0"
 inquire = "0.7.5"
@@ -30,7 +30,7 @@ shell-words = "1.1.0"
 ignore = "0.4.23"
 textwrap = "0.16.2"
 clap = "4.5.36"
-comrak = "0.38.0"
+comrak = "0.39.0"
 crossterm = "0.29.0"
 image = { version = "0.25.6", default-features = false, features = ["bmp", "dds", "exr", "ff", "gif", "hdr", "ico", "jpeg", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
 tempfile = "3.19.1"
@@ -52,4 +52,4 @@ indicatif = "0.17.11"
 regex = "1.11.1"
 
 [target.'cfg(windows)'.dependencies]
-winreg = "0.52.0"
+winreg = "0.55.0"
