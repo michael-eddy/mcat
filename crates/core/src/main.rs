@@ -33,11 +33,176 @@ fn print_completions<G: Generator>(gene: G, cmd: &mut Command) {
     );
 }
 
-fn build_cli(stdin_streamed: bool) -> Command {
+fn build_core_args() -> Vec<Arg> {
+    vec![
+        Arg::new("output")
+            .long("output")
+            .short('o')
+            .help("Output format")
+            .value_parser(["html", "md", "image", "video", "inline", "interactive"]),
+        Arg::new("theme")
+            .long("theme")
+            .short('t')
+            .help("Color theme")
+            .value_parser([
+                "catppuccin",
+                "nord",
+                "monokai",
+                "dracula",
+                "gruvbox",
+                "one_dark",
+                "solarized",
+                "tokyo_night",
+                "makurai_healer",
+                "makurai_mage",
+                "ayu",
+                "ayu_mirage",
+                "github",
+                "synthwave",
+                "material",
+            ]),
+    ]
+}
+
+fn build_markdown_viewer_args() -> Vec<Arg> {
+    vec![
+        Arg::new("no-linenumbers")
+            .long("no-linenumbers")
+            .help("Disable line numbers in code blocks")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("color")
+            .long("color")
+            .help("Control ANSI formatting [default: auto]")
+            .value_parser(["never", "always", "auto"]),
+        Arg::new("color-never")
+            .short('C')
+            .help("Shortcut for --color never")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("color-always")
+            .short('c')
+            .help("Shortcut for --color always")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("pager")
+            .long("pager")
+            .help("Modify the default pager [default: 'less -r']"),
+        Arg::new("paging")
+            .long("paging")
+            .help("Control paging behavior [default: auto]")
+            .value_parser(["never", "always", "auto"]),
+        Arg::new("paging-never")
+            .short('P')
+            .help("Shortcut for --paging never")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("paging-always")
+            .short('p')
+            .help("Shortcut for --paging always")
+            .action(clap::ArgAction::SetTrue),
+    ]
+}
+fn build_image_viewer_args() -> Vec<Arg> {
+    vec![
+        Arg::new("inline")
+            .short('i')
+            .help("Shortcut for --output inline")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("style-html")
+            .long("style-html")
+            .short('s')
+            .help("Add style to HTML output (when HTML is the output)")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("report")
+            .long("report")
+            .action(clap::ArgAction::SetTrue)
+            .help("Reports image/video dimensions and additional info"),
+        Arg::new("silent")
+            .long("silent")
+            .action(clap::ArgAction::SetTrue)
+            .help("Removes loading bars"),
+        Arg::new("kitty")
+            .long("kitty")
+            .help("Use Kitty image protocol")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("iterm")
+            .long("iterm")
+            .help("Use iTerm2 image protocol")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("sixel")
+            .long("sixel")
+            .help("Use Sixel image protocol")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("ascii")
+            .long("ascii")
+            .help("Use ASCII art output")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("horizontal")
+            .long("hori")
+            .action(clap::ArgAction::SetTrue)
+            .help("Concatenate images horizontally"),
+        Arg::new("delete-all-images")
+            .long("delete-images")
+            .help("Delete all images (Kitty only)")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("inline-options").long("opts").help(
+            "Options for --output inline:\n\
+                     *  center=<bool>\n\
+                     *  inline=<bool>\n\
+                     *  width=<string>\n\
+                     *  height=<string>\n\
+                     *  scale=<f32>\n\
+                     *  spx=<string>\n\
+                     *  sc=<string>\n\
+                     *  zoom=<usize>\n\
+                     *  x=<int>\n\
+                     *  y=<int>\n\
+                     Example: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5'",
+        ),
+    ]
+}
+fn build_fetcher_args() -> Vec<Arg> {
+    vec![
+        Arg::new("generate-completions")
+            .long("generate")
+            .help("Generate shell completions")
+            .value_parser(["bash", "zsh", "fish", "powershell"]),
+        Arg::new("fetch-chromium")
+            .long("fetch-chromium")
+            .help("Download and prepare chromium")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("fetch-ffmpeg")
+            .long("fetch-ffmpeg")
+            .help("Download and prepare ffmpeg")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("fetch-clean")
+            .long("fetch-clean")
+            .help("Clean up local binaries")
+            .action(clap::ArgAction::SetTrue),
+    ]
+}
+fn build_ls_args() -> Vec<Arg> {
+    vec![
+        Arg::new("hidden")
+            .long("hidden")
+            .short('a')
+            .help("Include hidden files")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("ls-options").long("ls-opts").help(
+            "Options for directory listings:\n\
+                 *  x_padding=<string>\n\
+                 *  y_padding=<string>\n\
+                 *  min_width=<string>\n\
+                 *  max_width=<string>\n\
+                 *  height=<string>\n\
+                 *  items_per_row=<usize>\n\
+                 Example: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c'",
+        ),
+    ]
+}
+fn build_input_arg(stdin_streamed: bool) -> Arg {
     let mut input_arg = Arg::new("input")
         .index(1)
         .num_args(1..)
-        .help("file / dir / url");
+        .help("Input source (file/dir/url/ls)");
+
     if !stdin_streamed {
         input_arg = input_arg.required_unless_present_any([
             "fetch-clean",
@@ -48,220 +213,36 @@ fn build_cli(stdin_streamed: bool) -> Command {
             "delete-all-images",
         ]);
     }
+    input_arg
+}
+
+fn build_cli(stdin_streamed: bool) -> Command {
     Command::new("mcat")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
-        .about(env!("CARGO_PKG_DESCRIPTION"))
+        .about("A powerful extended cat command - cat all the things you couldn't before")
         .color(ColorChoice::Always)
         .styles(
             Styles::styled()
                 .header(AnsiColor::Green.on_default().bold())
                 .literal(AnsiColor::Blue.on_default()),
         )
-        .arg(input_arg)
-        .arg(
-            Arg::new("output")
-                .long("output")
-                .short('o')
-                .help("the format to output")
-                .value_parser(["html", "md",  "image", "video", "inline", "interactive"]),
-        )
-        .arg(
-            Arg::new("theme")
-                .long("theme")
-                .short('t')
-                .help("the theme to use [default: makurai_mage]")
-                .value_parser([
-                    "catppuccin", 
-                    "nord", 
-                    "monokai", 
-                    "dracula", 
-                    "gruvbox", 
-                    "one_dark", 
-                    "solarized", 
-                    "tokyo_night",
-                    "makurai_healer",
-                    "makurai_mage", 
-                    "ayu",         
-                    "ayu_mirage", 
-                    "github",    
-                    "synthwave", 
-                    "material"  ,
-                    "rose_pine",
-                    "kanagawa",
-                    "vscode",
-                    "everforest",
-                ])
-        )
-        .arg(
-            Arg::new("style-html")
-                .long("style-html")
-                .short('s')
-                .help("add style to html too (when html is the output)")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("hidden")
-                .long("hidden")
-                .short('a')
-                .help("include hidden files")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("kitty")
-                .long("kitty")
-                .help("makes the inline image encoded to kitty")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("iterm")
-                .long("iterm")
-                .help("makes the inline image encoded to iterm")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("sixel")
-                .long("sixel")
-                .help("makes the inline image encoded to sixel")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("ascii")
-                .long("ascii")
-                .help("makes the inline image encoded to ascii")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("inline")
-                .short('i')
-                .help("shortcut for putting --output inline")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("pager")
-                .long("pager")
-                .help("modify the default pager used [default: 'less -r']")
-        )
-        .arg(
-            Arg::new("paging")
-                .long("paging")
-                .help("disable / enable paging forcefully [default: auto]")
-                .value_parser(["never", "always", "auto"])
-        )
-        .arg(
-            Arg::new("paging-never")
-                .short('P')
-                .help("shortcut for putting --paging never")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("paging-always")
-                .short('p')
-                .help("shortcut for putting --paging always")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("color")
-                .long("color")
-                .help("disable / enable ANSI formatting forcefully [default: auto]")
-                .value_parser(["never", "always", "auto"])
-        )
-        .arg(
-            Arg::new("color-never")
-                .short('C')
-                .help("shortcut for putting --color never")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("color-always")
-                .short('c')
-                .help("shortcut for putting --color always")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("horizontal")
-                .long("hori")
-                .action(clap::ArgAction::SetTrue)
-                .help("concat images horizontal instead of vertical"))
-        .arg(
-            Arg::new("no-linenumbers")
-                .long("no-linenumbers")
-                .help("changes the format of codeblock in the markdown viewer")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("delete-all-images")
-                .long("delete-images")
-                .help("deletes all the images, even ones that are not in the scrollview.. currently only works in kitty")
-                .action(clap::ArgAction::SetTrue)
-        )
-        .arg(
-            Arg::new("report")
-                .long("report")
-                .action(clap::ArgAction::SetTrue)
-                .help("reports image / video dimensions when drawing images. along with reporting more info when not drawing images")
-        )
-        .arg(
-            Arg::new("silent")
-                .long("silent")
-                .action(clap::ArgAction::SetTrue)
-                .help("removes loading bars")
-        )
-        .arg(
-            Arg::new("fetch-chromium")
-                .long("fetch-chromium")
-                .help("download and prepare chromium")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("fetch-ffmpeg")
-                .long("fetch-ffmpeg")
-                .help("download and prepare ffmpeg")
-                .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-            Arg::new("fetch-clean")
-                .long("fetch-clean")
-                .help("Clean up the local binaries")
-                .action(clap::ArgAction::SetTrue))
-        .arg(
-            Arg::new("generate-completions")
-                .long("generate")
-                .help("Generate shell completions")
-                .value_parser(["bash", "zsh", "fish", "powershell"])
-        )
-        .arg(
-            Arg::new("inline-options")
-                .long("opts")
-                .help(
-                    "Options for --output inline:\n\
-                     *  center=<bool>\n\
-                     *  inline=<bool>\n\
-                     *  width=<string>       [only for images]\n\
-                     *  height=<string>      [only for images]\n\
-                     *  scale=<f32>\n\
-                     *  spx=<string>\n\
-                     *  sc=<string>\n\
-                     *  zoom=<usize>         [only for images]\n\
-                     *  x=<int>              [only for images]\n\
-                     *  y=<int>              [only for images]\n\
-                     *  exmp: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20,zoom=2,x=16,y=8'\n"
-                )
-        )
-        .arg(
-            Arg::new("ls-options")
-                .long("ls-opts")
-                .help(
-                    "Options for the ls command:\n\
-                     *  x_padding=<string>\n\
-                     *  y_padding=<string>\n\
-                     *  min_width=<string>\n\
-                     *  max_width=<string>\n\
-                     *  height=<string>\n\
-                     *  items_per_row=<usize>\n\
-                     *  exmp: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c,max_width=16c,height=8%,items_per_row=12'\n"
-                )
-        )
+        // Core arguments and input
+        .arg(build_input_arg(stdin_streamed))
+        .next_help_heading("Core Options")
+        .args(build_core_args())
+        // Markdown viewing options
+        .next_help_heading("Markdown Viewing")
+        .args(build_markdown_viewer_args())
+        // Image/Media viewing options
+        .next_help_heading("Image/Video Viewing")
+        .args(build_image_viewer_args())
+        // Directory listing options
+        .next_help_heading("Directory Listing")
+        .args(build_ls_args())
+        // System operations
+        .next_help_heading("System Operations")
+        .args(build_fetcher_args())
 }
 
 fn main() {

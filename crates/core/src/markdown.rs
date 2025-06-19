@@ -374,7 +374,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     ));
                 }
                 3 => {
-                    ctx.write(&format!("→ {BOLD}{main_color}{content}{RESET}"));
+                    ctx.write(&format!("{BOLD}{main_color}→ {content}{RESET}"));
                 }
                 4.. => {
                     ctx.write(&format!("▸ {main_color}{content}{RESET}"));
