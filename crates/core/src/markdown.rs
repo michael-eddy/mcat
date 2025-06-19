@@ -338,6 +338,9 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
                 ctx.write(&highlighted);
             }
+            if ctx.output.ends_with('\n') {
+                ctx.output.pop();
+            }
         }
         NodeValue::Paragraph => {
             ctx.collect_and_write(node);
