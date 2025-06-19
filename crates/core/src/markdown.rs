@@ -36,7 +36,9 @@ struct AnsiContext {
 }
 impl AnsiContext {
     fn write(&mut self, val: &str) {
-        self.output.push_str(val);
+        let fg = self.theme.foreground.fg.clone();
+        let val = val.replace(RESET, &format!("{RESET}{fg}"));
+        self.output.push_str(&val);
     }
     fn cr(&mut self) {
         self.output.push('\n');
@@ -83,6 +85,7 @@ pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> Str
         output: String::new(),
         line: AtomicUsize::new(1),
     };
+    ctx.write(&ctx.theme.foreground.fg.clone());
     format_ast_node(root, &mut ctx);
 
     let lines: Vec<String> =
@@ -135,6 +138,10 @@ fn get_theme(s: Option<&str>) -> CustomTheme {
         "github" => CustomTheme::github(),
         "synthwave" => CustomTheme::synthwave(),
         "material" => CustomTheme::material(),
+        "rose_pine" => CustomTheme::rose_pine(),
+        "kanagawa" => CustomTheme::kanagawa(),
+        "vscode" => CustomTheme::vscode(),
+        "everforest" => CustomTheme::everforest(),
         _ => CustomTheme::makurai_mage(),
     }
 }
@@ -1267,6 +1274,102 @@ impl CustomTheme {
             yellow: "#FEE715".into(),
             white: "#F8F8F2".into(),
             black: "#262335".into(),
+        }
+    }
+    pub fn rose_pine() -> Self {
+        CustomTheme {
+            keyword: "#C4A7E7".into(),    // Iris (purple)
+            function: "#9CCFD8".into(),   // Foam (cyan)
+            string: "#F6C177".into(),     // Gold
+            module: "#EBBCBA".into(),     // Rose
+            constant: "#EB6F92".into(),   // Love (pink)
+            comment: "#6E6A86".into(),    // Muted
+            foreground: "#E0DEF4".into(), // Text
+            guide: "#26233A".into(),      // Highlight low
+            background: "#191724".into(), // Base
+            surface: "#1F1D2E".into(),    // Surface
+            border: "#403D52".into(),     // Highlight med
+
+            red: "#EB6F92".into(),     // Love
+            green: "#31748F".into(),   // Pine
+            blue: "#9CCFD8".into(),    // Foam
+            cyan: "#9CCFD8".into(),    // Foam
+            magenta: "#C4A7E7".into(), // Iris
+            yellow: "#F6C177".into(),  // Gold
+            white: "#E0DEF4".into(),   // Text
+            black: "#191724".into(),   // Base
+        }
+    }
+    pub fn kanagawa() -> Self {
+        CustomTheme {
+            keyword: "#957FB8".into(),    // Oniviolet
+            function: "#7AA89F".into(),   // Waveaqua1
+            string: "#98BB6C".into(),     // Autumngreen
+            module: "#7FB4CA".into(),     // Crystalblue
+            constant: "#D27E99".into(),   // Sakurapink
+            comment: "#727169".into(),    // Fujiwhite
+            foreground: "#DCD7BA".into(), // Fujiwhite
+            guide: "#2A2A37".into(),      // Waveblue1
+            background: "#1F1F28".into(), // Sumiink0
+            surface: "#16161D".into(),    // Sumiink1
+            border: "#54546D".into(),     // Sumiink4
+
+            red: "#C34043".into(),     // Peachred
+            green: "#76946A".into(),   // Springgreen
+            blue: "#7E9CD8".into(),    // Springblue
+            cyan: "#6A9589".into(),    // Waveaqua2
+            magenta: "#938AA9".into(), // Oniviolet2
+            yellow: "#C0A36E".into(),  // Carpyellow
+            white: "#DCD7BA".into(),   // Fujiwhite
+            black: "#1F1F28".into(),   // Sumiink0
+        }
+    }
+    pub fn everforest() -> Self {
+        CustomTheme {
+            keyword: "#E67E80".into(),    // Red
+            function: "#A7C080".into(),   // Green
+            string: "#DBBC7F".into(),     // Yellow
+            module: "#7FBBB3".into(),     // Aqua
+            constant: "#D699B6".into(),   // Purple
+            comment: "#7A8478".into(),    // Grey1
+            foreground: "#D3C6AA".into(), // Fg
+            guide: "#3D484D".into(),      // Bg2
+            background: "#2D353B".into(), // Bg0
+            surface: "#343F44".into(),    // Bg1
+            border: "#504945".into(),     // Grey0
+
+            red: "#E67E80".into(),     // Red
+            green: "#A7C080".into(),   // Green
+            blue: "#7FBBB3".into(),    // Blue
+            cyan: "#83C092".into(),    // Aqua
+            magenta: "#D699B6".into(), // Purple
+            yellow: "#DBBC7F".into(),  // Yellow
+            white: "#D3C6AA".into(),   // Fg
+            black: "#2D353B".into(),   // Bg0
+        }
+    }
+    pub fn vscode() -> Self {
+        CustomTheme {
+            keyword: "#569CD6".into(),    // Keyword blue
+            function: "#DCDCAA".into(),   // Function yellow
+            string: "#CE9178".into(),     // String orange
+            module: "#4EC9B0".into(),     // Type teal
+            constant: "#B5CEA8".into(),   // Number green
+            comment: "#6A9955".into(),    // Comment green
+            foreground: "#D4D4D4".into(), // Editor foreground
+            guide: "#404040".into(),      // Indent guide
+            background: "#1E1E1E".into(), // Editor background
+            surface: "#252526".into(),    // Side bar background
+            border: "#3E3E42".into(),     // Panel border
+
+            red: "#F44747".into(),     // Error red
+            green: "#6A9955".into(),   // String green
+            blue: "#569CD6".into(),    // Info blue
+            cyan: "#4EC9B0".into(),    // Cyan
+            magenta: "#C586C0".into(), // Keyword magenta
+            yellow: "#DCDCAA".into(),  // Warning yellow
+            white: "#D4D4D4".into(),   // White
+            black: "#1E1E1E".into(),   // Black
         }
     }
 

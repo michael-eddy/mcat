@@ -86,7 +86,11 @@ fn build_cli(stdin_streamed: bool) -> Command {
                     "ayu_mirage", 
                     "github",    
                     "synthwave", 
-                    "material"  
+                    "material"  ,
+                    "rose_pine",
+                    "kanagawa",
+                    "vscode",
+                    "everforest",
                 ])
         )
         .arg(
