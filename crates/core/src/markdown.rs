@@ -18,6 +18,7 @@ use syntect::{
     parsing::SyntaxSet,
     util::{LinesWithEndings, as_24_bit_terminal_escaped},
 };
+use unicode_width::UnicodeWidthStr;
 
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
@@ -348,14 +349,13 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Heading(node_heading) => {
             let content = ctx.collect(node);
             let main_color = ctx.theme.keyword.fg.clone();
-            let border = ctx.theme.border.fg.clone();
             match node_heading.level {
                 0 | 1 => {
                     let l = string_len(&content);
                     let sep_len = (l + 6).min(term_misc::get_wininfo().sc_width as usize);
                     let sep = "-".repeat(sep_len);
                     ctx.write(&format!(
-                        "{border}{sep}\n   {RESET}{BOLD}{main_color}{content}{RESET}\n{border}{sep}{RESET}"
+                        "{main_color}{BOLD}{sep}\n   {main_color}{content}\n{main_color}{sep}{RESET}"
                     ));
                 }
                 2 => {
@@ -363,7 +363,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     let sep_len = (l + 4).min(term_misc::get_wininfo().sc_width as usize);
                     let sep = "-".repeat(sep_len);
                     ctx.write(&format!(
-                        "{BOLD}{main_color}  {content}{RESET}\n{border}{sep}{RESET}"
+                        "{BOLD}{main_color}  {content}\n{main_color}{sep}{RESET}"
                     ));
                 }
                 3 => {
@@ -376,7 +376,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::ThematicBreak => {
             let br = br();
-            let border = ctx.theme.border.fg.clone();
+            let border = ctx.theme.guide.fg.clone();
             ctx.write(&format!("{border}{br}{RESET}"));
         }
         NodeValue::FootnoteDefinition(_) => {}
@@ -583,7 +583,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
 }
 
 fn string_len(str: &str) -> usize {
-    strip_ansi_escapes::strip_str(&str).chars().count()
+    strip_ansi_escapes::strip_str(&str).width()
 }
 
 pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
@@ -747,6 +747,7 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
     };
 
     let top = format!("{color}[ {} ]{RESET}\n", title);
+    let surface = ctx.theme.surface.bg.clone();
 
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
@@ -771,14 +772,16 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
 
     let mut bg_formatted_lines = String::new();
     for (i, line) in buf.lines().enumerate() {
+        let left_space = (twidth as usize).saturating_sub(string_len(line));
         if i == 0 {
-            bg_formatted_lines.push_str(&format!("{line}{RESET}"));
+            let suffix = format!("{surface}{}", " ".repeat(left_space));
+            bg_formatted_lines.push_str(&format!("{surface}{line}{suffix}{RESET}"));
         } else {
-            bg_formatted_lines.push_str(&format!("\n  {line}{RESET}"));
+            let suffix = format!("{surface}{}", " ".repeat(left_space.saturating_sub(2)));
+            bg_formatted_lines.push_str(&format!("\n{surface}  {line}{suffix}{RESET}"));
         }
     }
     ctx.write(&bg_formatted_lines);
-    ctx.write(&format!("\n{color}╰─{RESET}"));
 }
 fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let ts = ctx.theme.to_syntect_theme();
