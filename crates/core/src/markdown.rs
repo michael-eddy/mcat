@@ -487,12 +487,12 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Link(_) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(&format!("{UNDERLINE}{cyan}\u{eb01} {}{RESET}", content));
+            ctx.write(&format!("{UNDERLINE}{cyan}\u{f0339} {}{RESET}", content));
         }
         NodeValue::Image(_) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(&format!("{UNDERLINE}{cyan}\u{f03e} {}{RESET}", content));
+            ctx.write(&format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content));
         }
         NodeValue::Code(node_code) => {
             let surface = ctx.theme.surface.bg.clone();
