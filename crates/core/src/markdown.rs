@@ -67,18 +67,6 @@ impl AnsiContext {
         let text = self.collect(node);
         self.write(&text);
     }
-    fn ensure_cr_before(&mut self) {
-        if !self
-            .output
-            .lines()
-            .last()
-            .unwrap_or_default()
-            .trim()
-            .is_empty()
-        {
-            self.cr();
-        }
-    }
 }
 pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> String {
     let arena = Arena::new();
@@ -312,7 +300,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
 
             let indent = data.sourcepos.start.column;
             if ctx.hide_line_numbers || code.lines().count() < 10 {
-                format_code_simple(code, lang, ctx);
+                format_code_simple(code, lang, ctx, indent);
             } else {
                 format_code(code, lang, ctx, indent);
             }
@@ -730,13 +718,31 @@ pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str
     map.get(lang.to_lowercase().as_str()).copied()
 }
 
-fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext) {
+fn wrap_highlighted_line(original: String, width: usize, sub_prefix: &str) -> String {
+    if string_len(&original) <= width {
+        return original;
+    }
+    let lines: Vec<String> = textwrap::wrap(&original, width)
+        .into_iter()
+        .map(|cow| cow.into_owned())
+        .collect();
+    let mut buf = String::new();
+    for (i, line) in lines.iter().enumerate() {
+        if i == 0 || line.trim().is_empty() {
+            buf.push_str(line);
+        } else {
+            buf.push_str(&format!("\n{sub_prefix}{line}"));
+        }
+    }
+    buf.push('\n');
+    buf
+}
+fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let (title, color) = match get_lang_icon_and_color(lang) {
         Some((icon, color)) => (format!("{color}{icon} {lang}"), color),
         None => (lang.to_owned(), ""),
     };
 
-    ctx.ensure_cr_before();
     let top = format!("{color}[ {} ]{RESET}\n", title);
 
     let ts = ctx.theme.to_syntect_theme();
@@ -746,12 +752,30 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext) {
         .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
     let mut highlighter = HighlightLines::new(syntax, &ts);
 
-    ctx.write(&top);
-    for line in LinesWithEndings::from(code) {
+    let mut buf = String::new();
+    let twidth = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
+    buf.push_str(&top);
+    let count = code.lines().count();
+    for (i, line) in LinesWithEndings::from(code).enumerate() {
+        if i == count && line.trim().is_empty() {
+            continue;
+        }
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-        ctx.write(&format!("  {highlighted}"));
+        let highlighted = wrap_highlighted_line(highlighted, twidth as usize - 4, "  ");
+        buf.push_str(&highlighted);
     }
+
+    let mut bg_formatted_lines = String::new();
+    for (i, line) in buf.lines().enumerate() {
+        if i == 0 {
+            bg_formatted_lines.push_str(&format!("{line}{RESET}"));
+        } else {
+            bg_formatted_lines.push_str(&format!("\n  {line}{RESET}"));
+        }
+    }
+    ctx.write(&bg_formatted_lines);
+    ctx.write(&format!("\n{color}╰─{RESET}"));
 }
 fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let ts = ctx.theme.to_syntect_theme();
@@ -769,6 +793,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;
     let term_width = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
+    let text_size = term_width as usize - num_width;
     let color = ctx.theme.border.fg.clone();
 
     let top_header = format!(
@@ -790,12 +815,14 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     ctx.cr();
 
     let mut num = 1;
+    let prefix = format!("{}│  ", " ".repeat(num_width));
     for line in LinesWithEndings::from(code) {
         let left_space = num_width - num.to_string().chars().count();
         let left_offset = left_space / 2;
         let right_offset = left_space - left_offset;
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
+        let highlighted = wrap_highlighted_line(highlighted, text_size - 2, &prefix);
         ctx.write(&format!(
             "{color}{}{num}{}│ {RESET}{}",
             " ".repeat(left_offset),
