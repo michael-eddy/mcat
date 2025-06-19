@@ -43,7 +43,7 @@ fn build_core_args() -> Vec<Arg> {
         Arg::new("theme")
             .long("theme")
             .short('t')
-            .help("Color theme")
+            .help("Color theme [default: makurai_mage]")
             .value_parser([
                 "catppuccin",
                 "nord",
@@ -60,6 +60,10 @@ fn build_core_args() -> Vec<Arg> {
                 "github",
                 "synthwave",
                 "material",
+                "rose_pine",
+                "kanagawa",
+                "vscode",
+                "everforest",
             ]),
     ]
 }
@@ -154,7 +158,7 @@ fn build_image_viewer_args() -> Vec<Arg> {
                      *  zoom=<usize>\n\
                      *  x=<int>\n\
                      *  y=<int>\n\
-                     Example: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5'",
+                     Example: --opts 'center=false,inline=true,width=80%,height=20c,scale=0.5,spx=1920x1080,sc=100x20xforce,zoom=2,x=16,y=8'",
         ),
     ]
 }
@@ -193,7 +197,7 @@ fn build_ls_args() -> Vec<Arg> {
                  *  max_width=<string>\n\
                  *  height=<string>\n\
                  *  items_per_row=<usize>\n\
-                 Example: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c'",
+                 Example: --ls-opts 'x_padding=4c,y_padding=2c,min_width=4c,max_width=16c,height=8%,items_per_row=12'",
         ),
     ]
 }
