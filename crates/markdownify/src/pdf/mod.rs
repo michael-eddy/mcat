@@ -1,16 +1,16 @@
 use std::{error::Error, path::Path};
 
 use lopdf::Document;
-use pdf_element::{PdfElement, PdfText, PdfUnit};
+use pdf_element::PdfUnit;
 use pdf_page::PdfPage;
-
-use crate::sheets;
 
 mod pdf_element;
 mod pdf_page;
 mod pdf_state;
 
-/// convert `pdf` into markdown
+/// convert `pdf` into "markdown"
+/// because its hard to keep the layout of pdf and add markdown symbols, it really is just a pdf to
+/// text function, wrapped inside a pdf codeblock.
 /// # usage:
 /// ```
 /// use std::path::Path;
@@ -32,114 +32,92 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         result.push_str(&format!("\n\n<!-- S-TITLE: Page number {} -->\n", i));
         let mut page = page?;
         let units = page.handle_stream(page.stream.clone())?;
-        let font_sizes: Vec<f32> = units
-            .iter()
-            .filter_map(|u| match u {
-                PdfUnit::Text(pdf_text) => pdf_text.font_size,
-                PdfUnit::Line(_) => None,
-            })
-            .collect();
-        let median_font_size = median(font_sizes);
-        let elements = Pdf::pdf_units_to_elements(units);
-        let mut pre_header_level = "";
 
-        for row in elements {
-            let mut current_header_level = "";
-            for e in row {
-                match e {
-                    pdf_element::PdfElement::Text(pdf_text) => {
-                        let (mut text, header_level) = pdftext_to_md(pdf_text, median_font_size);
-                        current_header_level = header_level;
-                        // connected headres
-                        if current_header_level != "" && pre_header_level == current_header_level {
-                            result.push_str("<br>");
-                            text = text.replace(header_level, "");
-                        }
-                        // used to be header, now different
-                        if pre_header_level != "" && current_header_level != pre_header_level {
-                            result.push_str("\n");
-                        }
-                        result.push_str(&format!("{} ", text));
-                    }
-                    pdf_element::PdfElement::Table(mut pdf_table) => {
-                        let elements = pdf_table.get_sorted_elements();
-                        let elements: Vec<Vec<String>> = elements
-                            .iter()
-                            .map(|row| {
-                                row.iter()
-                                    .map(|cell| {
-                                        cell.iter()
-                                            // never header
-                                            .map(|item| pdftext_to_md(item.clone(), Some(1000.0)).0)
-                                            .collect::<Vec<String>>()
-                                            .join(" ")
-                                    })
-                                    .collect()
-                            })
-                            .collect();
+        // Separate text and lines
+        let mut texts = Vec::new();
+        let mut lines = Vec::new();
 
-                        let headers = elements.get(0);
-                        let rows = elements.get(1..);
-                        if rows.is_some() && headers.is_some() {
-                            let md = sheets::to_markdown_table(&headers.unwrap(), &rows.unwrap());
-                            result.push_str(&md);
-                        }
+        for unit in units {
+            match unit {
+                PdfUnit::Text(unit) => texts.push(unit),
+                PdfUnit::Line(line) => lines.push(line),
+            }
+        }
+
+        let max_x = 612.0;
+        let max_y = 792.0;
+
+        // making each lower will give more space for more "accurate" projection
+        let cell_width: f32 = 4.0;
+        let cell_height: f32 = 10.0;
+
+        let cols = (max_x / cell_width).ceil() as usize + 1;
+        let rows = (max_y / cell_height).ceil() as usize + 1;
+
+        let mut matrix = vec![vec![' '; cols]; rows];
+
+        // First, draw all lines
+        for line in lines {
+            let x1 = (line.from.0 / cell_width).round() as isize;
+            let mut y1 = (line.from.1 / cell_height).round() as isize;
+            let x2 = (line.to.0 / cell_width).round() as isize;
+            let mut y2 = (line.to.1 / cell_height).round() as isize;
+
+            // Flip Y coordinates
+            y1 = rows as isize - 1 - y1;
+            y2 = rows as isize - 1 - y2;
+
+            if y1 == y2 {
+                // Horizontal line
+                for x in x1.min(x2)..=x1.max(x2) {
+                    if (0..rows as isize).contains(&y1) && (0..cols as isize).contains(&x) {
+                        matrix[y1 as usize][x as usize] = '─';
                     }
                 }
+            } else if x1 == x2 {
+                // Vertical line
+                for y in y1.min(y2)..=y1.max(y2) {
+                    if (0..rows as isize).contains(&y) && (0..cols as isize).contains(&x1) {
+                        matrix[y as usize][x1 as usize] = '│';
+                    }
+                }
+            } else {
+                // Diagonal line, ignore -- too complex
             }
-            if current_header_level == "" {
-                result.push_str("\n");
-            }
-            pre_header_level = current_header_level;
         }
-    }
 
+        // Then, place all text (this will overwrite lines where they conflict)
+        for text_unit in texts {
+            let col = (text_unit.x / cell_width).round() as usize;
+            let row = (text_unit.y / cell_height).round() as usize;
+            // Flip Y coordinate
+            let row = rows.saturating_sub(row + 1);
+
+            // Place each character of the string
+            for (i, ch) in text_unit.text.chars().enumerate() {
+                if col + i < cols && row < rows {
+                    matrix[row][col + i] = ch;
+                }
+            }
+        }
+
+        let first = matrix.iter().position(|row| row.iter().any(|&c| c != ' '));
+        let last = matrix.iter().rposition(|row| row.iter().any(|&c| c != ' '));
+        let text = if let (Some(start), Some(end)) = (first, last) {
+            matrix[start..=end]
+                .iter()
+                .map(|row| row.iter().collect::<String>())
+                .collect::<Vec<_>>()
+                .join("\n")
+        } else {
+            String::new() // all rows are empty
+        };
+
+        result.push_str("```pdf\n");
+        result.push_str(&text);
+        result.push_str("\n```");
+    }
     Ok(result)
-}
-
-fn pdftext_to_md(mut unit: PdfText, median_size: Option<f32>) -> (String, &'static str) {
-    let mut text = unit.text;
-
-    if let Some(color) = unit.color {
-        if color != "#FFFFFF" {
-            text = format!("`{}` ", text);
-        }
-    }
-    if let Some(name) = unit.font_name {
-        let lwc = name.to_lowercase();
-        if lwc.contains("bold") {
-            text = format!("**{}** ", text.trim());
-        }
-        if lwc.contains("italic") {
-            unit.italic = true;
-        }
-    }
-    if unit.italic {
-        text = format!("*{}* ", text.trim());
-    }
-    if unit.underlined {
-        text = format!("<u>{}</u> ", text.trim());
-    }
-
-    let mut is_header = "";
-    if let Some(header) = font_size_to_header(unit.font_size.unwrap_or_default(), median_size) {
-        text = format!("{header} {} ", text.trim());
-        is_header = header;
-    }
-
-    return (text, is_header);
-}
-
-fn font_size_to_header(font_size: f32, median_size: Option<f32>) -> Option<&'static str> {
-    let base_size = median_size.unwrap_or(12.0);
-    let size_ratio = font_size / base_size;
-
-    match size_ratio {
-        ratio if ratio >= 3.0 => Some("#"), // 50%+ larger (H1)
-        ratio if ratio >= 2.5 && ratio < 3.0 => Some("##"), // 30-50% larger (H2)
-        ratio if ratio >= 2.0 && ratio < 2.5 => Some("###"), // 20-30% larger (H3)
-        _ => None,                          // Equal to or smaller than base size is regular text
-    }
 }
 
 struct Pdf {
@@ -159,28 +137,4 @@ impl Pdf {
             .page_iter()
             .map(|id| PdfPage::from_object_id(&self.doc, id))
     }
-
-    pub fn pdf_units_to_elements(units: Vec<PdfUnit>) -> Vec<Vec<PdfElement>> {
-        let elements = pdf_element::units_to_elements(units);
-        let mut matrix = pdf_element::elements_into_matrix(elements);
-        for row in matrix.iter_mut() {
-            pdf_element::sort_transform_elements(row);
-        }
-        matrix
-    }
-}
-
-fn median(mut values: Vec<f32>) -> Option<f32> {
-    let len = values.len();
-    if len == 0 {
-        return None;
-    }
-
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
-    Some(if len % 2 == 1 {
-        values[len / 2]
-    } else {
-        (values[len / 2 - 1] + values[len / 2]) / 2.0
-    })
 }

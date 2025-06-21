@@ -101,7 +101,8 @@ impl PdfState {
     }
 
     pub fn cm(&mut self, a: f32, b: f32, c: f32, d: f32, e: f32, f: f32) {
-        self.ctm = Matrix3x3::from_components(a, b, c, d, e, f);
+        let new_matrix = Matrix3x3::from_components(a, b, c, d, e, f);
+        self.ctm = self.ctm.multiply(&new_matrix);
     }
 
     pub fn m(&mut self, tx: f32, ty: f32) {

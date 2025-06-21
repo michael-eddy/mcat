@@ -2,6 +2,8 @@ use std::{collections::BTreeMap, error::Error, mem::take, str::from_utf8};
 
 use lopdf::{Dictionary, Document, Encoding, Object, ObjectId};
 
+use crate::pdf::pdf_element::is_fake_line;
+
 use super::{
     pdf_element::{PdfLine, PdfText, PdfUnit},
     pdf_state::PdfState,
@@ -66,6 +68,7 @@ impl<'a> PdfPage<'a> {
         let mut elements: Vec<PdfUnit> = Vec::new();
         let mut current_element = PdfText::default();
         let content = lopdf::content::Content::decode(&stream)?;
+        let mut pending_lines = Vec::new();
 
         let _: Vec<Result<(), Box<dyn Error>>> = content
             .operations
@@ -290,6 +293,16 @@ impl<'a> PdfPage<'a> {
                         elements.push(PdfUnit::Line(line));
                         Ok(())
                     }
+                    "S" | "s" => {
+                        if !pending_lines.is_empty() {
+                            elements.extend(take(&mut pending_lines));
+                        }
+                        Ok(())
+                    }
+                    "F" | "f" | "f*" => {
+                        pending_lines.clear();
+                        Ok(())
+                    }
                     "re" => {
                         let items: Vec<f32> = op
                             .operands
@@ -315,7 +328,7 @@ impl<'a> PdfPage<'a> {
                             self.state.re(point3, point4), // Line 3: top-right to top-left
                             self.state.re(point4, point1), // Line 4: top-left to bottom-left
                         ];
-                        let lines: Vec<PdfUnit> = lines
+                        pending_lines = lines
                             .iter()
                             .map(|line| {
                                 PdfUnit::Line(PdfLine {
@@ -324,7 +337,10 @@ impl<'a> PdfPage<'a> {
                                 })
                             })
                             .collect();
-                        elements.extend(lines);
+
+                        if is_fake_line(&pending_lines) {
+                            elements.extend(take(&mut pending_lines));
+                        }
 
                         Ok(())
                     }
