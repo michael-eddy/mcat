@@ -11,6 +11,7 @@ use rasteroid::{
     term_misc::{self, SizeDirection, dim_to_cells, dim_to_px, ensure_space},
 };
 use regex::Regex;
+use reqwest::Url;
 use resvg::{
     tiny_skia,
     usvg::{self, Options, Tree},
@@ -26,6 +27,7 @@ use std::{
     io::{Write, stdout},
     process::Command,
 };
+use tempfile::NamedTempFile;
 
 use crate::{catter, cdp::ChromeHeadless, config::LsixOptions, fetch_manager};
 
@@ -85,13 +87,16 @@ pub fn svg_to_image(
 }
 
 pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let encoded_html = urlencoding::encode(html);
-    let data_uri = format!("data:text/html;charset=utf-8,{}", encoded_html);
+    let mut tmp_file = NamedTempFile::with_suffix(".html").expect("failed to create tmp file");
+    tmp_file.write_all(html.as_bytes())?;
+    let path = tmp_file.path();
+    let url =
+        Url::from_file_path(path).map_err(|_| "Failed to create a url for the chromium flag")?;
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     rt.block_on(async {
-        let browser = ChromeHeadless::new(&data_uri).await?;
+        let browser = ChromeHeadless::new(&url.as_str()).await?;
         let img_data = browser.capture_screenshot().await?;
         Ok(img_data)
     })
