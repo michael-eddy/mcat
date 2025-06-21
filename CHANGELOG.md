@@ -3,7 +3,7 @@
 - 📈 markdown viewer now uses the theme colors and not terminal colors
 - 📈 improved the markdown viewer -- less clutter
 - 📈 improved the pdf to markdown parser -- now maintain layout and draws lines, in the cost of being more text then markdown.
-- 🐛 screenshots of HTML/documents no longer says the filename is too long in windows  
+- 🐛 screenshots of HTML/documents no longer says the filename / arg is too long
 
 ## V0.3.4
 - 🎉 now allows selection from the interactive selector along with other inputs
