@@ -1,4 +1,4 @@
-## Src
+## V0.3.5
 - 🎉 added ayu, ayu_mirage, synthwave, material, rose_pine, kanagawa, vscode, everforest and github themes!
 - 📈 markdown viewer now uses the theme colors and not terminal colors
 - 📈 improved the markdown viewer -- less clutter
