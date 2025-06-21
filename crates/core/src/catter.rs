@@ -11,6 +11,7 @@ use crossterm::{
     tty::IsTty,
 };
 use image::{DynamicImage, ImageFormat};
+use markdownify::ConvertOptions;
 use rasteroid::{
     InlineEncoder,
     image_extended::{InlineImage, ZoomPanViewport},
@@ -143,7 +144,10 @@ pub fn cat(
                     (Some(r), ext.as_ref())
                 }
                 _ => {
-                    let f = markdownify::convert(path, None)?;
+                    let screen_size = term_misc::get_wininfo();
+                    let opts = ConvertOptions::new(path)
+                        .with_screen_size((screen_size.sc_width, screen_size.sc_height));
+                    let f = markdownify::convert(opts)?;
                     (Some(f), "md")
                 }
             }

@@ -5,14 +5,64 @@ pub mod pptx;
 pub mod sheets;
 
 use std::{
+    borrow::Cow,
     fs::{self, File},
-    path::Path,
+    path::{Path, PathBuf},
 };
+
+pub struct ConvertOptions<'a> {
+    pub path: Cow<'a, Path>,
+    pub name_header: Option<&'a str>,
+    pub screen_size: Option<(u16, u16)>,
+}
+impl<'a> ConvertOptions<'a> {
+    pub fn new(path: impl Into<ConvertOptions<'a>>) -> Self {
+        path.into()
+    }
+    pub fn with_name_header(mut self, name_header: &'a str) -> Self {
+        self.name_header = Some(name_header);
+        self
+    }
+    pub fn with_screen_size(mut self, screen_size: (u16, u16)) -> Self {
+        self.screen_size = Some(screen_size);
+        self
+    }
+}
+impl<'a> From<&'a str> for ConvertOptions<'a> {
+    fn from(value: &'a str) -> Self {
+        ConvertOptions {
+            path: Cow::Owned(PathBuf::from(value)),
+            name_header: None,
+            screen_size: None,
+        }
+    }
+}
+impl<'a> From<&'a Path> for ConvertOptions<'a> {
+    fn from(value: &'a Path) -> Self {
+        ConvertOptions {
+            path: Cow::Borrowed(value),
+            name_header: None,
+            screen_size: None,
+        }
+    }
+}
+impl<'a> From<PathBuf> for ConvertOptions<'a> {
+    fn from(value: PathBuf) -> Self {
+        ConvertOptions {
+            path: Cow::Owned(value),
+            name_header: None,
+            screen_size: None,
+        }
+    }
+}
 
 use tempfile::Builder;
 use zip::ZipArchive;
 
 /// convert `any` document into markdown
+/// `path_or_opts` can be either just a path (&str, &Path, Pathbuf) or opts.
+/// opts allow you to add a header to the markdown, or give the pdf-to-markdown parser screensize
+/// so it can produce better looking results.
 /// # example:
 /// ```
 /// use std::path::Path;
@@ -32,17 +82,16 @@ use zip::ZipArchive;
 /// use markdownify::convert;
 ///
 /// let path = Path::new("path/to/file.docx");
-/// let name = "file.docx".to_string();
-/// match convert(&path, Some(&name)) {
+/// match convert(&path) {
 ///     Ok(md) => println!("{}", md),
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }
 /// ```
-pub fn convert(
-    path: &Path,
-    name_header: Option<&String>,
+pub fn convert<'a>(
+    path_or_opts: impl Into<ConvertOptions<'a>>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let path = Path::new(path);
+    let path_or_opts = path_or_opts.into();
+    let path = path_or_opts.path;
     if !path.is_file() {
         return Err(format!("Unknown path type for {}", path.display()).into());
     }
@@ -54,14 +103,14 @@ pub fn convert(
         .to_lowercase();
 
     let result = match ext.as_str() {
-        "csv" => sheets::csv_converter(path)?,
-        "docx" => docx::docx_convert(path)?,
-        "pdf" => pdf::pdf_convert(path)?,
-        "pptx" => pptx::pptx_converter(path)?,
-        "xlsx" | "xls" | "xlsm" | "xlsb" | "xla" | "xlam" | "ods" => sheets::sheets_convert(path)?,
-        "zip" => zip_convert(path)?,
-        "odt" => opendoc::opendoc_convert(path)?,
-        "odp" => opendoc::opendoc_convert(path)?,
+        "csv" => sheets::csv_converter(&path)?,
+        "docx" => docx::docx_convert(&path)?,
+        "pdf" => pdf::pdf_convert(&path, path_or_opts.screen_size)?,
+        "pptx" => pptx::pptx_converter(&path)?,
+        "xlsx" | "xls" | "xlsm" | "xlsb" | "xla" | "xlam" | "ods" => sheets::sheets_convert(&path)?,
+        "zip" => zip_convert(&path)?,
+        "odt" => opendoc::opendoc_convert(&path)?,
+        "odp" => opendoc::opendoc_convert(&path)?,
         "md" | "html" => {
             let res = fs::read_to_string(path)?;
             format!("{}\n\n", res)
@@ -72,7 +121,7 @@ pub fn convert(
         }
     };
 
-    let result = match name_header {
+    let result = match path_or_opts.name_header {
         Some(name) => format!("<!-- S-TITLE: {name} -->\n{result}\n---"),
         None => result,
     };
@@ -116,7 +165,7 @@ pub fn zip_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         let temp_path = temp.path().to_path_buf(); // clone path before move
 
         // convert using original convert function
-        let md = match convert(&temp_path, None) {
+        let md = match convert(temp_path) {
             Ok(result) => result,
             Err(err) => format!("**[Failed Reading: {}]**", err),
         };

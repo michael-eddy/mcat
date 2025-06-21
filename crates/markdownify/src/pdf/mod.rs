@@ -11,18 +11,25 @@ mod pdf_state;
 /// convert `pdf` into "markdown"
 /// because its hard to keep the layout of pdf and add markdown symbols, it really is just a pdf to
 /// text function, wrapped inside a pdf codeblock.
+///
+/// `screen_size` is the screen_size in cells. and the function will project that text with that
+/// in consideration. by default it has values that will stop text from overlapping, but if you have a larger
+/// buffer to show the text on, increasing the size will produce better looking result.
 /// # usage:
 /// ```
 /// use std::path::Path;
 /// use markdownify::pdf::pdf_convert;
 ///
 /// let path = Path::new("path/to/file.pdf");
-/// match pdf_convert(&path) {
+/// match pdf_convert(&path, None) {
 ///     Ok(md) => println!("{}", md),
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }
 /// ```
-pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+pub fn pdf_convert(
+    path: &Path,
+    screen_size: Option<(u16, u16)>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let pdf = Pdf::new(path)?;
     let mut result = String::new();
     let mut i = 0;
@@ -48,8 +55,10 @@ pub fn pdf_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         let max_y = 792.0;
 
         // making each lower will give more space for more "accurate" projection
-        let cell_width: f32 = 4.0;
-        let cell_height: f32 = 10.0;
+        let (cell_width, cell_height) = match screen_size {
+            Some((x, y)) => ((max_x / x as f32).min(4.0), (max_y / y as f32).min(10.0)),
+            None => (4.0, 10.0),
+        };
 
         let cols = (max_x / cell_width).ceil() as usize + 1;
         let rows = (max_y / cell_height).ceil() as usize + 1;

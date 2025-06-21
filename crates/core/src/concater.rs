@@ -3,6 +3,8 @@ use std::{fs::File, io::Write, path::PathBuf};
 use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{GenericImage, ImageFormat};
 use itertools::Itertools;
+use markdownify::ConvertOptions;
+use rasteroid::term_misc;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use tempfile::{NamedTempFile, TempDir};
 
@@ -13,7 +15,11 @@ pub fn concat_text(paths: Vec<(&PathBuf, Option<String>)>) -> NamedTempFile {
         .into_par_iter()
         .enumerate()
         .map(|(idx, (path, name))| {
-            let md = match markdownify::convert(path, name.as_ref()) {
+            let screen_size = term_misc::get_wininfo();
+            let mut opts = ConvertOptions::new(path.as_path())
+                .with_screen_size((screen_size.sc_width, screen_size.sc_height));
+            opts.name_header = name.as_ref().map(|v| v.as_str());
+            let md = match markdownify::convert(opts) {
                 Ok(md) => md,
                 Err(err) => format!("**[Failed Reading: {}]**", err),
             };
