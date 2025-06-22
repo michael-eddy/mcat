@@ -69,7 +69,7 @@ use zip::ZipArchive;
 /// use markdownify::convert;
 ///
 /// let path = Path::new("path/to/file.docx");
-/// match convert(&path, None) {
+/// match convert(path) {
 ///     Ok(md) => println!("{}", md),
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }
@@ -82,7 +82,7 @@ use zip::ZipArchive;
 /// use markdownify::convert;
 ///
 /// let path = Path::new("path/to/file.docx");
-/// match convert(&path) {
+/// match convert(path) {
 ///     Ok(md) => println!("{}", md),
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }
