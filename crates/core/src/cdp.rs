@@ -134,6 +134,22 @@ impl ChromeHeadless {
         )
         .await?;
 
+        // Remove background
+        self.send_command(
+            &mut ws_stream,
+            6,
+            "Emulation.setDefaultBackgroundColorOverride",
+            Some(json!({
+                "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 0,
+                    "a": 0
+                }
+            })),
+        )
+        .await?;
+
         // Capture screenshot
         let response = self
             .send_command(

@@ -1,3 +1,6 @@
+## Src
+- 🐛 now removes the background color when converting HTML to image
+
 ## V0.3.6
 - 🎉 added ayu, ayu_mirage, synthwave, material, rose_pine, kanagawa, vscode, everforest and github themes!
 - 📈 markdown viewer now uses the theme colors and not terminal colors
