@@ -434,6 +434,7 @@ fn expand_tilde(path: &str) -> String {
 fn report_full() {
     let is_chromium_installed = fetch_manager::is_chromium_installed();
     let is_ffmpeg_installed = fetch_manager::is_ffmpeg_installed();
+    let is_poppler_installed = fetch_manager::is_poppler_installed();
     let mut env = term_misc::EnvIdentifiers::new();
     let kitty = rasteroid::kitty_encoder::is_kitty_capable(&mut env);
     let iterm = rasteroid::iterm_encoder::is_iterm_capable(&mut env);
@@ -504,12 +505,16 @@ fn report_full() {
     }
 
     // Print required dependencies
-    println!("│ Dependencies:                                      │");
+    println!("│ Optional Dependencies:                             │");
     println!(
         "│   Chromium: {:<47} │",
         format_status(is_chromium_installed)
     );
     println!("│   FFmpeg:   {:<47} │", format_status(is_ffmpeg_installed));
+    println!(
+        "│   Poppler:  {:<47} │",
+        format_status(is_poppler_installed)
+    );
 
     // Print terminal capabilities
     println!("├────────────────────────────────────────────────────┤");

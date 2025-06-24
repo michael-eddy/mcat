@@ -35,6 +35,10 @@ pub fn fetch_chromium() -> Result<(), Box<dyn error::Error>> {
     }
 }
 
+pub fn is_poppler_installed() -> bool {
+    which::which("pdftocairo").is_ok() || which::which("pdftoppm").is_ok()
+}
+
 pub fn fetch_ffmpeg() -> Result<(), Box<dyn error::Error>> {
     let cache_path = get_cache_path();
     let des = cache_path.join("ffmpeg");
