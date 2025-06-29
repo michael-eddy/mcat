@@ -64,6 +64,8 @@ fn build_core_args() -> Vec<Arg> {
                 "kanagawa",
                 "vscode",
                 "everforest",
+                "autumn",
+                "spring",
             ]),
     ]
 }

@@ -142,7 +142,9 @@ fn get_theme(s: Option<&str>) -> CustomTheme {
         "kanagawa" => CustomTheme::kanagawa(),
         "vscode" => CustomTheme::vscode(),
         "everforest" => CustomTheme::everforest(),
-        _ => CustomTheme::makurai_mage(),
+        "autumn" => CustomTheme::autumn(),
+        "spring" => CustomTheme::spring(),
+        _ => CustomTheme::spring(),
     }
 }
 
@@ -854,7 +856,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
 }
 
 fn br() -> String {
-    "─".repeat(term_misc::get_wininfo().sc_width as usize)
+    "━".repeat(term_misc::get_wininfo().sc_width as usize)
 }
 
 #[derive(Debug, Clone)]
@@ -916,6 +918,55 @@ fn hex_to_rgba(hex: &str) -> Color {
 }
 
 impl CustomTheme {
+    pub fn autumn() -> Self {
+        CustomTheme {
+            keyword: "#fc6501".into(),
+            function: "#fac25a".into(),
+            string: "#a1cd32".into(),
+            module: "#fc4c4c".into(),
+            constant: "#FF6B9D".into(),
+            comment: "#5C6773".into(),
+            foreground: "#FFFFFF".into(),
+            guide: "#2D3640".into(),
+            background: "#14161f".into(),
+            surface: "#2a2a38".into(),
+            border: "#5C6773".into(),
+
+            red: "#fc4c4c".into(),
+            green: "#a1cd32".into(),
+            blue: "#5abffa".into(),
+            cyan: "#5abffa".into(),
+            magenta: "#FF6B9D".into(),
+            yellow: "#fac25a".into(),
+            white: "#FFFFFF".into(),
+            black: "#2e3339".into(),
+        }
+    }
+
+    pub fn spring() -> Self {
+        CustomTheme {
+            keyword: "#FFB347".into(),
+            function: "#D4FF59".into(),
+            string: "#8CEB3A".into(),
+            module: "#66E6FF".into(),
+            constant: "#D8A5FF".into(),
+            comment: "#5C6773".into(),
+            foreground: "#FFFFFF".into(),
+            guide: "#2D3640".into(),
+            background: "#14161f".into(),
+            surface: "#2a2a38".into(),
+            border: "#5C6773".into(),
+
+            red: "#FF5555".into(),
+            green: "#D4FF59".into(),
+            blue: "#66E6FF".into(),
+            cyan: "#66E6FF".into(),
+            magenta: "#D2A6FF".into(),
+            yellow: "#FFB347".into(),
+            white: "#FFFFFF".into(),
+            black: "#2e3339".into(),
+        }
+    }
     pub fn makurai_mage() -> Self {
         CustomTheme {
             keyword: "#FF7733".into(),

@@ -1,4 +1,6 @@
 ## Src
+- 🎉 added autumn and spring themes
+- 📈 the default theme is now spring
 - 🐛 now removes the background color when converting HTML to image
 
 ## V0.3.6
