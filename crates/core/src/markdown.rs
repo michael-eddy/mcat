@@ -947,7 +947,7 @@ impl CustomTheme {
         CustomTheme {
             keyword: "#FFB347".into(),
             function: "#D4FF59".into(),
-            string: "#8CEB3A".into(),
+            string: "#37dbb5".into(),
             module: "#66E6FF".into(),
             constant: "#D8A5FF".into(),
             comment: "#5C6773".into(),
