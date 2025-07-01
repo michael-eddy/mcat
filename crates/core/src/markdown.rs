@@ -333,19 +333,16 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let title = caps.get(1).unwrap().as_str();
                 let width = term_misc::get_wininfo().sc_width;
                 let text_size = string_len(title);
-                let padding = width as usize - text_size;
-                let left_padding = padding / 2;
-                let right_padding = padding - left_padding;
-                let surface = ctx.theme.surface.bg.clone();
-                let block = &format!("{surface}{}{RESET}\n", " ".repeat(width as usize));
+                let border_width = text_size + 4; // +4 for 2 spaces padding on each side
+                let center_padding = (width as usize - border_width) / 2;
+
                 let fg_yellow = ctx.theme.yellow.fg.clone();
-                ctx.write(&block);
-                ctx.write(&format!(
-                    "{surface}{}{fg_yellow}{BOLD}{title}{surface}{}{RESET}\n",
-                    " ".repeat(left_padding),
-                    " ".repeat(right_padding)
-                ));
-                ctx.write(&block);
+                let border_line = "─".repeat(border_width);
+                let spaces = " ".repeat(center_padding);
+
+                ctx.write(&format!("{spaces}┌{border_line}┐\n"));
+                ctx.write(&format!("{spaces}│  {fg_yellow}{BOLD}{title}{RESET}  │\n"));
+                ctx.write(&format!("{spaces}└{border_line}┘\n"));
                 return;
             }
 
