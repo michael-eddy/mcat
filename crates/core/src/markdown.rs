@@ -70,6 +70,18 @@ impl AnsiContext {
         let text = self.collect(node);
         self.write(&text);
     }
+    fn ensure_cr_before(&mut self) {
+        if !self
+            .output
+            .lines()
+            .last()
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            self.cr();
+        }
+    }
 }
 pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> String {
     let arena = Arena::new();
@@ -755,8 +767,8 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         None => (lang.to_owned(), ""),
     };
 
+    ctx.ensure_cr_before();
     let top = format!("{color}[ {} ]{RESET}\n", title);
-    let surface = ctx.theme.surface.bg.clone();
 
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
@@ -765,9 +777,8 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
     let mut highlighter = HighlightLines::new(syntax, &ts);
 
-    let mut buf = String::new();
     let twidth = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
-    buf.push_str(&top);
+    ctx.write(&top);
     let count = code.lines().count();
     for (i, line) in LinesWithEndings::from(code).enumerate() {
         if i == count && line.trim().is_empty() {
@@ -776,21 +787,8 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
         let highlighted = wrap_highlighted_line(highlighted, twidth as usize - 4, "  ");
-        buf.push_str(&highlighted);
+        ctx.write(&format!("  {highlighted}"));
     }
-
-    let mut bg_formatted_lines = String::new();
-    for (i, line) in buf.lines().enumerate() {
-        let left_space = (twidth as usize).saturating_sub(string_len(line));
-        if i == 0 {
-            let suffix = format!("{surface}{}", " ".repeat(left_space));
-            bg_formatted_lines.push_str(&format!("{surface}{line}{suffix}{RESET}"));
-        } else {
-            let suffix = format!("{surface}{}", " ".repeat(left_space.saturating_sub(2)));
-            bg_formatted_lines.push_str(&format!("\n{surface}  {line}{suffix}{RESET}"));
-        }
-    }
-    ctx.write(&bg_formatted_lines);
 }
 fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let ts = ctx.theme.to_syntect_theme();
