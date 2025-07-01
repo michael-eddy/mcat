@@ -223,9 +223,12 @@ pub fn cat(
             interact_with_image(img, opts, out, resize_for_ascii)?;
             Ok(CatType::Interactive)
         },
-        ("md", _) => {
-            //default for md
-            let res = string_result.unwrap();
+        ("md" | "html", _) => {
+            //default for md, html
+            let mut res = string_result.unwrap();
+            if from == "html" {
+                res = format!("```html\n{res}\n```");
+            }
             let is_tty = stdout().is_tty();
             let use_color = opts.color.should_use(is_tty);
             let content = match use_color {
@@ -246,11 +249,6 @@ pub fn cat(
                 out.write_all(content.as_bytes())?;
                 return Ok(CatType::Markdown)
             }
-        },
-        ("html", _) => {
-            // default for html
-            out.write_all(string_result.unwrap().as_bytes())?;
-            Ok(CatType::Html)
         },
         ("image", _) => {
             // default for image

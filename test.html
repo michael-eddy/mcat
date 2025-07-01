@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example HTML Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        h2 {
+            color: #555;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .highlight {
+            background-color: #fffacd;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin: 10px 5px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        ul {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to My Example Page</h1>
+        
+        <h2>About This Page</h2>
+        <p>This is an example HTML page demonstrating various elements including <span class="highlight">styled text</span>, forms, lists, and interactive buttons.</p>
+        
+        <h2>Features</h2>
+        <ul>
+            <li>Responsive design that works on all devices</li>
+            <li>Modern gradient backgrounds and hover effects</li>
+            <li>Interactive form elements</li>
+            <li>Clean, professional styling</li>
+        </ul>
+        
+        <div class="card">
+            <h2>Contact Form</h2>
+            <form>
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" placeholder="Enter your name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" placeholder="Enter your email">
+                </div>
+                
+                <div class="form-group">
+                    <label for="message">Message:</label>
+                    <textarea id="message" name="message" rows="4" placeholder="Enter your message"></textarea>
+                </div>
+                
+                <button type="submit" class="button">Send Message</button>
+                <button type="reset" class="button">Clear Form</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h2>Interactive Demo</h2>
+            <p>Click the buttons below to see some JavaScript in action:</p>
+            <button class="button" onclick="showAlert()">Show Alert</button>
+            <button class="button" onclick="changeColor()">Change Background</button>
+            <button class="button" onclick="addText()">Add Text</button>
+            <div id="dynamic-content" style="margin-top: 20px; font-weight: bold;"></div>
+        </div>
+    </div>
+
+    <script>
+        function showAlert() {
+            alert('Hello! This is a JavaScript alert.');
+        }
+        
+        function changeColor() {
+            const container = document.querySelector('.container');
+            const colors = ['rgba(255, 255, 255, 0.95)', 'rgba(255, 240, 245, 0.95)', 'rgba(240, 255, 240, 0.95)', 'rgba(240, 248, 255, 0.95)'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            container.style.background = randomColor;
+        }
+        
+        function addText() {
+            const content = document.getElementById('dynamic-content');
+            const messages = [
+                'JavaScript is working!',
+                'Dynamic content added!',
+                'This text was generated by JS!',
+                'Cool, right?',
+                'Web development is fun!'
+            ];
+            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+            content.innerHTML += '<p style="color: #667eea; margin: 5px 0;">' + randomMessage + '</p>';
+        }
+    </script>
+</body>
+</html>
