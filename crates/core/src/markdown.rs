@@ -70,18 +70,6 @@ impl AnsiContext {
         let text = self.collect(node);
         self.write(&text);
     }
-    fn ensure_cr_before(&mut self) {
-        if !self
-            .output
-            .lines()
-            .last()
-            .unwrap_or_default()
-            .trim()
-            .is_empty()
-        {
-            self.cr();
-        }
-    }
 }
 pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> String {
     let arena = Arena::new();
@@ -143,8 +131,8 @@ fn get_theme(s: Option<&str>) -> CustomTheme {
         "one_dark" => CustomTheme::one_dark(),
         "solarized" => CustomTheme::solarized(),
         "tokyo_night" => CustomTheme::tokyo_night(),
-        "makurai_light" => CustomTheme::makurai_healer(),
-        "makurai_dark" => CustomTheme::makurai_mage(),
+        "makurai_light" => CustomTheme::makurai_light(),
+        "makurai_dark" => CustomTheme::makurai_dark(),
         "ayu" => CustomTheme::ayu(),
         "ayu_mirage" => CustomTheme::ayu_mirage(),
         "github" => CustomTheme::github(),
@@ -346,16 +334,9 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 return;
             }
 
-            let ts = ctx.theme.to_syntect_theme();
-            let syntax = ctx
-                .ps
-                .find_syntax_by_token("html")
-                .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
-            let mut highlighter = HighlightLines::new(syntax, &ts);
-            for line in LinesWithEndings::from(&node_html_block.literal) {
-                let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
-                let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-                ctx.write(&highlighted);
+            for line in node_html_block.literal.lines() {
+                let comment = &ctx.theme.comment.fg;
+                ctx.write(&format!("{comment}{line}{RESET}\n"));
             }
             if ctx.output.ends_with('\n') {
                 ctx.output.pop();
@@ -367,30 +348,10 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Heading(node_heading) => {
             let content = ctx.collect(node);
             let main_color = ctx.theme.keyword.fg.clone();
-            match node_heading.level {
-                0 | 1 => {
-                    let l = string_len(&content);
-                    let sep_len = (l + 6).min(term_misc::get_wininfo().sc_width as usize);
-                    let sep = "-".repeat(sep_len);
-                    ctx.write(&format!(
-                        "{main_color}{BOLD}{sep}\n   {main_color}{content}\n{main_color}{sep}{RESET}"
-                    ));
-                }
-                2 => {
-                    let l = string_len(&content);
-                    let sep_len = (l + 4).min(term_misc::get_wininfo().sc_width as usize);
-                    let sep = "-".repeat(sep_len);
-                    ctx.write(&format!(
-                        "{BOLD}{main_color}  {content}\n{main_color}{sep}{RESET}"
-                    ));
-                }
-                3 => {
-                    ctx.write(&format!("{BOLD}{main_color}→ {content}{RESET}"));
-                }
-                4.. => {
-                    ctx.write(&format!("▸ {main_color}{content}{RESET}"));
-                }
-            }
+            ctx.write(&format!(
+                "{main_color}{} {content}{RESET}",
+                "#".repeat(node_heading.level as usize)
+            ));
         }
         NodeValue::ThematicBreak => {
             let br = br();
@@ -764,8 +725,7 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         None => (lang.to_owned(), ""),
     };
 
-    ctx.ensure_cr_before();
-    let top = format!("{color}[ {} ]{RESET}\n", title);
+    let top = format!("{color}``` {}{RESET}\n", title);
 
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
@@ -785,6 +745,10 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
         let highlighted = wrap_highlighted_line(highlighted, twidth as usize - 4, "  ");
         ctx.write(&format!("  {highlighted}"));
+    }
+    if ctx.output.ends_with('\n') {
+        ctx.output.pop();
+        ctx.write(&format!("\n{color}```{RESET}"));
     }
 }
 fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
@@ -962,7 +926,7 @@ impl CustomTheme {
             black: "#2e3339".into(),
         }
     }
-    pub fn makurai_mage() -> Self {
+    pub fn makurai_dark() -> Self {
         CustomTheme {
             keyword: "#FF7733".into(),
             function: "#FFEE99".into(),
@@ -986,7 +950,7 @@ impl CustomTheme {
             black: "#14161f".into(),
         }
     }
-    pub fn makurai_healer() -> Self {
+    pub fn makurai_light() -> Self {
         CustomTheme {
             keyword: "#E35043".into(),
             function: "#3D76F3".into(),

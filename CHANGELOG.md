@@ -1,6 +1,7 @@
 ## Src
 - 🎉 added autumn and spring themes
 - 📈 the default theme is now spring
+- 📈 improved the markdown viewer -- less clutter
 - 🐛 now removes the background color when converting HTML to image
 
 ## V0.3.6
