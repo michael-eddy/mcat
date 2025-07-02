@@ -43,7 +43,7 @@ fn build_core_args() -> Vec<Arg> {
         Arg::new("theme")
             .long("theme")
             .short('t')
-            .help("Color theme [default: monokai]")
+            .help("Color theme [default: github]")
             .value_parser([
                 "catppuccin",
                 "nord",
