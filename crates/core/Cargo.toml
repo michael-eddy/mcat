@@ -17,6 +17,12 @@ license = "MIT"
 readme = "../../README.md"
 edition = "2024"
 
+[package.metadata.wix]
+upgrade-guid = "98B25CB4-C372-49AB-BE32-DFCB1C5110E5"
+path-guid = "D1F93E5C-A8FF-462C-9540-5AF4D067001E"
+license = false
+eula = false
+
 [dependencies]
 markdownify = { version = "0.2.0", path = "../markdownify" }
 rasteroid = { version = "0.1.6", path = "../rasteroid" }
