@@ -1,7 +1,6 @@
-## V0.3.7
+## V0.3.8
 - 🎉 added autumn and spring themes
-- 📈 improved the markdown viewer -- less clutter
-- 📈 improved line wrapping in the markdown viewer -- now maintains previous highlight and indents to align with previous line
+- 📈 improved the markdown viewer (prettier, comments HTML, better line wrapping in code blocks)
 - 🐛 HTML will now be treated as markdown when no output is specified -- allows for syntax highlighted code blocks instead of just printing it back. 
 - 🐛 now removes the background color when converting HTML to image
 
