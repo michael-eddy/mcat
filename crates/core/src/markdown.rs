@@ -145,7 +145,7 @@ fn get_theme(s: Option<&str>) -> CustomTheme {
         "everforest" => CustomTheme::everforest(),
         "autumn" => CustomTheme::autumn(),
         "spring" => CustomTheme::spring(),
-        _ => CustomTheme::spring(),
+        _ => CustomTheme::monokai(),
     }
 }
 

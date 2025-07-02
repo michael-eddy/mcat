@@ -1,6 +1,5 @@
 ## Src
 - 🎉 added autumn and spring themes
-- 📈 the default theme is now spring
 - 📈 improved the markdown viewer -- less clutter
 - 📈 improved line wrapping in the markdown viewer -- now maintains previous highlight and indents to align with previous line
 - 🐛 HTML will now be treated as markdown when no output is specified -- allows for syntax highlighted code blocks instead of just printing it back. 
