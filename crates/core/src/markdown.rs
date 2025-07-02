@@ -481,10 +481,11 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.write(&format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content));
         }
         NodeValue::Code(node_code) => {
-            let surface = ctx.theme.surface.bg.clone();
-            let fg_surface = ctx.theme.surface.fg.clone();
+            let surface = &ctx.theme.green_bg.bg;
+            let fg_surface = &ctx.theme.green_bg.fg;
+            let fg = &ctx.theme.green.fg;
             ctx.write(&format!(
-                "{fg_surface}{RESET}{surface}{}{RESET}{fg_surface}{RESET}",
+                "{fg_surface}{surface}{fg}{}{RESET}{fg_surface}{RESET}",
                 node_code.literal
             ));
         }
@@ -957,6 +958,7 @@ impl CustomTheme {
 
             red: "#fc4c4c".into(),
             green: "#a1cd32".into(),
+            green_bg: "#1A2511".into(),
             blue: "#5abffa".into(),
             cyan: "#5abffa".into(),
             magenta: "#FF6B9D".into(),
@@ -983,6 +985,7 @@ impl CustomTheme {
 
             red: "#FF5555".into(),
             green: "#D4FF59".into(),
+            green_bg: "#1F2614".into(),
             blue: "#66E6FF".into(),
             cyan: "#66E6FF".into(),
             magenta: "#D2A6FF".into(),
@@ -1009,6 +1012,7 @@ impl CustomTheme {
 
             red: "#FF5555".into(),
             green: "#95FB79".into(),
+            green_bg: "#1A2817".into(),
             blue: "#82AAFF".into(),
             cyan: "#66D9EF".into(),
             magenta: "#FF77FF".into(),
@@ -1021,7 +1025,7 @@ impl CustomTheme {
     pub fn makurai_light() -> Self {
         CustomTheme {
             keyword: "#E35043".into(),
-            keyword_bg: "#FDF2F1".into(), // Very light red background for keyword
+            keyword_bg: "#FDF2F1".into(),
             function: "#3D76F3".into(),
             string: "#51A150".into(),
             module: "#AB31A9".into(),
@@ -1035,6 +1039,7 @@ impl CustomTheme {
 
             red: "#E35043".into(),
             green: "#51A150".into(),
+            green_bg: "#F1F8F1".into(),
             blue: "#3D76F3".into(),
             cyan: "#00BFCF".into(),
             magenta: "#AB31A9".into(),
@@ -1061,6 +1066,7 @@ impl CustomTheme {
 
             red: "#F92672".into(),
             green: "#A6E22E".into(),
+            green_bg: "#242A1B".into(),
             blue: "#66D9EF".into(),
             cyan: "#66D9EF".into(),
             magenta: "#AE81FF".into(),
@@ -1087,6 +1093,7 @@ impl CustomTheme {
 
             red: "#F38BA8".into(),
             green: "#A6E3A1".into(),
+            green_bg: "#1F2B1F".into(),
             blue: "#89B4FA".into(),
             cyan: "#89DCEB".into(),
             magenta: "#CBA6F7".into(),
@@ -1113,6 +1120,7 @@ impl CustomTheme {
 
             red: "#F7768E".into(),
             green: "#9ECE6A".into(),
+            green_bg: "#1D231A".into(),
             blue: "#7AA2F7".into(),
             cyan: "#2AC3DE".into(),
             magenta: "#BB9AF7".into(),
@@ -1134,11 +1142,12 @@ impl CustomTheme {
             foreground: "#F8F8F2".into(),
             guide: "#44475A".into(),
             background: "#282A36".into(),
-            surface: "#383A47".into(),
+            surface: "#353746".into(),
             border: "#44475A".into(),
 
             red: "#FF5555".into(),
             green: "#50FA7B".into(),
+            green_bg: "#1A2D1E".into(),
             blue: "#8BE9FD".into(),
             cyan: "#8BE9FD".into(),
             magenta: "#FF79C6".into(),
@@ -1165,6 +1174,7 @@ impl CustomTheme {
 
             red: "#BF616A".into(),
             green: "#A3BE8C".into(),
+            green_bg: "#1F2A22".into(),
             blue: "#81A1C1".into(),
             cyan: "#88C0D0".into(),
             magenta: "#B48EAD".into(),
@@ -1191,6 +1201,7 @@ impl CustomTheme {
 
             red: "#FB4934".into(),
             green: "#B8BB26".into(),
+            green_bg: "#212318".into(),
             blue: "#83A598".into(),
             cyan: "#8EC07C".into(),
             magenta: "#D3869B".into(),
@@ -1217,6 +1228,7 @@ impl CustomTheme {
 
             red: "#DC322F".into(),
             green: "#859900".into(),
+            green_bg: "#1A2A0A".into(),
             blue: "#268BD2".into(),
             cyan: "#2AA198".into(),
             magenta: "#D33682".into(),
@@ -1243,6 +1255,7 @@ impl CustomTheme {
 
             red: "#E06C75".into(),
             green: "#98C379".into(),
+            green_bg: "#1D241C".into(),
             blue: "#61AFEF".into(),
             cyan: "#56B6C2".into(),
             magenta: "#C678DD".into(),
@@ -1269,6 +1282,7 @@ impl CustomTheme {
 
             red: "#F85149".into(),
             green: "#56D364".into(),
+            green_bg: "#0F1B13".into(),
             blue: "#58A6FF".into(),
             cyan: "#39D0D6".into(),
             magenta: "#BC8CFF".into(),
@@ -1281,26 +1295,26 @@ impl CustomTheme {
     pub fn material() -> Self {
         CustomTheme {
             keyword: "#C792EA".into(),
-            keyword_bg: "#281F2B".into(),
+            keyword_bg: "#2F2A37".into(),
             function: "#82AAFF".into(),
             string: "#C3E88D".into(),
             module: "#FFCB6B".into(),
             constant: "#F78C6C".into(),
-            comment: "#546E7A".into(),
-            foreground: "#EEFFFF".into(),
-            guide: "#37474F".into(),
-            background: "#263238".into(),
-            surface: "#314047".into(),
-            border: "#37474F".into(),
-
+            comment: "#676E95".into(),
+            foreground: "#A6ACCD".into(),
+            guide: "#4E5579".into(),
+            background: "#292D3E".into(),
+            surface: "#32374D".into(),
+            border: "#444267".into(),
             red: "#F07178".into(),
             green: "#C3E88D".into(),
+            green_bg: "#2C3A2B".into(),
             blue: "#82AAFF".into(),
             cyan: "#89DDFF".into(),
             magenta: "#C792EA".into(),
             yellow: "#FFCB6B".into(),
-            white: "#EEFFFF".into(),
-            black: "#263238".into(),
+            white: "#FFFFFF".into(),
+            black: "#292D3E".into(),
         }
     }
 
@@ -1321,6 +1335,7 @@ impl CustomTheme {
 
             red: "#F28779".into(),
             green: "#AAD94C".into(),
+            green_bg: "#1A1F0F".into(),
             blue: "#59C2FF".into(),
             cyan: "#95E6CB".into(),
             magenta: "#D2A6FF".into(),
@@ -1347,6 +1362,7 @@ impl CustomTheme {
 
             red: "#FF6666".into(),
             green: "#BAE67E".into(),
+            green_bg: "#212B1C".into(),
             blue: "#73D0FF".into(),
             cyan: "#95E6CB".into(),
             magenta: "#D4BFFF".into(),
@@ -1373,6 +1389,7 @@ impl CustomTheme {
 
             red: "#FE4450".into(),
             green: "#72F1B8".into(),
+            green_bg: "#1A2B23".into(),
             blue: "#36F9F6".into(),
             cyan: "#36F9F6".into(),
             magenta: "#FF7EDB".into(),
@@ -1399,6 +1416,7 @@ impl CustomTheme {
 
             red: "#EB6F92".into(),
             green: "#31748F".into(),
+            green_bg: "#1A1F22".into(),
             blue: "#9CCFD8".into(),
             cyan: "#9CCFD8".into(),
             magenta: "#C4A7E7".into(),
@@ -1425,6 +1443,7 @@ impl CustomTheme {
 
             red: "#C34043".into(),
             green: "#76946A".into(),
+            green_bg: "#1B1F1A".into(),
             blue: "#7E9CD8".into(),
             cyan: "#6A9589".into(),
             magenta: "#938AA9".into(),
@@ -1451,6 +1470,7 @@ impl CustomTheme {
 
             red: "#E67E80".into(),
             green: "#A7C080".into(),
+            green_bg: "#223020".into(),
             blue: "#7FBBB3".into(),
             cyan: "#83C092".into(),
             magenta: "#D699B6".into(),
@@ -1477,6 +1497,7 @@ impl CustomTheme {
 
             red: "#F44747".into(),
             green: "#6A9955".into(),
+            green_bg: "#141A12".into(),
             blue: "#569CD6".into(),
             cyan: "#4EC9B0".into(),
             magenta: "#C586C0".into(),
