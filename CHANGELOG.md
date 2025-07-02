@@ -1,4 +1,4 @@
-## Src
+## V0.3.7
 - 🎉 added autumn and spring themes
 - 📈 improved the markdown viewer -- less clutter
 - 📈 improved line wrapping in the markdown viewer -- now maintains previous highlight and indents to align with previous line
