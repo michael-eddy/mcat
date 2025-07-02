@@ -12,6 +12,7 @@ use comrak::{
 };
 use rasteroid::term_misc;
 use regex::Regex;
+use strip_ansi_escapes::strip_str;
 use syntect::{
     easy::HighlightLines,
     highlighting::{Color, ScopeSelectors, Style, StyleModifier, Theme, ThemeSet, ThemeSettings},
@@ -699,7 +700,30 @@ pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str
 
     map.get(lang.to_lowercase().as_str()).copied()
 }
+fn find_last_fg_color_sequence(text: &str) -> Option<String> {
+    let re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+    let mut last_fg_color = None;
 
+    for m in re.find_iter(text) {
+        let seq = m.as_str();
+        let codes_str = &seq[2..seq.len() - 1];
+
+        if codes_str.is_empty() || codes_str == "0" {
+            last_fg_color = None;
+        } else {
+            for code in codes_str.split(';') {
+                if let Ok(num) = code.parse::<u32>() {
+                    if (30..=37).contains(&num) || (90..=97).contains(&num) || num == 38 {
+                        last_fg_color = Some(seq.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    last_fg_color
+}
 fn wrap_highlighted_line(original: String, width: usize, sub_prefix: &str) -> String {
     if string_len(&original) <= width {
         return original;
@@ -709,12 +733,25 @@ fn wrap_highlighted_line(original: String, width: usize, sub_prefix: &str) -> St
         .map(|cow| cow.into_owned())
         .collect();
     let mut buf = String::new();
+    let mut pre_padding = 0;
+    let mut pre_last_color = None;
     for (i, line) in lines.iter().enumerate() {
         if i == 0 || line.trim().is_empty() {
             buf.push_str(line);
         } else {
-            buf.push_str(&format!("\n{sub_prefix}{line}"));
+            if pre_padding > 0 {
+                // index is pointed to the start so +1, +4 for just visual indent
+                pre_padding += 5;
+            }
+            let last_color = match pre_last_color {
+                Some(color) => color,
+                None => "".into(),
+            };
+            let padding = " ".repeat(pre_padding);
+            buf.push_str(&format!("\n{sub_prefix}{padding}{last_color}{line}"));
         }
+        pre_padding = (strip_str(line)).rfind("  ").unwrap_or(0);
+        pre_last_color = find_last_fg_color_sequence(line);
     }
     buf.push('\n');
     buf
@@ -789,7 +826,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     ctx.cr();
 
     let mut num = 1;
-    let prefix = format!("{}│  ", " ".repeat(num_width));
+    let prefix = format!("{}{color}│{RESET}  ", " ".repeat(num_width));
     for line in LinesWithEndings::from(code) {
         let left_space = num_width - num.to_string().chars().count();
         let left_offset = left_space / 2;
