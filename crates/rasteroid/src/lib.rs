@@ -66,7 +66,7 @@ pub fn inline_an_image(
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum InlineEncoder {
     Kitty,
     Iterm,

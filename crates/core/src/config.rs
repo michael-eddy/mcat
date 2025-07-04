@@ -3,7 +3,7 @@ use std::{collections::HashMap, env};
 use clap::ArgMatches;
 use rasteroid::{InlineEncoder, term_misc};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InlineOptions<'a> {
     pub center: bool,
     pub width: Option<&'a str>,
@@ -76,6 +76,7 @@ impl<'a> InlineOptions<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct LsixOptions<'a> {
     pub x_padding: &'a str,
     pub y_padding: &'a str,
@@ -124,6 +125,7 @@ impl<'a> LsixOptions<'a> {
     }
 }
 
+#[derive(Clone)]
 pub struct McatConfig<'a> {
     pub input: Vec<String>,
     pub output: Option<&'a str>,
@@ -136,6 +138,7 @@ pub struct McatConfig<'a> {
     pub hidden: bool,
     pub report: bool,
     pub no_linenumbers: bool,
+    pub no_images: bool,
     pub horizontal_image_stacking: bool,
     pub style_html: bool,
     pub theme: &'a str,
@@ -146,6 +149,7 @@ pub struct McatConfig<'a> {
     encoder_force: String,
 }
 
+#[derive(Clone)]
 pub enum AlwaysOrNever {
     Always,
     Never,
@@ -169,6 +173,7 @@ impl AlwaysOrNever {
     }
 }
 
+#[derive(Clone)]
 pub enum FnAndLeave {
     ShellGenerate(String),
     DeleteImages,
@@ -192,6 +197,7 @@ impl<'a> Default for McatConfig<'a> {
             hidden: false,
             report: false,
             no_linenumbers: false,
+            no_images: false,
             horizontal_image_stacking: false,
             style_html: false,
             theme: "dark",
@@ -275,6 +281,9 @@ impl<'a> McatConfig<'a> {
         }
         if opts.get_flag("no-linenumbers") {
             self.no_linenumbers = true;
+        }
+        if opts.get_flag("no-images") {
+            self.no_images = true;
         }
         if opts.get_flag("horizontal") {
             self.horizontal_image_stacking = true;

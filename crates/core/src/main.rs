@@ -76,6 +76,10 @@ fn build_markdown_viewer_args() -> Vec<Arg> {
             .long("no-linenumbers")
             .help("Disable line numbers in code blocks")
             .action(clap::ArgAction::SetTrue),
+        Arg::new("no-images")
+            .long("no-images")
+            .help("if set, the markdown viewer won't render images")
+            .action(clap::ArgAction::SetTrue),
         Arg::new("color")
             .long("color")
             .help("Control ANSI formatting [default: auto]")
@@ -262,9 +266,11 @@ fn main() {
     config.extend_from_args(&opts);
 
     // setting the winsize
+    let spx = term_misc::break_size_string(config.inline_options.spx).unwrap_or_exit();
+    let sc = term_misc::break_size_string(config.inline_options.sc).unwrap_or_exit();
     let _ = term_misc::init_wininfo(
-        &term_misc::break_size_string(config.inline_options.spx).unwrap_or_exit(),
-        &term_misc::break_size_string(config.inline_options.sc).unwrap_or_exit(),
+        &spx,
+        &sc,
         config.inline_options.scale,
         config.is_tmux,
         config.inline_options.inline,
@@ -361,6 +367,14 @@ fn main() {
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
+            // changing to forced inline in case of images rendered
+            let _ = term_misc::init_wininfo(
+                &spx,
+                &sc,
+                config.inline_options.scale,
+                config.is_tmux,
+                true,
+            );
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
             } else {

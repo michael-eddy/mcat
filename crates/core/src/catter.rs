@@ -232,7 +232,7 @@ pub fn cat(
             let is_tty = stdout().is_tty();
             let use_color = opts.color.should_use(is_tty);
             let content = match use_color {
-                true => markdown::md_to_ansi(&res, Some(opts.theme), opts.no_linenumbers),
+                true => markdown::md_to_ansi(&res, &opts),
                 false => res,
             };
             let use_pager = opts.paging.should_use(is_tty && content.lines().count() > term_misc::get_wininfo().sc_height as usize);

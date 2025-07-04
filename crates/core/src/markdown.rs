@@ -2,7 +2,11 @@ use core::str;
 use std::{
     collections::HashMap,
     str::FromStr,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        mpsc::{self, Receiver, Sender},
+    },
+    thread,
 };
 
 use comrak::{
@@ -10,7 +14,7 @@ use comrak::{
     nodes::{AstNode, NodeMath, NodeValue, Sourcepos},
     plugins::syntect::SyntectAdapterBuilder,
 };
-use rasteroid::term_misc;
+use rasteroid::{InlineEncoder, term_misc};
 use regex::Regex;
 use strip_ansi_escapes::strip_str;
 use syntect::{
@@ -21,6 +25,8 @@ use syntect::{
 };
 use unicode_width::UnicodeWidthStr;
 
+use crate::{catter, config::McatConfig, scrapy};
+
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
 const ITALIC: &str = "\x1B[3m";
@@ -28,14 +34,53 @@ const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
 const FAINT: &str = "\x1b[2m";
 
-struct AnsiContext {
+pub struct JobQueue {
+    pub next_id: AtomicUsize,
+    tx: Sender<(usize, String)>,
+    rx: Receiver<(usize, String)>,
+}
+
+impl JobQueue {
+    pub fn new() -> Self {
+        let (tx, rx) = mpsc::channel();
+        JobQueue {
+            next_id: AtomicUsize::new(0),
+            tx,
+            rx,
+        }
+    }
+
+    pub fn add<F>(&self, job: F, fallback: String) -> usize
+    where
+        F: FnOnce() -> Result<String, Box<dyn std::error::Error>> + Send + 'static,
+    {
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let tx = self.tx.clone();
+
+        thread::spawn(move || {
+            let result = job().unwrap_or(fallback);
+            let _ = tx.send((id, result));
+        });
+
+        id
+    }
+
+    /// Waits and returns the next finished job.
+    pub fn next(&self) -> Option<(usize, String)> {
+        self.rx.recv().ok()
+    }
+}
+
+struct AnsiContext<'a> {
     ps: SyntaxSet,
     theme: CustomTheme,
     hide_line_numbers: bool,
     line: AtomicUsize,
     output: String,
+    config: &'a McatConfig<'a>,
+    job_queue: &'a JobQueue,
 }
-impl AnsiContext {
+impl<'a> AnsiContext<'a> {
     fn write(&mut self, val: &str) {
         let fg = self.theme.foreground.fg.clone();
         let val = val.replace(RESET, &format!("{RESET}{fg}"));
@@ -53,7 +98,7 @@ impl AnsiContext {
         }
         self.line.store(sps.end.line, Ordering::SeqCst);
     }
-    fn collect<'a>(&self, node: &'a AstNode<'a>) -> String {
+    fn collect<'b>(&self, node: &'b AstNode<'b>) -> String {
         let line = AtomicUsize::new(node.data.borrow().sourcepos.start.line);
         let mut ctx = AnsiContext {
             ps: self.ps.clone(),
@@ -61,40 +106,59 @@ impl AnsiContext {
             hide_line_numbers: self.hide_line_numbers,
             line,
             output: String::new(),
+            config: self.config,
+            job_queue: self.job_queue,
         };
         for child in node.children() {
             format_ast_node(child, &mut ctx);
         }
         ctx.output
     }
-    fn collect_and_write<'a>(&mut self, node: &'a AstNode<'a>) {
+    fn collect_and_write<'b>(&mut self, node: &'b AstNode<'b>) {
         let text = self.collect(node);
         self.write(&text);
     }
 }
-pub fn md_to_ansi(md: &str, theme: Option<&str>, hide_line_numbers: bool) -> String {
+pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
     let arena = Arena::new();
     let opts = comrak_options();
     let root = comrak::parse_document(&arena, md, &opts);
 
     let ps = SyntaxSet::load_defaults_newlines();
-    let theme = get_theme(theme);
+    let theme = get_theme(Some(config.theme));
+    let job_queue = JobQueue::new();
     let mut ctx = AnsiContext {
         ps,
         theme,
-        hide_line_numbers,
+        hide_line_numbers: config.no_linenumbers,
         output: String::new(),
         line: AtomicUsize::new(1),
+        config,
+        job_queue: &job_queue,
     };
     ctx.write(&ctx.theme.foreground.fg.clone());
     format_ast_node(root, &mut ctx);
 
+    // making sure its wrapped to fit into the termianl size
     let lines: Vec<String> =
         textwrap::wrap(&ctx.output, term_misc::get_wininfo().sc_width as usize)
             .into_iter()
             .map(|cow| cow.into_owned())
             .collect();
-    lines.join("\n")
+    let mut f = lines.join("\n");
+
+    // replace all placeholders to images
+    let final_id = job_queue.next_id.load(Ordering::SeqCst).saturating_sub(1);
+    if final_id >= 1 {
+        while let Some(job) = job_queue.next() {
+            let id = format!("&*LOADING[{}]*&", job.0);
+            f = f.replace(&id, &job.1);
+            if job.0 >= final_id {
+                break;
+            }
+        }
+    }
+    f
 }
 
 fn comrak_options<'a>() -> ComrakOptions<'a> {
@@ -478,10 +542,33 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 n.url, content
             ));
         }
-        NodeValue::Image(_) => {
+        NodeValue::Image(n) => {
+            let url = n.url.clone();
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(&format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content));
+            let fallback = format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content);
+            if ctx.config.no_images || ctx.config.inline_encoder == InlineEncoder::Ascii {
+                ctx.write(&fallback);
+                return;
+            }
+            // config lives for the entire program duration
+            let mut config: McatConfig<'static> =
+                unsafe { std::mem::transmute(ctx.config.clone()) };
+            let id = ctx.job_queue.add(
+                move || {
+                    let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;
+                    let mut b = Vec::new();
+                    config.inline_options.height = None;
+                    config.inline_options.width = None;
+                    config.inline_options.center = false;
+                    config.inline_options.inline = true;
+                    catter::cat(tmp.path(), &mut b, &config)?;
+                    let img = String::from_utf8(b)?;
+                    Ok(img)
+                },
+                fallback,
+            );
+            ctx.write(&format!("&*LOADING[{id}]*&"));
         }
         NodeValue::Code(node_code) => {
             let surface = &ctx.theme.surface.bg;

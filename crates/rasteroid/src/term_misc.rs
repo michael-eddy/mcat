@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env, f32,
     io::Write,
-    sync::{Arc, OnceLock, atomic::AtomicBool},
+    sync::{Arc, Mutex, OnceLock, atomic::AtomicBool},
 };
 
 use base64::{Engine, engine::general_purpose};
@@ -42,7 +42,17 @@ pub fn loc_to_terminal(at: Option<(u16, u16)>) -> String {
     }
 }
 
-static WINSIZE: OnceLock<Wininfo> = OnceLock::new();
+#[derive(Clone)]
+struct WininfoParams {
+    spx: Size,
+    sc: Size,
+    scale: Option<f32>,
+    is_tmux: bool,
+    needs_inline: bool,
+}
+
+static WININFO_PARAMS: OnceLock<Mutex<WininfoParams>> = OnceLock::new();
+static WININFO: OnceLock<Wininfo> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct Size {
@@ -129,10 +139,29 @@ pub fn init_wininfo(
     is_tmux: bool,
     needs_inline: bool,
 ) -> Result<(), &'static str> {
-    WINSIZE
-        .set(Wininfo::new(spx, sc, scale, is_tmux, needs_inline))
-        .map_err(|_| "Winsize already initialized")?;
-    Ok(())
+    let params = WininfoParams {
+        spx: spx.clone(),
+        sc: sc.clone(),
+        scale,
+        is_tmux,
+        needs_inline,
+    };
+
+    if let Some(existing_params) = WININFO_PARAMS.get() {
+        // Already have params, update them (only if Wininfo not created yet)
+        if WININFO.get().is_none() {
+            *existing_params.lock().unwrap() = params;
+            Ok(())
+        } else {
+            Err("Wininfo already in use, cannot update parameters")
+        }
+    } else {
+        // First time setting params
+        WININFO_PARAMS
+            .set(Mutex::new(params))
+            .map_err(|_| "Failed to set parameters")?;
+        Ok(())
+    }
 }
 
 pub enum SizeDirection {
@@ -143,18 +172,35 @@ pub enum SizeDirection {
 /// call init_winsize before it if you need to;
 /// if not going to use 1920x1080, 100x20 fallback for when failing to query sizes
 pub fn get_wininfo() -> &'static Wininfo {
-    WINSIZE.get_or_init(|| {
-        let spx = Size {
-            width: 1920,
-            height: 1080,
-            force: false,
+    WININFO.get_or_init(|| {
+        let params = if let Some(params_mutex) = WININFO_PARAMS.get() {
+            params_mutex.lock().unwrap().clone()
+        } else {
+            // Default fallback
+            WininfoParams {
+                spx: Size {
+                    width: 1920,
+                    height: 1080,
+                    force: false,
+                },
+                sc: Size {
+                    width: 100,
+                    height: 20,
+                    force: false,
+                },
+                scale: None,
+                is_tmux: false,
+                needs_inline: false,
+            }
         };
-        let sc = Size {
-            width: 100,
-            height: 20,
-            force: false,
-        };
-        Wininfo::new(&spx, &sc, None, false, false)
+
+        Wininfo::new(
+            &params.spx,
+            &params.sc,
+            params.scale,
+            params.is_tmux,
+            params.needs_inline,
+        )
     })
 }
 

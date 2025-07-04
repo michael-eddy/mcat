@@ -1,3 +1,7 @@
+## Src
+- 🎉 markdown_viewer now renders images (can be disabled with `--no-images` flag)
+- 🎉 markdown_viewer now includes hyperlinks
+
 ## V0.3.8
 - 🎉 added autumn and spring themes
 - 📈 improved the markdown viewer (prettier, comments HTML, better line wrapping in code blocks)
