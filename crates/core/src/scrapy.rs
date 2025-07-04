@@ -3,9 +3,10 @@ use reqwest::Client;
 use scraper::Html;
 use tempfile::NamedTempFile;
 use tokio::runtime::Builder;
-    use indicatif::{ProgressBar, ProgressStyle};
-
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use std::sync::OnceLock;
 use std::io::Write;
+use std::time::Duration;
 
 use crate::catter;
 
@@ -121,6 +122,13 @@ fn extension_from_mime(mime: &str) -> Option<&'static str> {
     }
 }
 
+
+static GLOBAL_MULTI_PROGRESS: OnceLock<MultiProgress> = OnceLock::new();
+
+fn get_global_multi_progress() -> &'static MultiProgress {
+    GLOBAL_MULTI_PROGRESS.get_or_init(|| MultiProgress::new())
+}
+
 pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
@@ -129,8 +137,27 @@ pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Bo
     let rt = Builder::new_current_thread().enable_all().build()?;
 
     rt.block_on(async {
-        // Initial request to get the page
+        let initial_spinner = if !silent {
+            let pb = get_global_multi_progress().add(ProgressBar::new_spinner());
+            pb.set_style(ProgressStyle::default_spinner()
+                .template(&format!("{{spinner:.green}} Fetching {url}..."))?
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ "));
+            let pb_clone = pb.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                pb_clone.set_draw_target(ProgressDrawTarget::stderr());
+                pb_clone.enable_steady_tick(Duration::from_millis(100));
+            });
+            Some(pb)
+        } else {
+            None
+        };
+
         let response = client.get(url).send().await?;
+
+        if let Some(spinner) = initial_spinner {
+            spinner.finish_and_clear();
+        }
 
         if !response.status().is_success() {
             return Err(format!("Failed to retrieve URL: {}", response.status()).into());
@@ -152,8 +179,8 @@ pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Bo
                     .and_then(|cl| cl.parse::<u64>().ok());
                 
                 // Setup progress bar if not silent and content length is known
-                let progress_bar = if !silent && content_length.is_some() {
-                    let pb = ProgressBar::new(content_length.unwrap());
+                let progress_bar = if !silent && content_length.is_some() && content_length.unwrap() > 2_000_000 {
+                    let pb = get_global_multi_progress().add(ProgressBar::new(content_length.unwrap()));
                     pb.set_style(ProgressStyle::default_bar()
                         .template("{spinner:.green} [{bar:50.blue/white}] {bytes}/{total_bytes} ({percent}%)")?
                         .progress_chars("█▓▒░"));
@@ -239,7 +266,7 @@ pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Bo
 
         let mut biggest_media: Option<(usize, Vec<u8>, String)> = None;
 
-        for (media_url, media_type) in potential_media {
+        for (media_url, media_type) in potential_media.iter() {
             if let Ok(resolved_url) = reqwest::Url::parse(url).and_then(|base| base.join(&media_url)) {
                 if let Ok(media_response) = client.get(resolved_url.as_str()).send().await {
                     if media_response.status().is_success() {
@@ -251,8 +278,8 @@ pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Bo
                             .and_then(|cl| cl.parse::<u64>().ok());
                         
                         // Only create progress bar for media that's likely to be significant
-                        let progress_bar = if !silent && content_length.is_some() && content_length.unwrap() > 1_000_000 {
-                            let pb = ProgressBar::new(content_length.unwrap());
+                        let progress_bar = if !silent && content_length.is_some() && content_length.unwrap() > 2_000_000 {
+                            let pb = get_global_multi_progress().add(ProgressBar::new(content_length.unwrap()));
                             pb.set_style(ProgressStyle::default_bar()
                                 .template("{spinner:.green} [{bar:50.cyan/blue}] {bytes}/{total_bytes} ({percent}%)")?
                                 .progress_chars("█▓▒░ "));
@@ -275,7 +302,7 @@ pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Bo
                             }
                         }
                         
-                        // Finish the progress bar if we have one
+                        // Finish the progress bar
                         if let Some(pb) = progress_bar {
                             pb.finish_and_clear();
                         }
