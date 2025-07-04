@@ -3,10 +3,10 @@ use std::{
     collections::HashMap,
     str::FromStr,
     sync::{
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
-        mpsc::{self, Receiver, Sender},
     },
-    thread,
+    thread::{self, JoinHandle},
 };
 
 use comrak::{
@@ -34,19 +34,16 @@ const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
 const FAINT: &str = "\x1b[2m";
 
-pub struct JobQueue {
+pub struct JobManager {
     pub next_id: AtomicUsize,
-    tx: Sender<(usize, String)>,
-    rx: Receiver<(usize, String)>,
+    jobs: Arc<Mutex<HashMap<usize, JoinHandle<(usize, String)>>>>,
 }
 
-impl JobQueue {
+impl JobManager {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel();
-        JobQueue {
+        JobManager {
             next_id: AtomicUsize::new(0),
-            tx,
-            rx,
+            jobs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -55,19 +52,32 @@ impl JobQueue {
         F: FnOnce() -> Result<String, Box<dyn std::error::Error>> + Send + 'static,
     {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        let tx = self.tx.clone();
-
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             let result = job().unwrap_or(fallback);
-            let _ = tx.send((id, result));
+            (id, result)
         });
 
+        self.jobs.lock().unwrap().insert(id, handle);
         id
     }
 
-    /// Waits and returns the next finished job.
-    pub fn next(&self) -> Option<(usize, String)> {
-        self.rx.recv().ok()
+    /// Waits for all jobs to complete and returns their results
+    pub fn finish(self) -> Vec<(usize, String)> {
+        let jobs = Arc::try_unwrap(self.jobs)
+            .unwrap_or_else(|_| panic!("JobManager still has references"))
+            .into_inner()
+            .unwrap();
+
+        let mut results = Vec::new();
+        for (_, handle) in jobs {
+            if let Ok(result) = handle.join() {
+                results.push(result);
+            }
+        }
+
+        // Sort by id to maintain order
+        results.sort_by_key(|&(id, _)| id);
+        results
     }
 }
 
@@ -78,7 +88,7 @@ struct AnsiContext<'a> {
     line: AtomicUsize,
     output: String,
     config: &'a McatConfig<'a>,
-    job_queue: &'a JobQueue,
+    job_manager: &'a JobManager,
 }
 impl<'a> AnsiContext<'a> {
     fn write(&mut self, val: &str) {
@@ -107,7 +117,7 @@ impl<'a> AnsiContext<'a> {
             line,
             output: String::new(),
             config: self.config,
-            job_queue: self.job_queue,
+            job_manager: self.job_manager,
         };
         for child in node.children() {
             format_ast_node(child, &mut ctx);
@@ -126,7 +136,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
 
     let ps = SyntaxSet::load_defaults_newlines();
     let theme = get_theme(Some(config.theme));
-    let job_queue = JobQueue::new();
+    let job_manager = JobManager::new();
     let mut ctx = AnsiContext {
         ps,
         theme,
@@ -134,7 +144,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         output: String::new(),
         line: AtomicUsize::new(1),
         config,
-        job_queue: &job_queue,
+        job_manager: &job_manager,
     };
     ctx.write(&ctx.theme.foreground.fg.clone());
     format_ast_node(root, &mut ctx);
@@ -148,15 +158,9 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
     let mut f = lines.join("\n");
 
     // replace all placeholders to images
-    let final_id = job_queue.next_id.load(Ordering::SeqCst).saturating_sub(1);
-    if final_id >= 1 {
-        while let Some(job) = job_queue.next() {
-            let id = format!("&*LOADING[{}]*&", job.0);
-            f = f.replace(&id, &job.1);
-            if job.0 >= final_id {
-                break;
-            }
-        }
+    for (id, res) in job_manager.finish() {
+        let id = format!("&*LOADING[{}]*&", id);
+        f = f.replace(&id, &res);
     }
     f
 }
@@ -554,7 +558,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             // config lives for the entire program duration
             let mut config: McatConfig<'static> =
                 unsafe { std::mem::transmute(ctx.config.clone()) };
-            let id = ctx.job_queue.add(
+            let id = ctx.job_manager.add(
                 move || {
                     let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;
                     let mut b = Vec::new();
