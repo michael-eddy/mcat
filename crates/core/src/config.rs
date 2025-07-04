@@ -383,6 +383,16 @@ impl<'a> McatConfig<'a> {
             }
             Err(_) => {}
         }
+        match env::var("MCAT_NO_IMAGES") {
+            Ok(v) => {
+                self.no_images = if v == "1" || v.eq_ignore_ascii_case("true") {
+                    true
+                } else {
+                    self.no_images
+                }
+            }
+            Err(_) => {}
+        }
 
         self
     }
