@@ -14,7 +14,10 @@ use comrak::{
     nodes::{AstNode, NodeMath, NodeValue, Sourcepos},
     plugins::syntect::SyntectAdapterBuilder,
 };
-use rasteroid::{InlineEncoder, term_misc};
+use rasteroid::{
+    InlineEncoder,
+    term_misc::{self, break_size_string},
+};
 use regex::Regex;
 use strip_ansi_escapes::strip_str;
 use syntect::{
@@ -25,7 +28,7 @@ use syntect::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::{catter, config::McatConfig, scrapy};
+use crate::{UnwrapOrExit, catter, config::McatConfig, scrapy};
 
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
@@ -133,6 +136,15 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
     let arena = Arena::new();
     let opts = comrak_options();
     let root = comrak::parse_document(&arena, md, &opts);
+
+    // changing to forced inline in case of images rendered
+    let _ = term_misc::init_wininfo(
+        &break_size_string(config.inline_options.spx).unwrap_or_exit(),
+        &break_size_string(config.inline_options.spx).unwrap_or_exit(),
+        config.inline_options.scale,
+        config.is_tmux,
+        true,
+    );
 
     let ps = SyntaxSet::load_defaults_newlines();
     let theme = get_theme(Some(config.theme));
@@ -577,7 +589,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Code(node_code) => {
             let surface = &ctx.theme.surface.bg;
             let fg_surface = &ctx.theme.surface.fg;
-            let fg = &ctx.theme.string.fg;
+            let fg = &ctx.theme.function.fg;
             ctx.write(&format!(
                 "{fg_surface}{surface}{fg}{}{RESET}{fg_surface}{RESET}",
                 node_code.literal

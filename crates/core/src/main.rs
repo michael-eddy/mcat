@@ -367,14 +367,6 @@ fn main() {
     let main_format = concater::check_unified_format(&path_bufs);
     match main_format {
         "text" => {
-            // changing to forced inline in case of images rendered
-            let _ = term_misc::init_wininfo(
-                &spx,
-                &sc,
-                config.inline_options.scale,
-                config.is_tmux,
-                true,
-            );
             if path_bufs.len() == 1 {
                 catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
             } else {
