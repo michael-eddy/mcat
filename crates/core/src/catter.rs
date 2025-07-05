@@ -6,6 +6,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+use clap::error::Result;
 use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
     tty::IsTty,
@@ -45,10 +46,6 @@ pub fn cat(
         return Err(format!("invalid path: {}", path.display()).into());
     }
 
-    let resize_for_ascii = match opts.inline_encoder {
-        rasteroid::InlineEncoder::Ascii => true,
-        _ => false,
-    };
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -84,30 +81,7 @@ pub fn cat(
             match to {
                 "inline" => {
                     let dyn_img = image::load_from_memory(&img_data)?;
-                    let dyn_img = apply_pan_zoom_once(dyn_img, &opts);
-                    let (img, center, _, _) = dyn_img.resize_plus(
-                        opts.inline_options.width,
-                        opts.inline_options.height,
-                        resize_for_ascii,
-                        false,
-                    )?;
-                    if opts.report {
-                        rasteroid::term_misc::report_size(
-                            opts.inline_options.width.unwrap_or_default(),
-                            opts.inline_options.height.unwrap_or_default(),
-                        );
-                    }
-                    rasteroid::inline_an_image(
-                        &img,
-                        out,
-                        if opts.inline_options.center {
-                            Some(center)
-                        } else {
-                            None
-                        },
-                        None,
-                        &opts.inline_encoder,
-                    )?;
+                    print_image(out, dyn_img, opts)?;
                     return Ok(CatType::InlineImage);
                 }
                 "image" => {
@@ -175,19 +149,14 @@ pub fn cat(
             let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme));
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
-            let dyn_img = apply_pan_zoom_once(dyn_img, &opts);
-            let (img, center, _, _) = dyn_img.resize_plus(opts.inline_options.width, opts.inline_options.height, resize_for_ascii, false)?;
-            if opts.report {
-                rasteroid::term_misc::report_size(opts.inline_options.width.unwrap_or_default(), opts.inline_options.height.unwrap_or_default());
-            }
-            rasteroid::inline_an_image(&img, out, if opts.inline_options.center {Some(center)} else {None}, None, &opts.inline_encoder)?;
+            print_image(out, dyn_img, opts)?;
             Ok(CatType::InlineImage)
         },
         ("md", "interactive") => {
             let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme));
             let img_bytes = converter::html_to_image(&html)?;
             let img = image::load_from_memory(&img_bytes)?;
-            interact_with_image(img, opts, out, resize_for_ascii)?;
+            interact_with_image(img, opts, out)?;
             Ok(CatType::Interactive)
         },
         ("html", "image") => {
@@ -198,19 +167,14 @@ pub fn cat(
         ("html", "inline") => {
             let image = converter::html_to_image(&string_result.unwrap())?;
             let dyn_img = image::load_from_memory(&image)?;
-            let dyn_img = apply_pan_zoom_once(dyn_img, &opts);
-            let (img, center, _, _) = dyn_img.resize_plus(opts.inline_options.width, opts.inline_options.height, resize_for_ascii, false)?;
-            if opts.report {
-                rasteroid::term_misc::report_size(opts.inline_options.width.unwrap_or_default(), opts.inline_options.height.unwrap_or_default());
-            }
-            rasteroid::inline_an_image(&img, out, if opts.inline_options.center {Some(center)} else {None}, None, &opts.inline_encoder)?;
+            print_image(out, dyn_img, opts)?;
             Ok(CatType::InlineImage)
         },
         ("html", "interactive") => {
             let html = &string_result.unwrap();
             let img_bytes = converter::html_to_image(&html)?;
             let img = image::load_from_memory(&img_bytes)?;
-            interact_with_image(img, opts, out, resize_for_ascii)?;
+            interact_with_image(img, opts, out)?;
             Ok(CatType::Interactive)
         },
         ("image", "image") => {
@@ -220,7 +184,7 @@ pub fn cat(
         },
         ("image", "interactive") => {
             let img = image_result.unwrap();
-            interact_with_image(img, opts, out, resize_for_ascii)?;
+            interact_with_image(img, opts, out)?;
             Ok(CatType::Interactive)
         },
         ("md" | "html", _) => {
@@ -252,12 +216,7 @@ pub fn cat(
         },
         ("image", _) => {
             // default for image
-            let image_result = apply_pan_zoom_once(image_result.unwrap(), &opts);
-            let (img, center, _, _) = image_result.resize_plus(opts.inline_options.width, opts.inline_options.height, resize_for_ascii, false)?;
-            if opts.report {
-                rasteroid::term_misc::report_size(opts.inline_options.width.unwrap_or_default(), opts.inline_options.height.unwrap_or_default());
-            }
-            rasteroid::inline_an_image(&img, out, if opts.inline_options.center {Some(center)} else {None}, None, &opts.inline_encoder)?;
+            print_image(out, image_result.unwrap(), opts)?;
             Ok(CatType::InlineImage)
         },
         _ => Err(format!(
@@ -265,6 +224,44 @@ pub fn cat(
             from, to
         ).into()),
     }
+}
+
+fn print_image(
+    out: &mut impl Write,
+    dyn_img: DynamicImage,
+    opts: &McatConfig,
+) -> Result<(), Box<dyn Error>> {
+    let resize_for_ascii = match opts.inline_encoder {
+        rasteroid::InlineEncoder::Ascii => true,
+        _ => false,
+    };
+
+    let dyn_img = apply_pan_zoom_once(dyn_img, &opts);
+    let (img, center, _, _) = dyn_img.resize_plus(
+        opts.inline_options.width,
+        opts.inline_options.height,
+        resize_for_ascii,
+        false,
+    )?;
+    if opts.report {
+        rasteroid::term_misc::report_size(
+            opts.inline_options.width.unwrap_or_default(),
+            opts.inline_options.height.unwrap_or_default(),
+        );
+    }
+    rasteroid::inline_an_image(
+        &img,
+        out,
+        if opts.inline_options.center {
+            Some(center)
+        } else {
+            None
+        },
+        None,
+        &opts.inline_encoder,
+    )?;
+
+    Ok(())
 }
 
 fn apply_pan_zoom_once(img: DynamicImage, opts: &McatConfig) -> DynamicImage {
@@ -291,13 +288,17 @@ fn interact_with_image(
     img: DynamicImage,
     opts: &McatConfig,
     out: &mut impl Write,
-    resize_for_ascii: bool,
 ) -> Result<(), Box<dyn Error>> {
     let tinfo = term_misc::get_wininfo();
     let container_width = tinfo.spx_width as u32;
     let container_height = tinfo.spx_height as u32;
     let image_width = img.width();
     let image_height = img.height();
+
+    let resize_for_ascii = match opts.inline_encoder {
+        rasteroid::InlineEncoder::Ascii => true,
+        _ => false,
+    };
 
     let height_cells = term_misc::dim_to_cells(
         opts.inline_options.height.unwrap_or_default(),
