@@ -580,6 +580,17 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             // config lives for the entire program duration
             let mut config: McatConfig<'static> =
                 unsafe { std::mem::transmute(ctx.config.clone()) };
+            // only kitty can handle big images well
+            match (config.inline_encoder, config.md_image_render) {
+                (InlineEncoder::Kitty, MdImageRender::Auto) => {
+                    config.md_image_render = MdImageRender::All
+                }
+                (InlineEncoder::Iterm, MdImageRender::Auto)
+                | (InlineEncoder::Sixel, MdImageRender::Auto) => {
+                    config.md_image_render = MdImageRender::Small
+                }
+                _ => {}
+            }
             let id = ctx.job_manager.add(
                 move || {
                     let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;

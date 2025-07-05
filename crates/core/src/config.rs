@@ -183,11 +183,12 @@ pub enum FnAndLeave {
     Report,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MdImageRender {
     All,
     Small,
     None,
+    Auto,
 }
 
 impl<'a> Default for McatConfig<'a> {
@@ -204,7 +205,7 @@ impl<'a> Default for McatConfig<'a> {
             hidden: false,
             report: false,
             no_linenumbers: false,
-            md_image_render: MdImageRender::Small,
+            md_image_render: MdImageRender::Auto,
             horizontal_image_stacking: false,
             style_html: false,
             theme: "dark",
@@ -294,6 +295,7 @@ impl<'a> McatConfig<'a> {
                 "all" => MdImageRender::All,
                 "small" => MdImageRender::Small,
                 "none" => MdImageRender::None,
+                "auto" => MdImageRender::Auto,
                 _ => self.md_image_render,
             },
             None => self.md_image_render,
@@ -402,6 +404,7 @@ impl<'a> McatConfig<'a> {
                     "all" => MdImageRender::All,
                     "small" => MdImageRender::Small,
                     "none" => MdImageRender::None,
+                    "auto" => MdImageRender::Auto,
                     _ => self.md_image_render,
                 };
             }

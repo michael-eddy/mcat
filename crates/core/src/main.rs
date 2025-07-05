@@ -80,8 +80,8 @@ fn build_markdown_viewer_args() -> Vec<Arg> {
         Arg::new("md-image")
             .long("md-image")
             .value_name("mode")
-            .help("what images to render in the markdown [default: small]")
-            .value_parser(["all", "small", "none"]),
+            .help("what images to render in the markdown [default: auto]")
+            .value_parser(["all", "small", "none", "auto"]),
         Arg::new("color")
             .long("color")
             .value_name("mode")
