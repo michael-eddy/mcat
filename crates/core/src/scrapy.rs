@@ -3,7 +3,7 @@ use reqwest::Client;
 use scraper::Html;
 use tempfile::NamedTempFile;
 use tokio::runtime::Builder;
-use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::sync::OnceLock;
 use std::io::Write;
 use std::time::Duration;
@@ -142,18 +142,26 @@ pub fn scrape_biggest_media(url: &str, silent: bool) -> Result<NamedTempFile, Bo
             pb.set_style(ProgressStyle::default_spinner()
                 .template(&format!("{{spinner:.green}} Fetching {url}..."))?
                 .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ "));
-            let pb_clone = pb.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(300)).await;
-                pb_clone.set_draw_target(ProgressDrawTarget::stderr());
-                pb_clone.enable_steady_tick(Duration::from_millis(100));
-            });
             Some(pb)
         } else {
             None
         };
 
-        let response = client.get(url).send().await?;
+        let request_future = client.get(url).send();
+        tokio::pin!(request_future);
+
+        let response = tokio::select! {
+            result = &mut request_future => {
+                result
+            }
+            _ = tokio::time::sleep(Duration::from_millis(300)) => {
+                // Request is taking too long, start spinner and wait for it
+                if let Some(ref spinner) = initial_spinner {
+                    spinner.enable_steady_tick(Duration::from_millis(100));
+                }
+                request_future.await
+            }
+        }?;
 
         if let Some(spinner) = initial_spinner {
             spinner.finish_and_clear();
