@@ -616,13 +616,8 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.write(&format!("&*LOADING[{id}]*&"));
         }
         NodeValue::Code(node_code) => {
-            let surface = &ctx.theme.surface.bg;
-            let fg_surface = &ctx.theme.surface.fg;
-            let fg = &ctx.theme.function.fg;
-            ctx.write(&format!(
-                "{fg_surface}{surface}{fg}{}{RESET}{fg_surface}{RESET}",
-                node_code.literal
-            ));
+            let fg = &ctx.theme.green.fg;
+            ctx.write(&format!("{fg}{}{RESET}", node_code.literal));
         }
         NodeValue::TaskItem(task) => {
             let offset = " ".repeat(data.sourcepos.start.column - 1);
@@ -911,7 +906,7 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         None => (lang.to_owned(), ""),
     };
 
-    let top = format!("{color}[ {} ]{RESET}\n", title);
+    let top = format!("{color}{}{RESET}\n", title);
     let surface = ctx.theme.surface.bg.clone();
 
     let ts = ctx.theme.to_syntect_theme();
