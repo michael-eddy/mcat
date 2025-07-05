@@ -14,6 +14,7 @@ use comrak::{
     nodes::{AstNode, NodeMath, NodeValue, Sourcepos},
     plugins::syntect::SyntectAdapterBuilder,
 };
+use image::GenericImageView;
 use rasteroid::{
     InlineEncoder,
     term_misc::{self, break_size_string},
@@ -28,7 +29,11 @@ use syntect::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::{UnwrapOrExit, catter, config::McatConfig, scrapy};
+use crate::{
+    UnwrapOrExit, catter,
+    config::{McatConfig, MdImageRender},
+    scrapy,
+};
 
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
@@ -563,19 +568,43 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
             let fallback = format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content);
-            if ctx.config.no_images || ctx.config.inline_encoder == InlineEncoder::Ascii {
+
+            // no images wanted.
+            if ctx.config.md_image_render == MdImageRender::None
+                || ctx.config.inline_encoder == InlineEncoder::Ascii
+            {
                 ctx.write(&fallback);
                 return;
             }
+
             // config lives for the entire program duration
             let mut config: McatConfig<'static> =
                 unsafe { std::mem::transmute(ctx.config.clone()) };
             let id = ctx.job_manager.add(
                 move || {
                     let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;
+                    let img = image::open(tmp.path()).unwrap_or_default();
+                    let (width, height) = img.dimensions();
+                    let tinfo = term_misc::get_wininfo();
+
+                    if ((width > (tinfo.spx_width as f32 * 0.2) as u32)
+                        || (height > (tinfo.spx_height as f32 * 0.2) as u32))
+                        && config.md_image_render == MdImageRender::Small
+                    {
+                        return Err("image too big and user asked for small images only".into());
+                    }
+
+                    if width + 50 > (tinfo.spx_width as f32 * 0.8) as u32 {
+                        config.inline_options.width = Some("80%");
+                    } else {
+                        config.inline_options.width = None;
+                    }
+                    if height + 50 > (tinfo.spx_height as f32 * 0.4) as u32 {
+                        config.inline_options.height = Some("40%");
+                    } else {
+                        config.inline_options.height = None;
+                    }
                     let mut b = Vec::new();
-                    config.inline_options.height = None;
-                    config.inline_options.width = None;
                     config.inline_options.center = false;
                     config.inline_options.inline = true;
                     catter::cat(tmp.path(), &mut b, &config)?;

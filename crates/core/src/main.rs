@@ -38,6 +38,7 @@ fn build_core_args() -> Vec<Arg> {
         Arg::new("output")
             .long("output")
             .short('o')
+            .value_name("type")
             .help("Output format")
             .value_parser(["html", "md", "image", "video", "inline", "interactive"]),
         Arg::new("theme")
@@ -76,12 +77,14 @@ fn build_markdown_viewer_args() -> Vec<Arg> {
             .long("no-linenumbers")
             .help("Disable line numbers in code blocks")
             .action(clap::ArgAction::SetTrue),
-        Arg::new("no-images")
-            .long("no-images")
-            .help("if set, the markdown viewer won't render images")
-            .action(clap::ArgAction::SetTrue),
+        Arg::new("md-image")
+            .long("md-image")
+            .value_name("mode")
+            .help("what images to render in the markdown [default: small]")
+            .value_parser(["all", "small", "none"]),
         Arg::new("color")
             .long("color")
+            .value_name("mode")
             .help("Control ANSI formatting [default: auto]")
             .value_parser(["never", "always", "auto"]),
         Arg::new("color-never")
@@ -94,9 +97,11 @@ fn build_markdown_viewer_args() -> Vec<Arg> {
             .action(clap::ArgAction::SetTrue),
         Arg::new("pager")
             .long("pager")
+            .value_name("command")
             .help("Modify the default pager [default: 'less -r']"),
         Arg::new("paging")
             .long("paging")
+            .value_name("mode")
             .help("Control paging behavior [default: auto]")
             .value_parser(["never", "always", "auto"]),
         Arg::new("paging-never")
@@ -172,6 +177,7 @@ fn build_fetcher_args() -> Vec<Arg> {
     vec![
         Arg::new("generate-completions")
             .long("generate")
+            .value_name("shell")
             .help("Generate shell completions")
             .value_parser(["bash", "zsh", "fish", "powershell"]),
         Arg::new("fetch-chromium")

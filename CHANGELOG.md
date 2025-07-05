@@ -1,5 +1,5 @@
 ## Src
-- 🎉 markdown_viewer now renders images (can be disabled with `--no-images` flag)
+- 🎉 markdown_viewer now renders images (can be disabled with `--md-image none` flag)
 - 🎉 markdown_viewer now includes hyperlinks
 
 ## V0.3.8

@@ -138,7 +138,7 @@ pub struct McatConfig<'a> {
     pub hidden: bool,
     pub report: bool,
     pub no_linenumbers: bool,
-    pub no_images: bool,
+    pub md_image_render: MdImageRender,
     pub horizontal_image_stacking: bool,
     pub style_html: bool,
     pub theme: &'a str,
@@ -183,6 +183,13 @@ pub enum FnAndLeave {
     Report,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum MdImageRender {
+    All,
+    Small,
+    None,
+}
+
 impl<'a> Default for McatConfig<'a> {
     fn default() -> Self {
         McatConfig {
@@ -197,7 +204,7 @@ impl<'a> Default for McatConfig<'a> {
             hidden: false,
             report: false,
             no_linenumbers: false,
-            no_images: false,
+            md_image_render: MdImageRender::Small,
             horizontal_image_stacking: false,
             style_html: false,
             theme: "dark",
@@ -282,9 +289,15 @@ impl<'a> McatConfig<'a> {
         if opts.get_flag("no-linenumbers") {
             self.no_linenumbers = true;
         }
-        if opts.get_flag("no-images") {
-            self.no_images = true;
-        }
+        self.md_image_render = match opts.get_one::<String>("md-image") {
+            Some(v) => match v.as_str() {
+                "all" => MdImageRender::All,
+                "small" => MdImageRender::Small,
+                "none" => MdImageRender::None,
+                _ => self.md_image_render,
+            },
+            None => self.md_image_render,
+        };
         if opts.get_flag("horizontal") {
             self.horizontal_image_stacking = true;
         }
@@ -383,13 +396,14 @@ impl<'a> McatConfig<'a> {
             }
             Err(_) => {}
         }
-        match env::var("MCAT_NO_IMAGES") {
+        match env::var("MCAT_MD_IMAGE") {
             Ok(v) => {
-                self.no_images = if v == "1" || v.eq_ignore_ascii_case("true") {
-                    true
-                } else {
-                    self.no_images
-                }
+                self.md_image_render = match v.to_lowercase().as_str() {
+                    "all" => MdImageRender::All,
+                    "small" => MdImageRender::Small,
+                    "none" => MdImageRender::None,
+                    _ => self.md_image_render,
+                };
             }
             Err(_) => {}
         }
