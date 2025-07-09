@@ -613,7 +613,13 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     if height + 50 > (tinfo.spx_height as f32 * 0.4) as u32 {
                         config.inline_options.height = Some("40%");
                     } else {
-                        config.inline_options.height = None;
+                        config.inline_options.height =
+                            if config.md_image_render == MdImageRender::Small {
+                                // 1 line should be easy
+                                Some("1c")
+                            } else {
+                                None
+                            };
                     }
                     let mut b = Vec::new();
                     config.inline_options.center = false;
@@ -750,7 +756,7 @@ pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str
         ("kt", ("\u{e634}", "\x1b[38;5;141m")),
         ("dart", ("\u{e798}", "\x1b[38;5;39m")), // Dart blue
         ("lua", ("\u{e620}", "\x1b[38;5;33m")),  // Lua blue
-        ("sh", ("\u{f489}", "\x1b[38;5;34m")),   // Shell green
+        ("sh", ("\u{ebca}", "\x1b[38;5;34m")),   // Shell green
         ("bash", ("\u{f489}", "\x1b[38;5;34m")),
         ("zsh", ("\u{f489}", "\x1b[38;5;34m")),
         ("fish", ("\u{f489}", "\x1b[38;5;34m")),
@@ -917,7 +923,7 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
         None => (lang.to_owned(), ""),
     };
 
-    let top = format!("{color}{}{RESET}\n", title);
+    let top = format!(" {color}{}{RESET}\n", title);
     let surface = ctx.theme.surface.bg.clone();
 
     let ts = ctx.theme.to_syntect_theme();
