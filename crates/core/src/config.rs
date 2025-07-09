@@ -300,6 +300,9 @@ impl<'a> McatConfig<'a> {
             },
             None => self.md_image_render,
         };
+        if opts.get_flag("fast") {
+            self.md_image_render = MdImageRender::None
+        }
         if opts.get_flag("horizontal") {
             self.horizontal_image_stacking = true;
         }

@@ -82,6 +82,10 @@ fn build_markdown_viewer_args() -> Vec<Arg> {
             .value_name("mode")
             .help("what images to render in the markdown [default: auto]")
             .value_parser(["all", "small", "none", "auto"]),
+        Arg::new("fast")
+            .short('f')
+            .help("sets md-image to none, for speed.")
+            .action(clap::ArgAction::SetTrue),
         Arg::new("color")
             .long("color")
             .value_name("mode")
