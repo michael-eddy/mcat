@@ -139,7 +139,6 @@ pub struct McatConfig<'a> {
     pub report: bool,
     pub no_linenumbers: bool,
     pub md_image_render: MdImageRender,
-    pub md_big_text: bool,
     pub horizontal_image_stacking: bool,
     pub style_html: bool,
     pub theme: &'a str,
@@ -207,7 +206,6 @@ impl<'a> Default for McatConfig<'a> {
             report: false,
             no_linenumbers: false,
             md_image_render: MdImageRender::Auto,
-            md_big_text: false,
             horizontal_image_stacking: false,
             style_html: false,
             theme: "dark",
@@ -286,7 +284,6 @@ impl<'a> McatConfig<'a> {
         if opts.get_flag("silent") {
             self.silent = true;
         }
-        self.md_big_text = !opts.get_flag("disbale-tsize") && env.term_contains("kitty");
         if opts.get_flag("hidden") {
             self.hidden = true;
         }
