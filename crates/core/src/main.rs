@@ -4,6 +4,7 @@ mod concater;
 mod config;
 mod converter;
 mod fetch_manager;
+mod html2md;
 mod image_viewer;
 mod inspector;
 mod markdown;

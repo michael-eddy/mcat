@@ -32,6 +32,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::{
     UnwrapOrExit, catter,
     config::{McatConfig, MdImageRender},
+    html2md::MarkdownHtmlPreprocessor,
     scrapy,
 };
 
@@ -138,6 +139,9 @@ impl<'a> AnsiContext<'a> {
     }
 }
 pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
+    let html_preprocessor = MarkdownHtmlPreprocessor::new();
+    let md = &html_preprocessor.process(md);
+
     let arena = Arena::new();
     let opts = comrak_options();
     let root = comrak::parse_document(&arena, md, &opts);
@@ -293,16 +297,8 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.write(str);
         }
         NodeValue::BlockQuote => {
-            let block_content = ctx.collect(node);
-            let color = ctx.theme.guide.fg.clone();
-            let comment = ctx.theme.comment.fg.clone();
-
-            for (i, line) in block_content.lines().enumerate() {
-                if i != 0 {
-                    ctx.cr();
-                }
-                ctx.write(&format!("{color}▌{RESET} {comment}{}{RESET}", line));
-            }
+            let content = ctx.collect(node);
+            format_blockquote(ctx, 0, content);
         }
         NodeValue::List(node_list) => {
             let list_type = &node_list.list_type;
@@ -453,7 +449,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             ctx.write(&format!("{main_color}{bg}{content}{padding}{RESET}",));
         }
         NodeValue::ThematicBreak => {
-            let br = br();
+            let br = br(sps.start.column);
             let border = ctx.theme.guide.fg.clone();
             ctx.write(&format!("{border}{br}{RESET}"));
         }
@@ -596,6 +592,11 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;
                     let img = image::open(tmp.path()).unwrap_or_default();
                     let (width, height) = img.dimensions();
+                    // if let Some(fragment) = url.split('#').nth(1) {
+                    //     let parts: Vec<&str> = fragment.split('x').collect();
+                    //     width = parts[0].parse::<u32>().unwrap_or(width);
+                    //     height = parts[1].parse::<u32>().unwrap_or(height);
+                    // }
                     let tinfo = term_misc::get_wininfo();
 
                     if ((width > (tinfo.spx_width as f32 * 0.2) as u32)
@@ -663,15 +664,8 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::MultilineBlockQuote(node_multi_line) => {
             let content = ctx.collect(node);
-            let guide = ctx.theme.guide.fg.clone();
-            let comment = ctx.theme.comment.fg.clone();
-            for (i, line) in content.lines().enumerate() {
-                if i != 0 {
-                    ctx.cr();
-                }
-                let offset = " ".repeat(node_multi_line.fence_offset + 1);
-                ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"));
-            }
+            let offset = node_multi_line.fence_offset;
+            format_blockquote(ctx, offset, content);
         }
         NodeValue::WikiLink(_) => {
             let content = ctx.collect(node);
@@ -720,6 +714,18 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Underline => {}            //disabled
         NodeValue::Subscript => {}            //disabled
         NodeValue::FootnoteReference(_) => {} // disabled
+    }
+}
+
+fn format_blockquote(ctx: &mut AnsiContext, fence_offset: usize, content: String) {
+    let guide = ctx.theme.guide.fg.clone();
+    let comment = ctx.theme.comment.fg.clone();
+    for (i, line) in content.lines().enumerate() {
+        if i != 0 {
+            ctx.cr();
+        }
+        let offset = " ".repeat(fence_offset + 1);
+        ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"));
     }
 }
 
@@ -1023,8 +1029,10 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     ctx.write(&last_border);
 }
 
-fn br() -> String {
-    "━".repeat(term_misc::get_wininfo().sc_width as usize)
+fn br(indent: usize) -> String {
+    let w = term_misc::get_wininfo().sc_width as usize;
+    // sps starts at 1
+    "━".repeat(w.saturating_sub(indent.saturating_sub(1)))
 }
 
 #[derive(Debug, Clone)]
