@@ -2,11 +2,7 @@ use core::str;
 use std::{
     collections::HashMap,
     str::FromStr,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
-    thread::{self, JoinHandle},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use comrak::{
@@ -14,11 +10,7 @@ use comrak::{
     nodes::{AstNode, NodeMath, NodeValue, Sourcepos},
     plugins::syntect::SyntectAdapterBuilder,
 };
-use image::GenericImageView;
-use rasteroid::{
-    InlineEncoder,
-    term_misc::{self, break_size_string},
-};
+use rasteroid::term_misc::{self, break_size_string};
 use regex::Regex;
 use strip_ansi_escapes::strip_str;
 use syntect::{
@@ -29,12 +21,7 @@ use syntect::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::{
-    UnwrapOrExit, catter,
-    config::{McatConfig, MdImageRender},
-    html2md::MarkdownHtmlPreprocessor,
-    scrapy,
-};
+use crate::{UnwrapOrExit, config::McatConfig, html2md::MarkdownHtmlPreprocessor};
 
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
@@ -43,53 +30,6 @@ const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
 const FAINT: &str = "\x1b[2m";
 
-pub struct JobManager {
-    pub next_id: AtomicUsize,
-    jobs: Arc<Mutex<HashMap<usize, JoinHandle<(usize, String)>>>>,
-}
-
-impl JobManager {
-    pub fn new() -> Self {
-        JobManager {
-            next_id: AtomicUsize::new(0),
-            jobs: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    pub fn add<F>(&self, job: F, fallback: String) -> usize
-    where
-        F: FnOnce() -> Result<String, Box<dyn std::error::Error>> + Send + 'static,
-    {
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        let handle = thread::spawn(move || {
-            let result = job().unwrap_or(fallback);
-            (id, result)
-        });
-
-        self.jobs.lock().unwrap().insert(id, handle);
-        id
-    }
-
-    /// Waits for all jobs to complete and returns their results
-    pub fn finish(self) -> Vec<(usize, String)> {
-        let jobs = Arc::try_unwrap(self.jobs)
-            .unwrap_or_else(|_| panic!("JobManager still has references"))
-            .into_inner()
-            .unwrap();
-
-        let mut results = Vec::new();
-        for (_, handle) in jobs {
-            if let Ok(result) = handle.join() {
-                results.push(result);
-            }
-        }
-
-        // Sort by id to maintain order
-        results.sort_by_key(|&(id, _)| id);
-        results
-    }
-}
-
 struct AnsiContext<'a> {
     ps: SyntaxSet,
     theme: CustomTheme,
@@ -97,13 +37,46 @@ struct AnsiContext<'a> {
     line: AtomicUsize,
     output: String,
     config: &'a McatConfig,
-    job_manager: &'a JobManager,
+    center: bool,
+    close_center: bool,
 }
 impl<'a> AnsiContext<'a> {
-    fn write(&mut self, val: &str) {
+    fn write(&mut self, val: &str, le: Option<i32>) {
         let fg = self.theme.foreground.fg.clone();
         let val = val.replace(RESET, &format!("{RESET}{fg}"));
-        self.output.push_str(&val);
+        if !self.center || le.is_none() {
+            self.output.push_str(&val);
+            return;
+        }
+        if let Some(le) = le {
+            // -1 is just me saying calculate it yourself.
+            // none should be don't center me
+            // value should be use that size (e.g. images)
+            for line in val.lines() {
+                if line.contains("___DONT_CENTER_FLAG___") {
+                    let line = line.replace("___DONT_CENTER_FLAG___", "");
+                    self.output.push_str(&line);
+                    continue;
+                }
+                let le = if le == -1 {
+                    string_len(&line)
+                } else {
+                    le as usize
+                };
+                let sw = term_misc::get_wininfo().sc_width;
+                let offset = (sw as usize).saturating_sub(le).saturating_div(2);
+                self.output
+                    .push_str(&format!("{}{line}\n", " ".repeat(offset)));
+            }
+            if self.output.ends_with("\n") {
+                self.output.pop();
+            }
+            if self.close_center {
+                self.close_center = false;
+                self.center = false;
+            }
+            return;
+        }
     }
     fn cr(&mut self) {
         self.output.push('\n');
@@ -117,7 +90,7 @@ impl<'a> AnsiContext<'a> {
         }
         self.line.store(sps.end.line, Ordering::SeqCst);
     }
-    fn collect<'b>(&self, node: &'b AstNode<'b>) -> String {
+    fn collect<'b>(&mut self, node: &'b AstNode<'b>) -> String {
         let line = AtomicUsize::new(node.data.borrow().sourcepos.start.line);
         let mut ctx = AnsiContext {
             ps: self.ps.clone(),
@@ -126,16 +99,15 @@ impl<'a> AnsiContext<'a> {
             line,
             output: String::new(),
             config: self.config,
-            job_manager: self.job_manager,
+            center: self.center,
+            close_center: self.close_center,
         };
         for child in node.children() {
             format_ast_node(child, &mut ctx);
         }
+        self.center = ctx.center;
+        self.close_center = ctx.close_center;
         ctx.output
-    }
-    fn collect_and_write<'b>(&mut self, node: &'b AstNode<'b>) {
-        let text = self.collect(node);
-        self.write(&text);
     }
 }
 pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
@@ -157,7 +129,6 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
 
     let ps = SyntaxSet::load_defaults_newlines();
     let theme = get_theme(Some(&config.theme));
-    let job_manager = JobManager::new();
     let mut ctx = AnsiContext {
         ps,
         theme,
@@ -165,9 +136,10 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         output: String::new(),
         line: AtomicUsize::new(1),
         config,
-        job_manager: &job_manager,
+        center: false,
+        close_center: false,
     };
-    ctx.write(&ctx.theme.foreground.fg.clone());
+    ctx.write(&ctx.theme.foreground.fg.clone(), None);
     format_ast_node(root, &mut ctx);
 
     // making sure its wrapped to fit into the termianl size
@@ -176,14 +148,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
             .into_iter()
             .map(|cow| cow.into_owned())
             .collect();
-    let mut f = lines.join("\n");
-
-    // replace all placeholders to images
-    for (id, res) in job_manager.finish() {
-        let id = format!("&*LOADING[{}]*&", id);
-        f = f.replace(&id, &res);
-    }
-    f
+    lines.join("\n")
 }
 
 fn comrak_options<'a>() -> ComrakOptions<'a> {
@@ -294,7 +259,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::FrontMatter(str) => {
             // no idea what that is.
-            ctx.write(str);
+            ctx.write(str, None);
         }
         NodeValue::BlockQuote => {
             let content = ctx.collect(node);
@@ -345,7 +310,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let offset = " ".repeat(offset);
 
                 if bullet.is_empty() {
-                    ctx.write(&format!("{offset}{line}"));
+                    ctx.write(&format!("{offset}{line}"), None);
                 } else {
                     let line = if line.contains("\0") {
                         let line = line.replace("\0", &format!("{bullet}{RESET}"));
@@ -353,7 +318,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     } else {
                         format!("  {line}")
                     };
-                    ctx.write(&format!("{offset}{line}"));
+                    ctx.write(&format!("{offset}{line}"), None);
                 }
             }
 
@@ -376,10 +341,13 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::Item(_) => {
             let content = ctx.collect(node);
             let yellow = &ctx.theme.yellow.fg;
-            ctx.write(&format!(
-                "{}{yellow}\0 {content}",
-                " ".repeat(data.sourcepos.start.column - 1)
-            ));
+            ctx.write(
+                &format!(
+                    "{}{yellow}\0 {content}",
+                    " ".repeat(data.sourcepos.start.column - 1)
+                ),
+                None,
+            );
         }
         NodeValue::CodeBlock(node_code_block) => {
             let code = &node_code_block.literal;
@@ -410,22 +378,26 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let border_line = "─".repeat(border_width);
                 let spaces = " ".repeat(center_padding);
 
-                ctx.write(&format!("{spaces}┌{border_line}┐\n"));
-                ctx.write(&format!("{spaces}│  {fg_yellow}{BOLD}{title}{RESET}  │\n"));
-                ctx.write(&format!("{spaces}└{border_line}┘\n"));
+                ctx.write(&format!("{spaces}┌{border_line}┐\n"), None);
+                ctx.write(
+                    &format!("{spaces}│  {fg_yellow}{BOLD}{title}{RESET}  │\n"),
+                    None,
+                );
+                ctx.write(&format!("{spaces}└{border_line}┘\n"), None);
                 return;
             }
 
             for line in node_html_block.literal.lines() {
                 let comment = &ctx.theme.comment.fg;
-                ctx.write(&format!("{comment}{line}{RESET}\n"));
+                ctx.write(&format!("{comment}{line}{RESET}\n"), Some(-1));
             }
             if ctx.output.ends_with('\n') {
                 ctx.output.pop();
             }
         }
         NodeValue::Paragraph => {
-            ctx.collect_and_write(node);
+            let tx = ctx.collect(node);
+            ctx.write(&tx, Some(-1));
         }
         NodeValue::Heading(node_heading) => {
             let content = ctx.collect(node);
@@ -439,20 +411,32 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 _ => unreachable!(),
             };
             let bg = &ctx.theme.keyword_bg.bg;
-            let padding = " ".repeat(
-                term_misc::get_wininfo()
-                    .sc_width
-                    .saturating_sub(string_len(&content) as u16)
-                    .into(),
-            );
-            let main_color = ctx.theme.keyword.fg.clone();
-            ctx.write(&format!("{main_color}{bg}{content}{padding}{RESET}",));
+            let main_color = &ctx.theme.keyword.fg;
+            let content = content.replace(RESET, &format!("{RESET}{bg}"));
+            if !ctx.center {
+                let padding = " ".repeat(
+                    term_misc::get_wininfo()
+                        .sc_width
+                        .saturating_sub(string_len(&content) as u16)
+                        .into(),
+                );
+                let wr = &format!("{main_color}{bg}{content}{padding}{RESET}",);
+                ctx.write(wr, None);
+            } else {
+                let sw = term_misc::get_wininfo().sc_width as usize;
+                let le = string_len(&content);
+                let left_space = sw.saturating_sub(le);
+                let padding_left = left_space.saturating_div(2);
+                let padding_rigth = left_space - padding_left;
+                let wr = &format!(
+                    "{main_color}{bg}{}{content}{}{RESET}",
+                    " ".repeat(padding_left),
+                    " ".repeat(padding_rigth)
+                );
+                ctx.write(wr, None);
+            }
         }
-        NodeValue::ThematicBreak => {
-            let br = br(sps.start.column);
-            let border = ctx.theme.guide.fg.clone();
-            ctx.write(&format!("{border}{br}{RESET}"));
-        }
+        NodeValue::ThematicBreak => format_tb(ctx, sps.start.column),
         NodeValue::FootnoteDefinition(_) => {}
         NodeValue::Table(table) => {
             let alignments = &table.alignments;
@@ -502,12 +486,12 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let top_border = build_line("╭", "┬", "╮", "─");
                 let middle_border = build_line("├", "┼", "┤", "─");
                 let bottom_border = build_line("╰", "┴", "╯", "─");
-                ctx.write(&top_border);
+                ctx.write(&top_border, Some(-1));
                 ctx.cr();
 
                 for (i, row) in rows.iter().enumerate() {
                     // Print the row content
-                    ctx.write(&format!("{color}│{RESET}"));
+                    ctx.write(&format!("{color}│{RESET}"), Some(-1));
                     for (j, cell) in row.iter().enumerate() {
                         let width = column_widths[j];
                         let padding = width - string_len(cell);
@@ -518,123 +502,83 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                             comrak::nodes::TableAlignment::Right => (padding, 0),
                             _ => (0, padding),
                         };
-                        ctx.write(&format!(
-                            " {}{}{} {color}│{RESET}",
-                            " ".repeat(left_pad),
-                            cell,
-                            " ".repeat(right_pad)
-                        ));
+                        ctx.write(
+                            &format!(
+                                " {}{}{} {color}│{RESET}",
+                                " ".repeat(left_pad),
+                                cell,
+                                " ".repeat(right_pad)
+                            ),
+                            Some(-1),
+                        );
                     }
-                    ctx.write("\n");
+                    ctx.write("\n", None);
 
                     if i == 0 {
-                        ctx.write(&middle_border);
+                        ctx.write(&middle_border, Some(-1));
                         ctx.cr();
                     }
                 }
-                ctx.write(&bottom_border);
+                ctx.write(&bottom_border, Some(-1));
             }
         }
-        NodeValue::Text(literal) => ctx.write(literal),
-        NodeValue::SoftBreak => ctx.write(" "),
+        NodeValue::Text(literal) => ctx.write(literal, None),
+        NodeValue::SoftBreak => ctx.write(" ", None),
         NodeValue::LineBreak => {} // already handles line breaks globally
-        NodeValue::Math(NodeMath { literal, .. }) => ctx.write(literal),
+        NodeValue::Math(NodeMath { literal, .. }) => ctx.write(literal, Some(-1)),
         NodeValue::Strong => {
             let content = ctx.collect(node);
-            ctx.write(&format!("{BOLD}{content}{RESET}"));
+            ctx.write(&format!("{BOLD}{content}{RESET}"), None);
         }
         NodeValue::Emph => {
             let content = ctx.collect(node);
-            ctx.write(&format!("{ITALIC}{content}{RESET}"));
+            ctx.write(&format!("{ITALIC}{content}{RESET}"), None);
         }
         NodeValue::Strikethrough => {
             let content = ctx.collect(node);
-            ctx.write(&format!("{STRIKETHROUGH}{content}{RESET}"));
+            ctx.write(&format!("{STRIKETHROUGH}{content}{RESET}"), None);
         }
         NodeValue::Link(n) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(&format!(
-                "{UNDERLINE}{cyan}\x1b]8;;{}\x1b\\\u{f0339} {}{RESET}\x1b]8;;\x1b\\",
-                n.url, content
-            ));
+            ctx.write(
+                &format!(
+                    "{UNDERLINE}{cyan}\x1b]8;;{}\x1b\\\u{f0339} {}{RESET}\x1b]8;;\x1b\\",
+                    n.url, content
+                ),
+                None,
+            );
         }
-        NodeValue::Image(n) => {
-            let url = n.url.clone();
+        NodeValue::Image(_) => {
+            //TODO allow images
+            //we should preprocess images in the ast so ill be able to center them instead of
+            //leaving the placement of images to the end.
+            //also we should adjust scrapy to be smarter (allow ignore gif and ignore images of a
+            //certain size -- we can try to figure out by the content size or perhaps in other ways)
+            //to conclude:
+            // * make scrapy take that into consideration
+            // * preprocess images (we should map them into a grid so it will be easier to center)
+            // * finally handle them here at ease.
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
             let fallback = format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content);
-
-            // no images wanted.
-            if ctx.config.md_image_render == MdImageRender::None
-                || ctx.config.inline_encoder == InlineEncoder::Ascii
-            {
-                ctx.write(&fallback);
-                return;
-            }
-
-            let mut config: McatConfig = ctx.config.clone();
-
-            // only kitty can handle big images well
-            match (config.inline_encoder, config.md_image_render) {
-                (InlineEncoder::Kitty, MdImageRender::Auto) => {
-                    config.md_image_render = MdImageRender::All
-                }
-                (InlineEncoder::Iterm, MdImageRender::Auto)
-                | (InlineEncoder::Sixel, MdImageRender::Auto) => {
-                    config.md_image_render = MdImageRender::Small
-                }
-                _ => {}
-            }
-            let id = ctx.job_manager.add(
-                move || {
-                    let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;
-                    let img = image::open(tmp.path()).unwrap_or_default();
-                    let (mut width, mut height) = img.dimensions();
-                    if let Some(fragment) = url.split('#').nth(1) {
-                        let parts: Vec<&str> = fragment.split('x').collect();
-                        width = parts[0].parse::<u32>().unwrap_or(width);
-                        height = parts[1].parse::<u32>().unwrap_or(height);
-                    }
-                    let tinfo = term_misc::get_wininfo();
-
-                    if ((width > (tinfo.spx_width as f32 * 0.2) as u32)
-                        || (height > (tinfo.spx_height as f32 * 0.2) as u32))
-                        && config.md_image_render == MdImageRender::Small
-                    {
-                        return Err("image too big and user asked for small images only".into());
-                    }
-
-                    if width + 50 > (tinfo.spx_width as f32 * 0.8) as u32 {
-                        config.inline_options.width = Some("80%".into());
-                    } else {
-                        config.inline_options.width = Some(width.to_string());
-                    }
-                    if height + 50 > (tinfo.spx_height as f32 * 0.4) as u32 {
-                        config.inline_options.height = Some("40%".into());
-                    } else {
-                        config.inline_options.height =
-                            if config.md_image_render == MdImageRender::Small {
-                                // 1 line should be easy
-                                Some("1c".into())
-                            } else {
-                                Some(height.to_string())
-                            };
-                    }
-                    let mut b = Vec::new();
-                    config.inline_options.center = false;
-                    config.inline_options.inline = true;
-                    catter::cat(tmp.path(), &mut b, &config)?;
-                    let img = String::from_utf8(b)?;
-                    Ok(img)
-                },
-                fallback,
-            );
-            ctx.write(&format!("&*LOADING[{id}]*&"));
+            ctx.write(&fallback, None);
         }
         NodeValue::Code(node_code) => {
             let fg = &ctx.theme.green.fg;
-            ctx.write(&format!("{fg}{}{RESET}", node_code.literal));
+            if node_code.literal == "___CENTER_FLAG_OPEN___" {
+                ctx.center = true;
+                return;
+            }
+            if node_code.literal == "___CENTER_FLAG_CLOSE___" {
+                ctx.close_center = true;
+                return;
+            }
+            if node_code.literal == "___HR_FLAG___" {
+                format_tb(ctx, sps.start.column);
+                return;
+            }
+            ctx.write(&format!("{fg}{}{RESET}", node_code.literal), None);
         }
         NodeValue::TaskItem(task) => {
             let offset = " ".repeat(data.sourcepos.start.column - 1);
@@ -649,17 +593,18 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
 
             let content = ctx.collect(node);
 
-            ctx.write(&format!("{}{}", checkbox, content));
+            ctx.write(&format!("{}{}", checkbox, content), None);
         }
         NodeValue::HtmlInline(html) => {
             let string_color = ctx.theme.string.fg.clone();
-            ctx.write(&format!("{string_color}{html}{RESET}"));
+            ctx.write(&format!("{string_color}{html}{RESET}"), None);
         }
         NodeValue::Raw(str) => {
-            ctx.write(str);
+            ctx.write(str, None);
         }
         NodeValue::Superscript => {
-            ctx.collect_and_write(node);
+            let tx = ctx.collect(node);
+            ctx.write(&tx, None);
         }
         NodeValue::MultilineBlockQuote(node_multi_line) => {
             let content = ctx.collect(node);
@@ -669,12 +614,12 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         NodeValue::WikiLink(_) => {
             let content = ctx.collect(node);
             let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(&format!("{cyan}\u{f15d6} {}{RESET}", content));
+            ctx.write(&format!("{cyan}\u{f15d6} {}{RESET}", content), None);
         }
         NodeValue::SpoileredText => {
             let content = ctx.collect(node);
             let comment = ctx.theme.comment.fg.clone();
-            ctx.write(&format!("{FAINT}{comment}{content}{RESET}"));
+            ctx.write(&format!("{FAINT}{comment}{content}{RESET}"), None);
         }
         NodeValue::Alert(node_alert) => {
             let kind = &node_alert.alert_type;
@@ -692,13 +637,13 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", red),
             };
 
-            ctx.write(&format!("{}▌ {BOLD}{}{RESET}", color, prefix));
+            ctx.write(&format!("{}▌ {BOLD}{}{RESET}", color, prefix), None);
 
             for child in node.children() {
                 let alert_content = ctx.collect(child);
 
                 for line in alert_content.lines() {
-                    ctx.write(&format!("\n{}▌{RESET} {}", color, line));
+                    ctx.write(&format!("\n{}▌{RESET} {}", color, line), None);
                 }
             }
         }
@@ -716,6 +661,12 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
     }
 }
 
+fn format_tb(ctx: &mut AnsiContext, offset: usize) {
+    let br = br(offset);
+    let border = &ctx.theme.guide.fg;
+    ctx.write(&format!("{border}{br}{RESET}"), None);
+}
+
 fn format_blockquote(ctx: &mut AnsiContext, fence_offset: usize, content: String) {
     let guide = ctx.theme.guide.fg.clone();
     let comment = ctx.theme.comment.fg.clone();
@@ -724,7 +675,7 @@ fn format_blockquote(ctx: &mut AnsiContext, fence_offset: usize, content: String
             ctx.cr();
         }
         let offset = " ".repeat(fence_offset + 1);
-        ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"));
+        ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"), None);
     }
 }
 
@@ -963,7 +914,7 @@ fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usi
             bg_formatted_lines.push_str(&format!("\n{surface}  {line}{suffix}{RESET}"));
         }
     }
-    ctx.write(&bg_formatted_lines);
+    ctx.write(&bg_formatted_lines, None);
 }
 fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
     let ts = ctx.theme.to_syntect_theme();
@@ -995,11 +946,11 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
         "─".repeat(num_width),
         "─".repeat(term_width as usize - num_width - 1)
     );
-    ctx.write(&top_header);
+    ctx.write(&top_header, None);
     ctx.cr();
-    ctx.write(&middle_header);
+    ctx.write(&middle_header, None);
     ctx.cr();
-    ctx.write(&bottom_header);
+    ctx.write(&bottom_header, None);
     ctx.cr();
 
     let mut num = 1;
@@ -1011,12 +962,15 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
         let highlighted = wrap_highlighted_line(highlighted, text_size - 2, &prefix);
-        ctx.write(&format!(
-            "{color}{}{num}{}│ {RESET}{}",
-            " ".repeat(left_offset),
-            " ".repeat(right_offset),
-            highlighted
-        ));
+        ctx.write(
+            &format!(
+                "{color}{}{num}{}│ {RESET}{}",
+                " ".repeat(left_offset),
+                " ".repeat(right_offset),
+                highlighted
+            ),
+            None,
+        );
         num += 1;
     }
 
@@ -1025,7 +979,7 @@ fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
         "─".repeat(num_width),
         "─".repeat(term_width as usize - num_width - 1)
     );
-    ctx.write(&last_border);
+    ctx.write(&last_border, None);
 }
 
 fn br(indent: usize) -> String {

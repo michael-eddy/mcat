@@ -31,7 +31,7 @@ impl MarkdownHtmlPreprocessor {
             "img".to_string(),
             Box::new(|element, _processor| {
                 let src = element.value().attr("src").unwrap_or("");
-                let alt = element.value().attr("alt").unwrap_or("");
+                let alt = element.value().attr("alt").unwrap_or("IMG");
                 let width = element.value().attr("width");
                 let height = element.value().attr("height");
 
@@ -43,15 +43,7 @@ impl MarkdownHtmlPreprocessor {
                     (None, None) => src.to_string(),
                 };
 
-                let mut result = format!("![{}]({})", alt, enhanced_src);
-
-                if let Some(align) = element.value().attr("align") {
-                    if align.trim().to_lowercase() == "center" {
-                        result = format!("<center>{}</center>", result);
-                    }
-                }
-
-                result
+                format!("![{}]({})", alt, enhanced_src)
             }),
         );
     }
@@ -83,7 +75,7 @@ impl MarkdownHtmlPreprocessor {
             Box::new(|element, processor| {
                 let content = processor.process_children(element);
                 if let Some(href) = element.value().attr("href") {
-                    format!("[{}]({})", content, href)
+                    format!("[{}]({})", content.trim(), href.trim())
                 } else {
                     content
                 }
@@ -110,10 +102,8 @@ impl MarkdownHtmlPreprocessor {
 
     fn add_formatting_rules(&mut self) {
         // br - line break
-        self.rules.insert(
-            "br".to_string(),
-            Box::new(|_element, _processor| "\n".to_string()),
-        );
+        self.rules
+            .insert("br".to_string(), Box::new(|_element, _processor| "".into()));
 
         // var - italic
         self.rules.insert(
@@ -127,7 +117,7 @@ impl MarkdownHtmlPreprocessor {
         // hr - horizontal rule
         self.rules.insert(
             "hr".to_string(),
-            Box::new(|_element, _processor| "---".to_string()),
+            Box::new(|_element, _processor| "`___HR_FLAG___`".to_string()),
         );
 
         // b - bold
@@ -199,7 +189,10 @@ impl MarkdownHtmlPreprocessor {
                     // Check for align=center
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            result = format!("<center>{}</center>", result);
+                            result = format!(
+                                "`___CENTER_FLAG_OPEN___`{}`___CENTER_FLAG_CLOSE___`",
+                                result
+                            );
                         }
                     }
 
@@ -214,16 +207,7 @@ impl MarkdownHtmlPreprocessor {
             "q".to_string(),
             Box::new(|element, processor| {
                 let quote_content = processor.process_children(element);
-                let result = format!("\"{}\"", quote_content);
-
-                // Check for align=center
-                if let Some(align) = element.value().attr("align") {
-                    if align.trim().to_lowercase() == "center" {
-                        return format!("<center>{}</center>", result);
-                    }
-                }
-
-                result
+                format!("\"{}\"", quote_content)
             }),
         );
     }
@@ -237,7 +221,10 @@ impl MarkdownHtmlPreprocessor {
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            return format!("<center>{}</center>", inner_content);
+                            return format!(
+                                "`___CENTER_FLAG_OPEN___`{}`___CENTER_FLAG_CLOSE___`",
+                                inner_content
+                            );
                         }
                     }
                     inner_content

@@ -1,6 +1,7 @@
 ## Src
-- 🎉 markdown_viewer now renders images (can be disabled with `--md-image none` flag)
 - 🎉 markdown_viewer now includes hyperlinks
+- 🎉 markdown_viewer now parses some HTML!
+- [ ] planned: images in markdown
 
 ## V0.3.8
 - 🎉 added autumn and spring themes
