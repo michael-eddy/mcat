@@ -96,7 +96,7 @@ struct AnsiContext<'a> {
     hide_line_numbers: bool,
     line: AtomicUsize,
     output: String,
-    config: &'a McatConfig<'a>,
+    config: &'a McatConfig,
     job_manager: &'a JobManager,
 }
 impl<'a> AnsiContext<'a> {
@@ -148,15 +148,15 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
 
     // changing to forced inline in case of images rendered
     let _ = term_misc::init_wininfo(
-        &break_size_string(config.inline_options.spx).unwrap_or_exit(),
-        &break_size_string(config.inline_options.spx).unwrap_or_exit(),
+        &break_size_string(&config.inline_options.spx).unwrap_or_exit(),
+        &break_size_string(&config.inline_options.spx).unwrap_or_exit(),
         config.inline_options.scale,
         config.is_tmux,
         true,
     );
 
     let ps = SyntaxSet::load_defaults_newlines();
-    let theme = get_theme(Some(config.theme));
+    let theme = get_theme(Some(&config.theme));
     let job_manager = JobManager::new();
     let mut ctx = AnsiContext {
         ps,
@@ -573,9 +573,8 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 return;
             }
 
-            // config lives for the entire program duration
-            let mut config: McatConfig<'static> =
-                unsafe { std::mem::transmute(ctx.config.clone()) };
+            let mut config: McatConfig = ctx.config.clone();
+
             // only kitty can handle big images well
             match (config.inline_encoder, config.md_image_render) {
                 (InlineEncoder::Kitty, MdImageRender::Auto) => {
@@ -591,12 +590,12 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 move || {
                     let tmp = scrapy::scrape_biggest_media(&url, config.silent)?;
                     let img = image::open(tmp.path()).unwrap_or_default();
-                    let (width, height) = img.dimensions();
-                    // if let Some(fragment) = url.split('#').nth(1) {
-                    //     let parts: Vec<&str> = fragment.split('x').collect();
-                    //     width = parts[0].parse::<u32>().unwrap_or(width);
-                    //     height = parts[1].parse::<u32>().unwrap_or(height);
-                    // }
+                    let (mut width, mut height) = img.dimensions();
+                    if let Some(fragment) = url.split('#').nth(1) {
+                        let parts: Vec<&str> = fragment.split('x').collect();
+                        width = parts[0].parse::<u32>().unwrap_or(width);
+                        height = parts[1].parse::<u32>().unwrap_or(height);
+                    }
                     let tinfo = term_misc::get_wininfo();
 
                     if ((width > (tinfo.spx_width as f32 * 0.2) as u32)
@@ -607,19 +606,19 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                     }
 
                     if width + 50 > (tinfo.spx_width as f32 * 0.8) as u32 {
-                        config.inline_options.width = Some("80%");
+                        config.inline_options.width = Some("80%".into());
                     } else {
-                        config.inline_options.width = None;
+                        config.inline_options.width = Some(width.to_string());
                     }
                     if height + 50 > (tinfo.spx_height as f32 * 0.4) as u32 {
-                        config.inline_options.height = Some("40%");
+                        config.inline_options.height = Some("40%".into());
                     } else {
                         config.inline_options.height =
                             if config.md_image_render == MdImageRender::Small {
                                 // 1 line should be easy
-                                Some("1c")
+                                Some("1c".into())
                             } else {
-                                None
+                                Some(height.to_string())
                             };
                     }
                     let mut b = Vec::new();

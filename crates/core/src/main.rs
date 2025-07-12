@@ -277,8 +277,8 @@ fn main() {
     config.extend_from_args(&opts);
 
     // setting the winsize
-    let spx = term_misc::break_size_string(config.inline_options.spx).unwrap_or_exit();
-    let sc = term_misc::break_size_string(config.inline_options.sc).unwrap_or_exit();
+    let spx = term_misc::break_size_string(config.inline_options.spx.as_ref()).unwrap_or_exit();
+    let sc = term_misc::break_size_string(config.inline_options.sc.as_ref()).unwrap_or_exit();
     let _ = term_misc::init_wininfo(
         &spx,
         &sc,

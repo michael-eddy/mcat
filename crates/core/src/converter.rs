@@ -302,7 +302,7 @@ pub fn lsix(
     let y_padding = term_misc::dim_to_cells(&ctx.y_padding, SizeDirection::Height)? as u16;
     let width = (ts.sc_width as f32 / items_per_row as f32 + 0.1).round() as u16 - x_padding - 1;
     let width_formatted = format!("{width}c");
-    let height = ctx.height;
+    let height = ctx.height.as_ref();
     let px_x_padding = dim_to_px(&format!("{x_padding}c"), SizeDirection::Width)?;
 
     // Collect all valid paths first
@@ -393,7 +393,7 @@ pub fn lsix(
                 px_x_padding
             },
         )?;
-        let height = dim_to_cells(height, SizeDirection::Height)?;
+        let height = dim_to_cells(height.as_ref(), SizeDirection::Height)?;
         ensure_space(&mut buf, height as u16)?;
         // windows for some reason doesn't handle newlines as expected..
         if cfg!(windows) {

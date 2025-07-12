@@ -54,7 +54,7 @@ pub fn cat(
     let mut image_result: Option<DynamicImage> = None;
     let mut string_result: Option<String> = None;
     let mut from: &str = "unknown";
-    let to = opts.output.unwrap_or("unknown");
+    let to = opts.output.as_deref().unwrap_or("unknown");
 
     //video
     if is_video(&ext) {
@@ -67,8 +67,8 @@ pub fn cat(
             path.to_string_lossy(),
             out,
             &opts.inline_encoder,
-            opts.inline_options.width,
-            opts.inline_options.height,
+            opts.inline_options.width.as_deref(),
+            opts.inline_options.height.as_deref(),
             opts.inline_options.center,
             opts.silent,
         )?;
@@ -95,8 +95,11 @@ pub fn cat(
     //svg
     (image_result, from) = if ext == "svg" {
         let file = File::open(path)?;
-        let dyn_img =
-            converter::svg_to_image(file, opts.inline_options.width, opts.inline_options.height)?;
+        let dyn_img = converter::svg_to_image(
+            file,
+            opts.inline_options.width.as_deref(),
+            opts.inline_options.height.as_deref(),
+        )?;
         (Some(dyn_img), "image")
     } else {
         (image_result, from)
@@ -135,25 +138,25 @@ pub fn cat(
             Ok(CatType::Markdown)
         }
         ("md", "html") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), if opts.style_html {Some(opts.theme)} else {None});
+            let html = markdown::md_to_html(&string_result.unwrap(), if opts.style_html {Some(opts.theme.as_ref())} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
         },
         ("md", "image") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme));
+            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
             let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
             Ok(CatType::Image)
         },
         ("md", "inline") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme));
+            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             print_image(out, dyn_img, opts)?;
             Ok(CatType::InlineImage)
         },
         ("md", "interactive") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme));
+            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
             let img_bytes = converter::html_to_image(&html)?;
             let img = image::load_from_memory(&img_bytes)?;
             interact_with_image(img, opts, out)?;
@@ -201,7 +204,7 @@ pub fn cat(
             };
             let use_pager = opts.paging.should_use(is_tty && content.lines().count() > term_misc::get_wininfo().sc_height as usize);
             if use_pager {
-                if let Some(pager) = Pager::new(opts.pager) {
+                if let Some(pager) = Pager::new(opts.pager.as_ref()) {
                     if pager.page(&content).is_err() {
                         out.write_all(content.as_bytes())?;
                     }
@@ -238,15 +241,15 @@ fn print_image(
 
     let dyn_img = apply_pan_zoom_once(dyn_img, &opts);
     let (img, center, _, _) = dyn_img.resize_plus(
-        opts.inline_options.width,
-        opts.inline_options.height,
+        opts.inline_options.width.as_deref(),
+        opts.inline_options.height.as_deref(),
         resize_for_ascii,
         false,
     )?;
     if opts.report {
         rasteroid::term_misc::report_size(
-            opts.inline_options.width.unwrap_or_default(),
-            opts.inline_options.height.unwrap_or_default(),
+            &opts.inline_options.width.as_deref().unwrap_or(""),
+            &opts.inline_options.height.as_deref().unwrap_or(""),
         );
     }
     rasteroid::inline_an_image(
@@ -301,7 +304,7 @@ fn interact_with_image(
     };
 
     let height_cells = term_misc::dim_to_cells(
-        opts.inline_options.height.unwrap_or_default(),
+        opts.inline_options.height.as_deref().unwrap_or(""),
         term_misc::SizeDirection::Height,
     )?;
     let height = (tinfo.sc_height - 3).min(height_cells as u16);
@@ -320,7 +323,7 @@ fn interact_with_image(
             let new_img = vp.apply_to_image(&img);
             let (img, center, _, _) = new_img
                 .resize_plus(
-                    opts.inline_options.width,
+                    opts.inline_options.width.as_deref(),
                     Some(&format!("{height}c")),
                     resize_for_ascii,
                     false,

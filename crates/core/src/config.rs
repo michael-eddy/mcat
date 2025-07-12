@@ -4,12 +4,12 @@ use clap::ArgMatches;
 use rasteroid::{InlineEncoder, term_misc};
 
 #[derive(Debug, Clone)]
-pub struct InlineOptions<'a> {
+pub struct InlineOptions {
     pub center: bool,
-    pub width: Option<&'a str>,
-    pub height: Option<&'a str>,
-    pub spx: &'a str,
-    pub sc: &'a str,
+    pub width: Option<String>,
+    pub height: Option<String>,
+    pub spx: String,
+    pub sc: String,
     pub scale: Option<f32>,
     pub zoom: Option<usize>,
     pub x: Option<i32>,
@@ -17,14 +17,14 @@ pub struct InlineOptions<'a> {
     pub inline: bool,
 }
 
-impl<'a> Default for InlineOptions<'a> {
+impl Default for InlineOptions {
     fn default() -> Self {
         InlineOptions {
             center: true,
-            width: Some("80%"),
-            height: Some("80%"),
-            spx: "1920x1080",
-            sc: "100x20",
+            width: Some("80%".into()),
+            height: Some("80%".into()),
+            spx: "1920x1080".into(),
+            sc: "100x20".into(),
             scale: None,
             zoom: None,
             x: None,
@@ -34,8 +34,8 @@ impl<'a> Default for InlineOptions<'a> {
     }
 }
 
-impl<'a> InlineOptions<'a> {
-    pub fn extend_from_string(&mut self, s: &'a str) -> &mut Self {
+impl InlineOptions {
+    pub fn extend_from_string(&mut self, s: &str) -> &mut Self {
         let map: HashMap<_, _> = s
             .split(',')
             .filter_map(|pair| {
@@ -47,21 +47,25 @@ impl<'a> InlineOptions<'a> {
             .collect();
 
         let get = |key: &str| map.get(key).copied();
-        let get_size = |key: &str, default: Option<&'a str>| match map.get(key) {
+        let get_size = |key: &str, default: &Option<String>| match map.get(key) {
             Some(v) => {
                 if v.eq_ignore_ascii_case("none") {
                     None
                 } else {
-                    Some(*v)
+                    Some(v.to_string())
                 }
             }
-            None => default,
+            None => default.clone(),
         };
 
-        self.width = get_size("width", self.width);
-        self.height = get_size("height", self.height);
-        self.spx = get("spx").unwrap_or(self.spx);
-        self.sc = get("sc").unwrap_or(self.sc);
+        self.width = get_size("width", &self.width);
+        self.height = get_size("height", &self.height);
+        if let Some(spx) = get("spx") {
+            self.spx = spx.to_string();
+        }
+        if let Some(sc) = get("sc") {
+            self.sc = sc.to_string();
+        }
         self.scale = get("scale").and_then(|v| v.parse().ok()).or(self.scale);
         self.zoom = get("zoom").and_then(|v| v.parse().ok()).or(self.zoom);
         self.x = get("x").and_then(|v| v.parse().ok()).or(self.x);
@@ -77,30 +81,30 @@ impl<'a> InlineOptions<'a> {
 }
 
 #[derive(Clone)]
-pub struct LsixOptions<'a> {
-    pub x_padding: &'a str,
-    pub y_padding: &'a str,
-    pub min_width: &'a str,
-    pub max_width: &'a str,
-    pub height: &'a str,
+pub struct LsixOptions {
+    pub x_padding: String,
+    pub y_padding: String,
+    pub min_width: String,
+    pub max_width: String,
+    pub height: String,
     pub max_items_per_row: usize,
 }
 
-impl<'a> Default for LsixOptions<'a> {
+impl Default for LsixOptions {
     fn default() -> Self {
         LsixOptions {
-            x_padding: "3c",
-            y_padding: "2c",
-            min_width: "2c",
-            max_width: "16c",
-            height: "2c",
+            x_padding: "3c".into(),
+            y_padding: "2c".into(),
+            min_width: "2c".into(),
+            max_width: "16c".into(),
+            height: "2c".into(),
             max_items_per_row: 20,
         }
     }
 }
 
-impl<'a> LsixOptions<'a> {
-    pub fn extend_from_string(&mut self, s: &'a str) -> &mut Self {
+impl LsixOptions {
+    pub fn extend_from_string(&mut self, s: &str) -> &mut Self {
         let map: HashMap<_, _> = s
             .split(',')
             .filter_map(|pair| {
@@ -113,11 +117,21 @@ impl<'a> LsixOptions<'a> {
 
         let get = |key: &str| map.get(key).copied();
 
-        self.x_padding = get("x_padding").unwrap_or(self.x_padding);
-        self.y_padding = get("y_padding").unwrap_or(self.y_padding);
-        self.min_width = get("min_width").unwrap_or(self.min_width);
-        self.max_width = get("max_width").unwrap_or(self.max_width);
-        self.height = get("height").unwrap_or(self.height);
+        if let Some(x_padding) = get("x_padding") {
+            self.x_padding = x_padding.to_string();
+        }
+        if let Some(y_padding) = get("y_padding") {
+            self.y_padding = y_padding.to_string();
+        }
+        if let Some(min_width) = get("min_width") {
+            self.min_width = min_width.to_string();
+        }
+        if let Some(max_width) = get("max_width") {
+            self.max_width = max_width.to_string();
+        }
+        if let Some(height) = get("height") {
+            self.height = height.to_string();
+        }
         self.max_items_per_row = get("items_per_row")
             .and_then(|v| v.parse().ok())
             .unwrap_or(self.max_items_per_row);
@@ -126,13 +140,13 @@ impl<'a> LsixOptions<'a> {
 }
 
 #[derive(Clone)]
-pub struct McatConfig<'a> {
+pub struct McatConfig {
     pub input: Vec<String>,
-    pub output: Option<&'a str>,
+    pub output: Option<String>,
     pub is_ls: bool,
     pub inline_encoder: InlineEncoder,
-    pub ls_options: LsixOptions<'a>,
-    pub inline_options: InlineOptions<'a>,
+    pub ls_options: LsixOptions,
+    pub inline_options: InlineOptions,
     pub is_tmux: bool,
     pub silent: bool,
     pub hidden: bool,
@@ -141,9 +155,9 @@ pub struct McatConfig<'a> {
     pub md_image_render: MdImageRender,
     pub horizontal_image_stacking: bool,
     pub style_html: bool,
-    pub theme: &'a str,
+    pub theme: String,
     pub fn_and_leave: Option<FnAndLeave>,
-    pub pager: &'a str,
+    pub pager: String,
     pub color: AlwaysOrNever,
     pub paging: AlwaysOrNever,
     encoder_force: String,
@@ -191,7 +205,7 @@ pub enum MdImageRender {
     Auto,
 }
 
-impl<'a> Default for McatConfig<'a> {
+impl Default for McatConfig {
     fn default() -> Self {
         McatConfig {
             input: Vec::new(),
@@ -208,18 +222,18 @@ impl<'a> Default for McatConfig<'a> {
             md_image_render: MdImageRender::Auto,
             horizontal_image_stacking: false,
             style_html: false,
-            theme: "dark",
+            theme: "dark".into(),
             fn_and_leave: None,
-            encoder_force: "".into(),
-            pager: "less -r",
+            encoder_force: String::new(),
+            pager: "less -r".into(),
             color: AlwaysOrNever::Auto,
             paging: AlwaysOrNever::Auto,
         }
     }
 }
 
-impl<'a> McatConfig<'a> {
-    pub fn extend_from_args(&mut self, opts: &'a ArgMatches) -> &mut Self {
+impl McatConfig {
+    pub fn extend_from_args(&mut self, opts: &ArgMatches) -> &mut Self {
         self.input = opts
             .get_many::<String>("input")
             .unwrap_or_default()
@@ -309,15 +323,13 @@ impl<'a> McatConfig<'a> {
         if opts.get_flag("style-html") {
             self.style_html = true;
         }
-        self.theme = opts
-            .get_one::<String>("theme")
-            .map(|v| v.as_ref())
-            .unwrap_or(self.theme);
+        if let Some(theme) = opts.get_one::<String>("theme") {
+            self.theme = theme.clone();
+        }
         // paging
-        self.pager = opts
-            .get_one::<String>("pager")
-            .map(|v| v.as_ref())
-            .unwrap_or(self.pager);
+        if let Some(pager) = opts.get_one::<String>("pager") {
+            self.pager = pager.clone();
+        }
         if let Some(paging) = opts.get_one::<String>("paging") {
             self.paging = AlwaysOrNever::from_string(paging);
         }
@@ -341,77 +353,44 @@ impl<'a> McatConfig<'a> {
         // output
         let inline = opts.get_flag("inline");
         self.output = if inline {
-            Some("inline")
+            Some("inline".to_string())
         } else {
-            opts.get_one::<String>("output").map(|v| v.as_ref())
+            opts.get_one::<String>("output").cloned()
         };
 
         self
     }
+
     pub fn extend_from_env(&mut self) -> &mut Self {
-        match env::var("MCAT_ENCODER") {
-            Ok(v) => {
-                self.encoder_force = v.to_lowercase();
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_ENCODER") {
+            self.encoder_force = v.to_lowercase();
         }
-        match env::var("MCAT_PAGER") {
-            Ok(v) => {
-                self.pager = Box::leak(v.into_boxed_str());
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_PAGER") {
+            self.pager = v;
         }
-        match env::var("MCAT_THEME") {
-            Ok(v) => self.theme = Box::leak(v.into_boxed_str()),
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_THEME") {
+            self.theme = v;
         }
-        match env::var("MCAT_INLINE_OPTS") {
-            Ok(v) => {
-                _ = self
-                    .inline_options
-                    .extend_from_string(Box::leak(v.into_boxed_str()))
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_INLINE_OPTS") {
+            self.inline_options.extend_from_string(&v);
         }
-        match env::var("MCAT_LS_OPTS") {
-            Ok(v) => {
-                _ = self
-                    .ls_options
-                    .extend_from_string(Box::leak(v.into_boxed_str()))
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_LS_OPTS") {
+            self.ls_options.extend_from_string(&v);
         }
-        match env::var("MCAT_SILENT") {
-            Ok(v) => {
-                self.silent = if v == "1" || v.eq_ignore_ascii_case("true") {
-                    true
-                } else {
-                    self.silent
-                }
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_SILENT") {
+            self.silent = v == "1" || v.eq_ignore_ascii_case("true");
         }
-        match env::var("MCAT_NO_LINENUMBERS") {
-            Ok(v) => {
-                self.no_linenumbers = if v == "1" || v.eq_ignore_ascii_case("true") {
-                    true
-                } else {
-                    self.no_linenumbers
-                }
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_NO_LINENUMBERS") {
+            self.no_linenumbers = v == "1" || v.eq_ignore_ascii_case("true");
         }
-        match env::var("MCAT_MD_IMAGE") {
-            Ok(v) => {
-                self.md_image_render = match v.to_lowercase().as_str() {
-                    "all" => MdImageRender::All,
-                    "small" => MdImageRender::Small,
-                    "none" => MdImageRender::None,
-                    "auto" => MdImageRender::Auto,
-                    _ => self.md_image_render,
-                };
-            }
-            Err(_) => {}
+        if let Ok(v) = env::var("MCAT_MD_IMAGE") {
+            self.md_image_render = match v.to_lowercase().as_str() {
+                "all" => MdImageRender::All,
+                "small" => MdImageRender::Small,
+                "none" => MdImageRender::None,
+                "auto" => MdImageRender::Auto,
+                _ => self.md_image_render,
+            };
         }
 
         self
