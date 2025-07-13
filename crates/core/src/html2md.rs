@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use regex::Regex;
 use scraper::{ElementRef, Html};
 use std::collections::HashMap;
@@ -130,14 +131,24 @@ impl ProcessingContext {
             "var".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("*{}*", content));
+                ctx.write(&format!("*{}*", content.trim()));
             }),
         );
 
         self.rules.insert(
             "hr".to_string(),
             Box::new(|_element, ctx| {
-                ctx.write("`___HR_FLAG___`");
+                if !ctx
+                    .output
+                    .lines()
+                    .last()
+                    .unwrap_or_default()
+                    .trim()
+                    .is_empty()
+                {
+                    ctx.write("\n");
+                }
+                ctx.write("<!--HR-->");
             }),
         );
 
@@ -145,7 +156,7 @@ impl ProcessingContext {
             "b".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("**{}**", content));
+                ctx.write(&format!("**{}**", content.trim()));
             }),
         );
 
@@ -153,7 +164,7 @@ impl ProcessingContext {
             "strong".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("**{}**", content));
+                ctx.write(&format!("**{}**", content.trim()));
             }),
         );
 
@@ -161,7 +172,7 @@ impl ProcessingContext {
             "em".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("*{}*", content));
+                ctx.write(&format!("*{}*", content.trim()));
             }),
         );
 
@@ -169,7 +180,7 @@ impl ProcessingContext {
             "del".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("~~{}~~", content));
+                ctx.write(&format!("~~{}~~", content.trim()));
             }),
         );
 
@@ -177,7 +188,7 @@ impl ProcessingContext {
             "s".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("~~{}~~", content));
+                ctx.write(&format!("~~{}~~", content.trim()));
             }),
         );
 
@@ -185,7 +196,7 @@ impl ProcessingContext {
             "strike".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("~~{}~~", content));
+                ctx.write(&format!("~~{}~~", content.trim()));
             }),
         );
     }
@@ -203,10 +214,7 @@ impl ProcessingContext {
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            result = format!(
-                                "`___CENTER_FLAG_OPEN___`{}`___CENTER_FLAG_CLOSE___`",
-                                result
-                            );
+                            result = format!("{result}<!--CENTER-->");
                         }
                     }
 
@@ -231,15 +239,20 @@ impl ProcessingContext {
             self.rules.insert(
                 item.to_string(),
                 Box::new(|element, ctx| {
-                    let content = ctx.collect(element);
+                    let mut content = ctx.collect(element);
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            ctx.write(&format!(
-                                "`___CENTER_FLAG_OPEN___`{}`___CENTER_FLAG_CLOSE___`",
-                                content
-                            ));
-                            return;
+                            content = content
+                                .lines()
+                                .map(|v| {
+                                    if v.trim().is_empty() {
+                                        v.into()
+                                    } else {
+                                        format!("{v}<!--CENTER-->")
+                                    }
+                                })
+                                .join("\n");
                         }
                     }
                     ctx.write(&content);

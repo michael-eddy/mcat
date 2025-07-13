@@ -211,3 +211,4 @@ each variable mimicks its corresponding flag alternative.
 
 ## 📎 License
 MIT License
+

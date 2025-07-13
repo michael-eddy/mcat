@@ -10,6 +10,7 @@ use comrak::{
     nodes::{AstNode, NodeMath, NodeValue, Sourcepos},
     plugins::syntect::SyntectAdapterBuilder,
 };
+use itertools::Itertools;
 use rasteroid::term_misc::{self, break_size_string};
 use regex::Regex;
 use strip_ansi_escapes::strip_str;
@@ -37,45 +38,39 @@ struct AnsiContext<'a> {
     line: AtomicUsize,
     output: String,
     config: &'a McatConfig,
-    center: bool,
-    close_center: bool,
 }
 impl<'a> AnsiContext<'a> {
     fn write(&mut self, val: &str, le: Option<i32>) {
         let fg = self.theme.foreground.fg.clone();
         let val = val.replace(RESET, &format!("{RESET}{fg}"));
-        if !self.center || le.is_none() {
+        if le.is_none() {
             self.output.push_str(&val);
             return;
         }
+        // -1 is just me saying calculate it yourself.
+        // none should be don't center me
+        // value should be use that size (e.g. images)
         if let Some(le) = le {
-            // -1 is just me saying calculate it yourself.
-            // none should be don't center me
-            // value should be use that size (e.g. images)
-            for line in val.lines() {
-                if line.contains("___DONT_CENTER_FLAG___") {
-                    let line = line.replace("___DONT_CENTER_FLAG___", "");
-                    self.output.push_str(&line);
-                    continue;
-                }
-                let le = if le == -1 {
-                    string_len(&line)
-                } else {
-                    le as usize
-                };
-                let sw = term_misc::get_wininfo().sc_width;
-                let offset = (sw as usize).saturating_sub(le).saturating_div(2);
-                self.output
-                    .push_str(&format!("{}{line}\n", " ".repeat(offset)));
-            }
-            if self.output.ends_with("\n") {
-                self.output.pop();
-            }
-            if self.close_center {
-                self.close_center = false;
-                self.center = false;
-            }
-            return;
+            let val = val
+                .lines()
+                .map(|line| {
+                    // center
+                    if val.contains("<!--CENTER-->") {
+                        let line = trim_ansi_string(line.replace("<!--CENTER-->", ""));
+                        let le = if le == -1 {
+                            string_len(&line)
+                        } else {
+                            le as usize
+                        };
+                        let sw = term_misc::get_wininfo().sc_width;
+                        let offset = (sw as usize).saturating_sub(le).saturating_div(2);
+                        format!("{}{line}", " ".repeat(offset))
+                    } else {
+                        line.into()
+                    }
+                })
+                .join("\n");
+            self.output.push_str(&val);
         }
     }
     fn cr(&mut self) {
@@ -99,14 +94,10 @@ impl<'a> AnsiContext<'a> {
             line,
             output: String::new(),
             config: self.config,
-            center: self.center,
-            close_center: self.close_center,
         };
         for child in node.children() {
             format_ast_node(child, &mut ctx);
         }
-        self.center = ctx.center;
-        self.close_center = ctx.close_center;
         ctx.output
     }
 }
@@ -135,8 +126,6 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         output: String::new(),
         line: AtomicUsize::new(1),
         config,
-        center: false,
-        close_center: false,
     };
     ctx.write(&ctx.theme.foreground.fg.clone(), None);
     format_ast_node(root, &mut ctx);
@@ -385,6 +374,10 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 ctx.write(&format!("{spaces}└{border_line}┘\n"), None);
                 return;
             }
+            if node_html_block.literal.contains("<!--HR-->") {
+                format_tb(ctx, sps.start.column);
+                return;
+            }
 
             for line in node_html_block.literal.lines() {
                 let comment = &ctx.theme.comment.fg;
@@ -411,8 +404,8 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
             };
             let bg = &ctx.theme.keyword_bg.bg;
             let main_color = &ctx.theme.keyword.fg;
-            let content = content.replace(RESET, &format!("{RESET}{bg}"));
-            if !ctx.center {
+            let mut content = content.replace(RESET, &format!("{RESET}{bg}"));
+            if !content.contains("<!--CENTER-->") {
                 let padding = " ".repeat(
                     term_misc::get_wininfo()
                         .sc_width
@@ -422,6 +415,7 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
                 let wr = &format!("{main_color}{bg}{content}{padding}{RESET}",);
                 ctx.write(wr, None);
             } else {
+                content = content.replace("<!--CENTER-->", "");
                 let sw = term_misc::get_wininfo().sc_width as usize;
                 let le = string_len(&content);
                 let left_space = sw.saturating_sub(le);
@@ -565,18 +559,6 @@ fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
         }
         NodeValue::Code(node_code) => {
             let fg = &ctx.theme.green.fg;
-            if node_code.literal == "___CENTER_FLAG_OPEN___" {
-                ctx.center = true;
-                return;
-            }
-            if node_code.literal == "___CENTER_FLAG_CLOSE___" {
-                ctx.close_center = true;
-                return;
-            }
-            if node_code.literal == "___HR_FLAG___" {
-                format_tb(ctx, sps.start.column);
-                return;
-            }
             ctx.write(&format!("{fg}{}{RESET}", node_code.literal), None);
         }
         NodeValue::TaskItem(task) => {
@@ -680,6 +662,42 @@ fn format_blockquote(ctx: &mut AnsiContext, fence_offset: usize, content: String
 
 fn string_len(str: &str) -> usize {
     strip_ansi_escapes::strip_str(&str).width()
+}
+
+fn trim_ansi_string(mut str: String) -> String {
+    let stripped = strip_str(&str);
+    let mut leading = stripped.chars().take_while(|c| c.is_whitespace()).count();
+    let mut trailing = stripped
+        .chars()
+        .rev()
+        .take_while(|c| c.is_whitespace())
+        .count();
+
+    if leading == 0 && trailing == 0 {
+        return str;
+    }
+
+    // Remove first N spaces
+    str.retain(|c| {
+        if c == ' ' && leading > 0 {
+            leading -= 1;
+            false
+        } else {
+            true
+        }
+    });
+
+    // Remove last N spaces
+    let mut i = str.len();
+    while i > 0 && trailing > 0 {
+        i -= 1;
+        if str.as_bytes()[i] == b' ' {
+            str.remove(i);
+            trailing -= 1;
+        }
+    }
+
+    str
 }
 
 pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
