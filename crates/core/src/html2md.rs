@@ -240,14 +240,7 @@ impl MarkdownHtmlPreprocessor {
                 let content = processor.process_children(element);
                 let mut result = String::new();
 
-                // Add content as blockquote, skip leading empty lines
-                let mut start = true;
                 for line in content.lines() {
-                    if start && line.trim().is_empty() {
-                        continue;
-                    } else {
-                        start = false;
-                    }
                     result.push_str(&format!("> {}\n", line));
                 }
 
