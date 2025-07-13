@@ -2,40 +2,66 @@ use regex::Regex;
 use scraper::{ElementRef, Html};
 use std::collections::HashMap;
 
-pub struct MarkdownHtmlPreprocessor {
-    rules: HashMap<String, Box<dyn Fn(ElementRef, &MarkdownHtmlPreprocessor) -> String>>,
+pub struct ProcessingContext {
+    output: String,
+    rules: HashMap<String, Box<dyn Fn(ElementRef, &mut ProcessingContext)>>,
 }
 
-impl MarkdownHtmlPreprocessor {
-    pub fn new() -> Self {
-        let mut processor = Self {
+impl ProcessingContext {
+    fn new() -> Self {
+        let mut ctx = Self {
+            output: String::new(),
             rules: HashMap::new(),
         };
 
-        processor.add_div_rules();
-        processor.add_details_rules();
-        processor.add_quote_rules();
-        processor.add_heading_rules();
-        processor.add_formatting_rules();
-        processor.add_link_rules();
-        processor.add_img_rules();
-        processor.add_code_rules();
-        processor.add_block_rules();
+        ctx.add_div_rules();
+        ctx.add_details_rules();
+        ctx.add_quote_rules();
+        ctx.add_heading_rules();
+        ctx.add_formatting_rules();
+        ctx.add_link_rules();
+        ctx.add_img_rules();
+        ctx.add_code_rules();
+        ctx.add_block_rules();
 
-        processor
+        ctx
+    }
+
+    fn write(&mut self, text: &str) {
+        self.output.push_str(text);
+    }
+
+    fn collect(&mut self, element: ElementRef) -> String {
+        let mut temp_output = String::new();
+        let original_output = std::mem::replace(&mut self.output, temp_output);
+
+        self.process_children(element);
+
+        temp_output = std::mem::replace(&mut self.output, original_output);
+
+        let start = self
+            .output
+            .lines()
+            .last()
+            .unwrap_or_default()
+            .trim()
+            .is_empty();
+        if start {
+            temp_output = temp_output.trim().into();
+        }
+
+        temp_output
     }
 
     fn add_img_rules(&mut self) {
-        // img - images
         self.rules.insert(
             "img".to_string(),
-            Box::new(|element, _processor| {
+            Box::new(|element, ctx| {
                 let src = element.value().attr("src").unwrap_or("");
                 let alt = element.value().attr("alt").unwrap_or("IMG");
                 let width = element.value().attr("width");
                 let height = element.value().attr("height");
 
-                // Build the src with dimensions if available
                 let enhanced_src = match (width, height) {
                     (Some(w), Some(h)) => format!("{}#{}x{}", src, w, h),
                     (Some(w), None) => format!("{}#{}x", src, w),
@@ -43,134 +69,123 @@ impl MarkdownHtmlPreprocessor {
                     (None, None) => src.to_string(),
                 };
 
-                format!("![{}]({})", alt, enhanced_src)
+                ctx.write(&format!("![{}]({})", alt, enhanced_src));
             }),
         );
     }
 
     fn add_code_rules(&mut self) {
-        // pre - preformatted text
         self.rules.insert(
             "pre".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("```\n{}\n```\n\n", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("```\n{}\n```\n\n", content));
             }),
         );
 
-        // code - inline code
         self.rules.insert(
             "code".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("`{}`", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("`{}`", content));
             }),
         );
     }
 
     fn add_link_rules(&mut self) {
-        // a - links
         self.rules.insert(
             "a".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
                 if let Some(href) = element.value().attr("href") {
-                    format!("[{}]({})", content.trim(), href.trim())
+                    ctx.write(&format!("[{}]({})", content.trim(), href.trim()));
                 } else {
-                    content
+                    ctx.write(&content);
                 }
             }),
         );
     }
 
     fn add_block_rules(&mut self) {
-        // blockquote
         self.rules.insert(
             "blockquote".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                let mut result = String::new();
-
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
                 for line in content.lines() {
-                    result.push_str(&format!("> {}\n", line));
+                    ctx.write(&format!("> {}\n", line));
                 }
-
-                result
             }),
         );
     }
 
     fn add_formatting_rules(&mut self) {
-        // br - line break
-        self.rules
-            .insert("br".to_string(), Box::new(|_element, _processor| "".into()));
+        self.rules.insert(
+            "br".to_string(),
+            Box::new(|_element, _ctx| {
+                // Line breaks are handled by not writing anything
+            }),
+        );
 
-        // var - italic
         self.rules.insert(
             "var".to_string(),
-            Box::new(|element, processor| {
-                let var_content = processor.process_children(element);
-                format!("*{}*", var_content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("*{}*", content));
             }),
         );
 
-        // hr - horizontal rule
         self.rules.insert(
             "hr".to_string(),
-            Box::new(|_element, _processor| "`___HR_FLAG___`".to_string()),
+            Box::new(|_element, ctx| {
+                ctx.write("`___HR_FLAG___`");
+            }),
         );
 
-        // b - bold
         self.rules.insert(
             "b".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("**{}**", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("**{}**", content));
             }),
         );
 
-        // strong - bold
         self.rules.insert(
             "strong".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("**{}**", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("**{}**", content));
             }),
         );
 
-        // em - italic
         self.rules.insert(
             "em".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("*{}*", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("*{}*", content));
             }),
         );
 
-        // del - strike
         self.rules.insert(
             "del".to_string(),
-            Box::new(|element, processor| {
-                let del_content = processor.process_children(element);
-                format!("~~{}~~", del_content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("~~{}~~", content));
             }),
         );
 
-        // s - strikethrough
         self.rules.insert(
             "s".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("~~{}~~", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("~~{}~~", content));
             }),
         );
 
-        // strike - strikethrough
         self.rules.insert(
             "strike".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                format!("~~{}~~", content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("~~{}~~", content));
             }),
         );
     }
@@ -182,11 +197,10 @@ impl MarkdownHtmlPreprocessor {
 
             self.rules.insert(
                 tag,
-                Box::new(move |element, processor| {
-                    let content = processor.process_children(element);
+                Box::new(move |element, ctx| {
+                    let content = ctx.collect(element);
                     let mut result = format!("{} {}", prefix, content.trim());
 
-                    // Check for align=center
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
                             result = format!(
@@ -196,7 +210,7 @@ impl MarkdownHtmlPreprocessor {
                         }
                     }
 
-                    result
+                    ctx.write(&result);
                 }),
             );
         }
@@ -205,9 +219,9 @@ impl MarkdownHtmlPreprocessor {
     fn add_quote_rules(&mut self) {
         self.rules.insert(
             "q".to_string(),
-            Box::new(|element, processor| {
-                let quote_content = processor.process_children(element);
-                format!("\"{}\"", quote_content)
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("\"{}\"", content));
             }),
         );
     }
@@ -216,18 +230,19 @@ impl MarkdownHtmlPreprocessor {
         for item in ["div", "p"] {
             self.rules.insert(
                 item.to_string(),
-                Box::new(|element, processor| {
-                    let inner_content = processor.process_children(element);
+                Box::new(|element, ctx| {
+                    let content = ctx.collect(element);
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            return format!(
+                            ctx.write(&format!(
                                 "`___CENTER_FLAG_OPEN___`{}`___CENTER_FLAG_CLOSE___`",
-                                inner_content
-                            );
+                                content
+                            ));
+                            return;
                         }
                     }
-                    inner_content
+                    ctx.write(&content);
                 }),
             );
         }
@@ -236,29 +251,25 @@ impl MarkdownHtmlPreprocessor {
     fn add_details_rules(&mut self) {
         self.rules.insert(
             "details".to_string(),
-            Box::new(|element, processor| {
-                let content = processor.process_children(element);
-                let mut result = String::new();
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
 
                 for line in content.lines() {
-                    result.push_str(&format!("> {}\n", line));
+                    ctx.write(&format!("> {}\n", line));
                 }
-
-                result
             }),
         );
 
         self.rules.insert(
             "summary".to_string(),
-            Box::new(|element, processor| {
-                let summary_content = processor.process_children(element);
-                format!("▼ {}", summary_content.trim())
+            Box::new(|element, ctx| {
+                let content = ctx.collect(element);
+                ctx.write(&format!("▼ {}", content.trim()));
             }),
         );
     }
 
     fn escape_unknown_elements(&self, markdown: &str) -> String {
-        // regex to match HTML tags
         let tag_regex = Regex::new(r"</?([a-zA-Z][a-zA-Z0-9]*)[^>]*>").unwrap();
 
         tag_regex
@@ -283,17 +294,7 @@ impl MarkdownHtmlPreprocessor {
             .replace("___ESCAPED_GT___", ">")
     }
 
-    pub fn process(&self, markdown: &str) -> String {
-        let escaped_markdown = self.escape_unknown_elements(markdown);
-
-        let document = Html::parse_fragment(&escaped_markdown);
-        let result = self.process_children(document.root_element());
-
-        self.unescape_text(&result)
-    }
-
-    fn process_children(&self, element: ElementRef) -> String {
-        let mut result = String::new();
+    fn process_children(&mut self, element: ElementRef) {
         for child in element.children() {
             match child.value() {
                 scraper::node::Node::Element(_) => {
@@ -301,24 +302,36 @@ impl MarkdownHtmlPreprocessor {
                     let tag_name = child_element.value().name();
 
                     if let Some(rule) = self.rules.get(tag_name) {
-                        result.push_str(&rule(child_element, self));
+                        // We need to clone the rule to avoid borrow checker issues
+                        let rule_clone = unsafe {
+                            std::mem::transmute::<
+                                &Box<dyn Fn(ElementRef, &mut ProcessingContext)>,
+                                &Box<dyn Fn(ElementRef, &mut ProcessingContext)>,
+                            >(rule)
+                        };
+                        rule_clone(child_element, self);
                     } else {
                         // For unknown elements, process their children
-                        result.push_str(&self.process_children(child_element));
+                        self.process_children(child_element);
                     }
                 }
                 scraper::node::Node::Text(text) => {
-                    result.push_str(text.text.as_ref());
+                    self.write(text.text.as_ref());
                 }
                 _ => {}
             }
         }
-        result
     }
 }
 
-impl Default for MarkdownHtmlPreprocessor {
-    fn default() -> Self {
-        Self::new()
-    }
+// Global process function
+pub fn process(markdown: &str) -> String {
+    let mut ctx = ProcessingContext::new();
+
+    let escaped_markdown = ctx.escape_unknown_elements(markdown);
+    let document = Html::parse_fragment(&escaped_markdown);
+
+    ctx.process_children(document.root_element());
+
+    ctx.unescape_text(&ctx.output)
 }

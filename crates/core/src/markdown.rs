@@ -21,7 +21,7 @@ use syntect::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::{UnwrapOrExit, config::McatConfig, html2md::MarkdownHtmlPreprocessor};
+use crate::{UnwrapOrExit, config::McatConfig, html2md};
 
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
@@ -111,8 +111,7 @@ impl<'a> AnsiContext<'a> {
     }
 }
 pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
-    let html_preprocessor = MarkdownHtmlPreprocessor::new();
-    let md = &html_preprocessor.process(md);
+    let md = &html2md::process(md);
 
     let arena = Arena::new();
     let opts = comrak_options();
