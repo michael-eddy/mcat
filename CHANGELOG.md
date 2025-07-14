@@ -1,5 +1,4 @@
 ## Src
-- 🎉 markdown_viewer now includes hyperlinks
 - 🎉 markdown_viewer now parses some HTML!
 - [ ] planned: images in markdown
 

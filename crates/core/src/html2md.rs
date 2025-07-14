@@ -1,11 +1,16 @@
-use itertools::Itertools;
 use regex::Regex;
 use scraper::{ElementRef, Html};
 use std::collections::HashMap;
 
+pub struct ProcessingResult {
+    pub content: String,
+    pub centered_lines: Vec<usize>,
+}
+
 pub struct ProcessingContext {
     output: String,
     rules: HashMap<String, Box<dyn Fn(ElementRef, &mut ProcessingContext)>>,
+    centered_lines: Vec<usize>,
 }
 
 impl ProcessingContext {
@@ -13,6 +18,7 @@ impl ProcessingContext {
         let mut ctx = Self {
             output: String::new(),
             rules: HashMap::new(),
+            centered_lines: Vec::new(),
         };
 
         ctx.add_div_rules();
@@ -210,11 +216,13 @@ impl ProcessingContext {
                 tag,
                 Box::new(move |element, ctx| {
                     let content = ctx.collect(element);
-                    let mut result = format!("{} {}", prefix, content.trim());
+                    let result = format!("{} {}", prefix, content.trim());
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            result = format!("{result}<!--CENTER-->");
+                            // Mark this heading as centered
+                            let line_num = ctx.output.lines().count() + 1;
+                            ctx.centered_lines.push(line_num);
                         }
                     }
 
@@ -239,20 +247,19 @@ impl ProcessingContext {
             self.rules.insert(
                 item.to_string(),
                 Box::new(|element, ctx| {
-                    let mut content = ctx.collect(element);
+                    let content = ctx.collect(element);
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
-                            content = content
-                                .lines()
-                                .map(|v| {
-                                    if v.trim().is_empty() {
-                                        v.into()
-                                    } else {
-                                        format!("{v}<!--CENTER-->")
-                                    }
-                                })
-                                .join("\n");
+                            // Mark all lines of this section as centered
+                            let start_line = ctx.output.lines().count() + 1;
+                            ctx.write(&content);
+                            let end_line = ctx.output.lines().count();
+
+                            for line_num in start_line..=end_line {
+                                ctx.centered_lines.push(line_num);
+                            }
+                            return;
                         }
                     }
                     ctx.write(&content);
@@ -338,7 +345,7 @@ impl ProcessingContext {
 }
 
 // Global process function
-pub fn process(markdown: &str) -> String {
+pub fn process(markdown: &str) -> ProcessingResult {
     let mut ctx = ProcessingContext::new();
 
     let escaped_markdown = ctx.escape_unknown_elements(markdown);
@@ -346,5 +353,10 @@ pub fn process(markdown: &str) -> String {
 
     ctx.process_children(document.root_element());
 
-    ctx.unescape_text(&ctx.output)
+    let final_content = ctx.unescape_text(&ctx.output);
+
+    ProcessingResult {
+        content: final_content,
+        centered_lines: ctx.centered_lines,
+    }
 }

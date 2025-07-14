@@ -36,73 +36,27 @@ struct AnsiContext<'a> {
     theme: CustomTheme,
     hide_line_numbers: bool,
     line: AtomicUsize,
-    output: String,
     config: &'a McatConfig,
+    centered_lines: &'a [usize],
 }
 impl<'a> AnsiContext<'a> {
-    fn write(&mut self, val: &str, le: Option<i32>) {
-        let fg = self.theme.foreground.fg.clone();
-        let val = val.replace(RESET, &format!("{RESET}{fg}"));
-        if le.is_none() {
-            self.output.push_str(&val);
-            return;
-        }
-        // -1 is just me saying calculate it yourself.
-        // none should be don't center me
-        // value should be use that size (e.g. images)
-        if let Some(le) = le {
-            let val = val
-                .lines()
-                .map(|line| {
-                    // center
-                    if val.contains("<!--CENTER-->") {
-                        let line = trim_ansi_string(line.replace("<!--CENTER-->", ""));
-                        let le = if le == -1 {
-                            string_len(&line)
-                        } else {
-                            le as usize
-                        };
-                        let sw = term_misc::get_wininfo().sc_width;
-                        let offset = (sw as usize).saturating_sub(le).saturating_div(2);
-                        format!("{}{line}", " ".repeat(offset))
-                    } else {
-                        line.into()
-                    }
-                })
-                .join("\n");
-            self.output.push_str(&val);
-        }
-    }
-    fn cr(&mut self) {
-        self.output.push('\n');
-    }
-    fn sps(&mut self, sps: Sourcepos) {
+    fn sps(&self, sps: Sourcepos) -> Option<String> {
         let current_line = self.line.load(Ordering::SeqCst);
 
-        if sps.start.line > current_line {
+        let out = if sps.start.line > current_line {
             let offset = sps.start.line - current_line;
-            self.output.push_str(&"\n".repeat(offset));
-        }
-        self.line.store(sps.end.line, Ordering::SeqCst);
-    }
-    fn collect<'b>(&mut self, node: &'b AstNode<'b>) -> String {
-        let line = AtomicUsize::new(node.data.borrow().sourcepos.start.line);
-        let mut ctx = AnsiContext {
-            ps: self.ps.clone(),
-            theme: self.theme.clone(),
-            hide_line_numbers: self.hide_line_numbers,
-            line,
-            output: String::new(),
-            config: self.config,
+            Some("\n".repeat(offset))
+        } else {
+            None
         };
-        for child in node.children() {
-            format_ast_node(child, &mut ctx);
-        }
-        ctx.output
+
+        self.line.store(sps.end.line, Ordering::SeqCst);
+        out
     }
 }
 pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
-    let md = &html2md::process(md);
+    let res = &html2md::process(md);
+    let md = &res.content;
 
     let arena = Arena::new();
     let opts = comrak_options();
@@ -123,19 +77,20 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         ps,
         theme,
         hide_line_numbers: config.no_linenumbers,
-        output: String::new(),
         line: AtomicUsize::new(1),
         config,
+        centered_lines: &res.centered_lines,
     };
-    ctx.write(&ctx.theme.foreground.fg.clone(), None);
-    format_ast_node(root, &mut ctx);
+
+    let mut output = String::new();
+    output.push_str(&ctx.theme.foreground.fg);
+    output.push_str(&parse_node(root, &mut ctx));
 
     // making sure its wrapped to fit into the termianl size
-    let lines: Vec<String> =
-        textwrap::wrap(&ctx.output, term_misc::get_wininfo().sc_width as usize)
-            .into_iter()
-            .map(|cow| cow.into_owned())
-            .collect();
+    let lines: Vec<String> = textwrap::wrap(&output, term_misc::get_wininfo().sc_width as usize)
+        .into_iter()
+        .map(|cow| cow.into_owned())
+        .collect();
     lines.join("\n")
 }
 
@@ -234,430 +189,516 @@ pub fn md_to_html(markdown: &str, style: Option<&str>) -> String {
     }
 }
 
-fn format_ast_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) {
+fn collect<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let mut buffer = String::new();
+
+    for child in node.children() {
+        buffer.push_str(&parse_node(child, ctx));
+    }
+
+    buffer
+}
+fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
     let data = node.data.borrow();
     let sps = data.sourcepos;
-    ctx.sps(sps);
+    let mut buffer = String::new();
+    if let Some(newlines) = ctx.sps(sps) {
+        buffer.push_str(&newlines);
+    }
 
-    match &data.value {
-        NodeValue::Document => {
-            for child in node.children() {
-                format_ast_node(child, ctx);
-            }
-        }
-        NodeValue::FrontMatter(str) => {
-            // no idea what that is.
-            ctx.write(str, None);
-        }
-        NodeValue::BlockQuote => {
-            let content = ctx.collect(node);
-            format_blockquote(ctx, 0, content);
-        }
-        NodeValue::List(node_list) => {
-            let list_type = &node_list.list_type;
-            let mut index: i32 = match list_type {
-                comrak::nodes::ListType::Bullet => 0,
-                comrak::nodes::ListType::Ordered => node_list.start as i32,
-            };
-            let bullet = if node_list.is_task_list { "" } else { "●" };
-            let content = ctx.collect(node);
-
-            let mut pre_offset = 0;
-            for (i, line) in content.lines().enumerate() {
-                if line.trim().is_empty() {
-                    continue;
-                }
-                if i != 0 {
-                    ctx.cr();
-                }
-
-                let mut offset = 0;
-                for c in line.chars() {
-                    match c {
-                        ' ' => offset += 1,
-                        '\t' => offset += 2,
-                        _ => break,
-                    }
-                }
-                let is_nested = offset > pre_offset && i != 0;
-                if is_nested {
-                    index -= 1;
-                } else {
-                    pre_offset = offset;
-                }
-                let new_index = index + i as i32;
-                let line = line.trim();
-                let bullet = if is_nested {
-                    ""
-                } else {
-                    match list_type {
-                        comrak::nodes::ListType::Bullet => bullet,
-                        comrak::nodes::ListType::Ordered => &format!("{new_index}."),
-                    }
-                };
-                let offset = " ".repeat(offset);
-
-                if bullet.is_empty() {
-                    ctx.write(&format!("{offset}{line}"), None);
-                } else {
-                    let line = if line.contains("\0") {
-                        let line = line.replace("\0", &format!("{bullet}{RESET}"));
-                        line
-                    } else {
-                        format!("  {line}")
-                    };
-                    ctx.write(&format!("{offset}{line}"), None);
-                }
-            }
-
-            let mut current = node.parent();
-            let mut is_first = true;
-            while let Some(parent) = current {
-                match parent.data.borrow().value {
-                    comrak::nodes::NodeValue::Item(_) => {
-                        is_first = false;
-                        break;
-                    }
-                    comrak::nodes::NodeValue::Document => break,
-                    _ => current = parent.parent(),
-                }
-            }
-            if is_first {
-                ctx.cr();
-            }
-        }
-        NodeValue::Item(_) => {
-            let content = ctx.collect(node);
-            let yellow = &ctx.theme.yellow.fg;
-            ctx.write(
-                &format!(
-                    "{}{yellow}\0 {content}",
-                    " ".repeat(data.sourcepos.start.column - 1)
-                ),
-                None,
-            );
-        }
-        NodeValue::CodeBlock(node_code_block) => {
-            let code = &node_code_block.literal;
-            let lang = &node_code_block.info;
-            let lang = if lang.is_empty() {
-                &"txt".to_string()
-            } else {
-                lang
-            };
-
-            let indent = data.sourcepos.start.column;
-            if ctx.hide_line_numbers || code.lines().count() < 10 {
-                format_code_simple(code, lang, ctx, indent);
-            } else {
-                format_code(code, lang, ctx, indent);
-            }
-        }
-        NodeValue::HtmlBlock(node_html_block) => {
-            let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
-            if let Some(caps) = re.captures(&node_html_block.literal) {
-                let title = caps.get(1).unwrap().as_str();
-                let width = term_misc::get_wininfo().sc_width;
-                let text_size = string_len(title);
-                let border_width = text_size + 4; // +4 for 2 spaces padding on each side
-                let center_padding = (width as usize - border_width) / 2;
-
-                let fg_yellow = ctx.theme.yellow.fg.clone();
-                let border_line = "─".repeat(border_width);
-                let spaces = " ".repeat(center_padding);
-
-                ctx.write(&format!("{spaces}┌{border_line}┐\n"), None);
-                ctx.write(
-                    &format!("{spaces}│  {fg_yellow}{BOLD}{title}{RESET}  │\n"),
-                    None,
-                );
-                ctx.write(&format!("{spaces}└{border_line}┘\n"), None);
-                return;
-            }
-            if node_html_block.literal.contains("<!--HR-->") {
-                format_tb(ctx, sps.start.column);
-                return;
-            }
-
-            for line in node_html_block.literal.lines() {
-                let comment = &ctx.theme.comment.fg;
-                ctx.write(&format!("{comment}{line}{RESET}\n"), Some(-1));
-            }
-            if ctx.output.ends_with('\n') {
-                ctx.output.pop();
-            }
-        }
-        NodeValue::Paragraph => {
-            let tx = ctx.collect(node);
-            ctx.write(&tx, Some(-1));
-        }
-        NodeValue::Heading(node_heading) => {
-            let content = ctx.collect(node);
-            let content = match node_heading.level {
-                1 => format!(" 󰲡 {content}"),
-                2 => format!(" 󰲣 {content}"),
-                3 => format!(" 󰲥 {content}"),
-                4 => format!(" 󰲧 {content}"),
-                5 => format!(" 󰲩 {content}"),
-                6 => format!(" 󰲫 {content}"),
-                _ => unreachable!(),
-            };
-            let bg = &ctx.theme.keyword_bg.bg;
-            let main_color = &ctx.theme.keyword.fg;
-            let mut content = content.replace(RESET, &format!("{RESET}{bg}"));
-            if !content.contains("<!--CENTER-->") {
-                let padding = " ".repeat(
-                    term_misc::get_wininfo()
-                        .sc_width
-                        .saturating_sub(string_len(&content) as u16)
-                        .into(),
-                );
-                let wr = &format!("{main_color}{bg}{content}{padding}{RESET}",);
-                ctx.write(wr, None);
-            } else {
-                content = content.replace("<!--CENTER-->", "");
-                let sw = term_misc::get_wininfo().sc_width as usize;
-                let le = string_len(&content);
-                let left_space = sw.saturating_sub(le);
-                let padding_left = left_space.saturating_div(2);
-                let padding_rigth = left_space - padding_left;
-                let wr = &format!(
-                    "{main_color}{bg}{}{content}{}{RESET}",
-                    " ".repeat(padding_left),
-                    " ".repeat(padding_rigth)
-                );
-                ctx.write(wr, None);
-            }
-        }
+    buffer.push_str(&match &data.value {
+        NodeValue::Document => format_document(node, ctx),
+        NodeValue::FrontMatter(str) => format_front_matter(str),
+        NodeValue::BlockQuote => format_blockquote(node, ctx, 0),
+        NodeValue::List(node_list) => format_list(node, node_list, ctx),
+        NodeValue::Item(_) => format_item(node, ctx),
+        NodeValue::CodeBlock(node_code_block) => format_code_block(node_code_block, ctx, sps),
+        NodeValue::HtmlBlock(node_html_block) => format_html_block(node_html_block, ctx, sps),
+        NodeValue::Paragraph => format_paragraph(node, ctx, sps),
+        NodeValue::Heading(node_heading) => format_heading(node, node_heading, ctx, sps),
         NodeValue::ThematicBreak => format_tb(ctx, sps.start.column),
-        NodeValue::FootnoteDefinition(_) => {}
-        NodeValue::Table(table) => {
-            let alignments = &table.alignments;
-            let mut rows: Vec<Vec<String>> = Vec::new();
-
-            for child in node.children() {
-                let mut row_cells: Vec<String> = Vec::new();
-
-                for cell_node in child.children() {
-                    let cell_content = ctx.collect(cell_node);
-                    row_cells.push(cell_content.to_string());
-                }
-
-                rows.push(row_cells);
-            }
-
-            // Find the maximum width for each column
-            let mut column_widths: Vec<usize> = vec![0; alignments.len()];
-            for row in &rows {
-                for (i, cell) in row.iter().enumerate() {
-                    let c = string_len(cell.trim());
-                    if c > column_widths[i] {
-                        column_widths[i] = c;
-                    }
-                }
-            }
-
-            let color = &ctx.theme.border.fg.clone();
-            if !rows.is_empty() {
-                let cols = column_widths.len();
-
-                let build_line = |left: &str, mid: &str, right: &str, fill: &str| -> String {
-                    let mut line = String::new();
-                    line.push_str(color);
-                    line.push_str(left);
-                    for (i, &width) in column_widths.iter().enumerate() {
-                        line.push_str(&fill.repeat(width + 2));
-                        if i < cols - 1 {
-                            line.push_str(mid);
-                        }
-                    }
-                    line.push_str(right);
-                    line.push_str(RESET);
-                    line
-                };
-
-                let top_border = build_line("╭", "┬", "╮", "─");
-                let middle_border = build_line("├", "┼", "┤", "─");
-                let bottom_border = build_line("╰", "┴", "╯", "─");
-                ctx.write(&top_border, Some(-1));
-                ctx.cr();
-
-                for (i, row) in rows.iter().enumerate() {
-                    // Print the row content
-                    ctx.write(&format!("{color}│{RESET}"), Some(-1));
-                    for (j, cell) in row.iter().enumerate() {
-                        let width = column_widths[j];
-                        let padding = width - string_len(cell);
-                        let (left_pad, right_pad) = match alignments[j] {
-                            comrak::nodes::TableAlignment::Center => {
-                                (padding / 2, padding - (padding / 2))
-                            }
-                            comrak::nodes::TableAlignment::Right => (padding, 0),
-                            _ => (0, padding),
-                        };
-                        ctx.write(
-                            &format!(
-                                " {}{}{} {color}│{RESET}",
-                                " ".repeat(left_pad),
-                                cell,
-                                " ".repeat(right_pad)
-                            ),
-                            Some(-1),
-                        );
-                    }
-                    ctx.write("\n", None);
-
-                    if i == 0 {
-                        ctx.write(&middle_border, Some(-1));
-                        ctx.cr();
-                    }
-                }
-                ctx.write(&bottom_border, Some(-1));
-            }
-        }
-        NodeValue::Text(literal) => ctx.write(literal, None),
-        NodeValue::SoftBreak => ctx.write(" ", None),
-        NodeValue::LineBreak => {} // already handles line breaks globally
-        NodeValue::Math(NodeMath { literal, .. }) => ctx.write(literal, Some(-1)),
-        NodeValue::Strong => {
-            let content = ctx.collect(node);
-            ctx.write(&format!("{BOLD}{content}{RESET}"), None);
-        }
-        NodeValue::Emph => {
-            let content = ctx.collect(node);
-            ctx.write(&format!("{ITALIC}{content}{RESET}"), None);
-        }
-        NodeValue::Strikethrough => {
-            let content = ctx.collect(node);
-            ctx.write(&format!("{STRIKETHROUGH}{content}{RESET}"), None);
-        }
-        NodeValue::Link(n) => {
-            let content = ctx.collect(node);
-            let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(
-                &format!(
-                    "{UNDERLINE}{cyan}\x1b]8;;{}\x1b\\\u{f0339} {}{RESET}\x1b]8;;\x1b\\",
-                    n.url, content
-                ),
-                None,
-            );
-        }
-        NodeValue::Image(_) => {
-            //TODO allow images
-            //we should preprocess images in the ast so ill be able to center them instead of
-            //leaving the placement of images to the end.
-            //also we should adjust scrapy to be smarter (allow ignore gif and ignore images of a
-            //certain size -- we can try to figure out by the content size or perhaps in other ways)
-            //to conclude:
-            // * make scrapy take that into consideration
-            // * preprocess images (we should map them into a grid so it will be easier to center)
-            // * finally handle them here at ease.
-            let content = ctx.collect(node);
-            let cyan = ctx.theme.cyan.fg.clone();
-            let fallback = format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content);
-            ctx.write(&fallback, None);
-        }
-        NodeValue::Code(node_code) => {
-            let fg = &ctx.theme.green.fg;
-            ctx.write(&format!("{fg}{}{RESET}", node_code.literal), None);
-        }
-        NodeValue::TaskItem(task) => {
-            let offset = " ".repeat(data.sourcepos.start.column - 1);
-            let checked = task.unwrap_or_default().to_lowercase().to_string() == "x";
-            let green = ctx.theme.green.fg.clone();
-            let red = ctx.theme.red.fg.clone();
-            let checkbox = if checked {
-                format!("{offset}{green}\u{f4a7}{RESET}  ")
-            } else {
-                format!("{offset}{red}\u{e640}{RESET}  ")
-            };
-
-            let content = ctx.collect(node);
-
-            ctx.write(&format!("{}{}", checkbox, content), None);
-        }
-        NodeValue::HtmlInline(html) => {
-            let string_color = ctx.theme.string.fg.clone();
-            ctx.write(&format!("{string_color}{html}{RESET}"), None);
-        }
-        NodeValue::Raw(str) => {
-            ctx.write(str, None);
-        }
-        NodeValue::Superscript => {
-            let tx = ctx.collect(node);
-            ctx.write(&tx, None);
-        }
+        NodeValue::FootnoteDefinition(_) => String::new(),
+        NodeValue::Table(table) => format_table(node, table, ctx),
+        NodeValue::Text(literal) => literal.clone(),
+        NodeValue::SoftBreak => " ".to_string(),
+        NodeValue::LineBreak => String::new(),
+        NodeValue::Math(NodeMath { literal, .. }) => literal.clone(),
+        NodeValue::Strong => format_strong(node, ctx),
+        NodeValue::Emph => format_emph(node, ctx),
+        NodeValue::Strikethrough => format_strikethrough(node, ctx),
+        NodeValue::Link(n) => format_link(node, n, ctx),
+        NodeValue::Image(_) => format_image(node, ctx),
+        NodeValue::Code(node_code) => format_code(node_code, ctx),
+        NodeValue::TaskItem(task) => format_task_item(node, task, ctx, sps),
+        NodeValue::HtmlInline(html) => format_html_inline(html, ctx),
+        NodeValue::Raw(str) => str.clone(),
+        NodeValue::Superscript => format_superscript(node, ctx),
         NodeValue::MultilineBlockQuote(node_multi_line) => {
-            let content = ctx.collect(node);
-            let offset = node_multi_line.fence_offset;
-            format_blockquote(ctx, offset, content);
+            format_multiline_block_quote(node, node_multi_line, ctx)
         }
-        NodeValue::WikiLink(_) => {
-            let content = ctx.collect(node);
-            let cyan = ctx.theme.cyan.fg.clone();
-            ctx.write(&format!("{cyan}\u{f15d6} {}{RESET}", content), None);
+        NodeValue::WikiLink(_) => format_wiki_link(node, ctx),
+        NodeValue::SpoileredText => format_spoilered_text(node, ctx),
+        NodeValue::Alert(node_alert) => format_alert(node, node_alert, ctx),
+        NodeValue::TableRow(_) => String::new(),
+        NodeValue::TableCell => String::new(),
+        NodeValue::Escaped => String::new(),
+        NodeValue::DescriptionList => String::new(),
+        NodeValue::DescriptionItem(_) => String::new(),
+        NodeValue::DescriptionTerm => String::new(),
+        NodeValue::DescriptionDetails => String::new(),
+        NodeValue::EscapedTag(_) => String::new(),
+        NodeValue::Underline => String::new(),
+        NodeValue::Subscript => String::new(),
+        NodeValue::FootnoteReference(_) => String::new(),
+    });
+    buffer
+}
+
+fn format_code<'a>(node_code: &comrak::nodes::NodeCode, ctx: &AnsiContext) -> String {
+    let fg = &ctx.theme.green.fg;
+    format!("{fg}{}{RESET}", node_code.literal)
+}
+
+fn format_document<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    node.children()
+        .map(|child| parse_node(child, ctx))
+        .collect()
+}
+
+fn format_front_matter(str: &str) -> String {
+    //dk what is that.
+    str.to_string()
+}
+
+fn format_list<'a>(
+    node: &'a AstNode<'a>,
+    node_list: &comrak::nodes::NodeList,
+    ctx: &AnsiContext,
+) -> String {
+    let list_type = &node_list.list_type;
+    let mut index: i32 = match list_type {
+        comrak::nodes::ListType::Bullet => 0,
+        comrak::nodes::ListType::Ordered => node_list.start as i32,
+    };
+    let bullet = if node_list.is_task_list { "" } else { "●" };
+    let content = collect(node, ctx);
+    let mut result = String::new();
+
+    let mut pre_offset = 0;
+    for (i, line) in content.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
         }
-        NodeValue::SpoileredText => {
-            let content = ctx.collect(node);
-            let comment = ctx.theme.comment.fg.clone();
-            ctx.write(&format!("{FAINT}{comment}{content}{RESET}"), None);
+        if i != 0 {
+            result.push('\n');
         }
-        NodeValue::Alert(node_alert) => {
-            let kind = &node_alert.alert_type;
-            let blue = ctx.theme.blue.fg.clone();
-            let red = ctx.theme.red.fg.clone();
-            let green = ctx.theme.green.fg.clone();
-            let cyan = ctx.theme.cyan.fg.clone();
-            let yellow = ctx.theme.yellow.fg.clone();
 
-            let (prefix, color) = match kind {
-                comrak::nodes::AlertType::Note => ("\u{f05d6} NOTE", blue),
-                comrak::nodes::AlertType::Tip => ("\u{f400} TIP", green),
-                comrak::nodes::AlertType::Important => ("\u{f017e} INFO", cyan),
-                comrak::nodes::AlertType::Warning => ("\u{ea6c} WARNING", yellow),
-                comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", red),
-            };
-
-            ctx.write(&format!("{}▌ {BOLD}{}{RESET}", color, prefix), None);
-
-            for child in node.children() {
-                let alert_content = ctx.collect(child);
-
-                for line in alert_content.lines() {
-                    ctx.write(&format!("\n{}▌{RESET} {}", color, line), None);
-                }
+        let mut offset = 0;
+        for c in line.chars() {
+            match c {
+                ' ' => offset += 1,
+                '\t' => offset += 2,
+                _ => break,
             }
         }
-        NodeValue::TableRow(_) => {}          //handled at the table
-        NodeValue::TableCell => {}            //handled at the table
-        NodeValue::Escaped => {}              //disabled
-        NodeValue::DescriptionList => {}      //disabled,
-        NodeValue::DescriptionItem(_) => {}   //disabled,
-        NodeValue::DescriptionTerm => {}      //disabled,
-        NodeValue::DescriptionDetails => {}   //disabled,
-        NodeValue::EscapedTag(_) => {}        //disabled
-        NodeValue::Underline => {}            //disabled
-        NodeValue::Subscript => {}            //disabled
-        NodeValue::FootnoteReference(_) => {} // disabled
+        let is_nested = offset > pre_offset && i != 0;
+        if is_nested {
+            index -= 1;
+        } else {
+            pre_offset = offset;
+        }
+        let new_index = index + i as i32;
+        let line = line.trim();
+        let bullet = if is_nested {
+            ""
+        } else {
+            match list_type {
+                comrak::nodes::ListType::Bullet => bullet,
+                comrak::nodes::ListType::Ordered => &format!("{new_index}."),
+            }
+        };
+        let offset = " ".repeat(offset);
+
+        if bullet.is_empty() {
+            result.push_str(&format!("{offset}{line}"));
+        } else {
+            let line = if line.contains("\0") {
+                let line = line.replace("\0", &format!("{bullet}{RESET}"));
+                line
+            } else {
+                format!("  {line}")
+            };
+            result.push_str(&format!("{offset}{line}"));
+        }
+    }
+
+    let mut current = node.parent();
+    let mut is_first = true;
+    while let Some(parent) = current {
+        match parent.data.borrow().value {
+            comrak::nodes::NodeValue::Item(_) => {
+                is_first = false;
+                break;
+            }
+            comrak::nodes::NodeValue::Document => break,
+            _ => current = parent.parent(),
+        }
+    }
+    if is_first {
+        result.push('\n');
+    }
+
+    result
+}
+
+fn format_item<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let data = node.data.borrow();
+    let yellow = ctx.theme.yellow.fg.clone();
+    let content = collect(node, ctx);
+    format!(
+        "{}{yellow}\0 {content}",
+        " ".repeat(data.sourcepos.start.column - 1)
+    )
+}
+
+fn format_code_block(
+    node_code_block: &comrak::nodes::NodeCodeBlock,
+    ctx: &AnsiContext,
+    sps: Sourcepos,
+) -> String {
+    let code = &node_code_block.literal;
+    let lang = &node_code_block.info;
+    let lang = if lang.is_empty() {
+        &"txt".to_string()
+    } else {
+        lang
+    };
+
+    let indent = sps.start.column;
+    if ctx.hide_line_numbers || code.lines().count() < 10 {
+        format_code_simple(code, lang, ctx, indent)
+    } else {
+        format_code_full(code, lang, ctx, indent)
     }
 }
 
-fn format_tb(ctx: &mut AnsiContext, offset: usize) {
+fn format_html_block(
+    node_html_block: &comrak::nodes::NodeHtmlBlock,
+    ctx: &AnsiContext,
+    sps: comrak::nodes::Sourcepos,
+) -> String {
+    let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
+    if let Some(caps) = re.captures(&node_html_block.literal) {
+        let title = caps.get(1).unwrap().as_str();
+        let width = term_misc::get_wininfo().sc_width;
+        let text_size = string_len(title);
+        let border_width = text_size + 4;
+        let center_padding = (width as usize - border_width) / 2;
+
+        let fg_yellow = ctx.theme.yellow.fg.clone();
+        let border_line = "─".repeat(border_width);
+        let spaces = " ".repeat(center_padding);
+
+        return format!(
+            "{spaces}┌{border_line}┐\n{spaces}│  {fg_yellow}{BOLD}{title}{RESET}  │\n{spaces}└{border_line}┘\n"
+        );
+    }
+
+    if node_html_block.literal.contains("<!--HR-->") {
+        return format_tb(ctx, sps.start.column);
+    }
+
+    let mut result = String::new();
+    let comment = &ctx.theme.comment.fg;
+    for line in node_html_block.literal.lines() {
+        result.push_str(&format!("{comment}{line}{RESET}\n"));
+    }
+    if result.ends_with('\n') {
+        result.pop();
+    }
+    result
+}
+
+fn format_paragraph<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext, sps: Sourcepos) -> String {
+    let lines = collect(node, ctx);
+    if ctx.centered_lines.contains(&sps.start.line) {
+        let sw = term_misc::get_wininfo().sc_width;
+        return lines
+            .lines()
+            .map(|line| {
+                let line = trim_ansi_string(line.into());
+                let le = string_len(&line);
+                // 1 based index
+                let offset = sps.start.column.saturating_sub(1);
+                let offset = (sw as usize - offset).saturating_sub(le).saturating_div(2);
+                format!("{}{line}", " ".repeat(offset))
+            })
+            .join("\n");
+    } else {
+        lines
+    }
+}
+
+fn format_heading<'a>(
+    node: &'a AstNode<'a>,
+    node_heading: &comrak::nodes::NodeHeading,
+    ctx: &AnsiContext,
+    sps: Sourcepos,
+) -> String {
+    let content = collect(node, ctx);
+    let content = match node_heading.level {
+        1 => format!(" 󰲡 {content}"),
+        2 => format!(" 󰲣 {content}"),
+        3 => format!(" 󰲥 {content}"),
+        4 => format!(" 󰲧 {content}"),
+        5 => format!(" 󰲩 {content}"),
+        6 => format!(" 󰲫 {content}"),
+        _ => unreachable!(),
+    };
+    let bg = &ctx.theme.keyword_bg.bg;
+    let main_color = &ctx.theme.keyword.fg;
+    let content = content.replace(RESET, &format!("{RESET}{bg}"));
+
+    // TODO handle centering
+    if !ctx.centered_lines.contains(&sps.start.line) {
+        let padding = " ".repeat(
+            term_misc::get_wininfo()
+                .sc_width
+                .saturating_sub(string_len(&content) as u16)
+                .into(),
+        );
+        format!("{main_color}{bg}{content}{padding}{RESET}")
+    } else {
+        // center here
+        let sw = term_misc::get_wininfo().sc_width as usize;
+        let le = string_len(&content);
+        let left_space = sw.saturating_sub(le);
+        let padding_left = left_space.saturating_div(2);
+        let padding_rigth = left_space - padding_left;
+        format!(
+            "{main_color}{bg}{}{content}{}{RESET}",
+            " ".repeat(padding_left),
+            " ".repeat(padding_rigth)
+        )
+    }
+}
+
+fn format_table<'a>(
+    node: &'a AstNode<'a>,
+    table: &comrak::nodes::NodeTable,
+    ctx: &AnsiContext,
+) -> String {
+    let alignments = &table.alignments;
+    let mut rows: Vec<Vec<String>> = Vec::new();
+
+    for child in node.children() {
+        let mut row_cells: Vec<String> = Vec::new();
+        for cell_node in child.children() {
+            let cell_content = collect(cell_node, ctx);
+            row_cells.push(cell_content.to_string());
+        }
+        rows.push(row_cells);
+    }
+
+    let mut column_widths: Vec<usize> = vec![0; alignments.len()];
+    for row in &rows {
+        for (i, cell) in row.iter().enumerate() {
+            let c = string_len(cell.trim());
+            if c > column_widths[i] {
+                column_widths[i] = c;
+            }
+        }
+    }
+
+    let color = &ctx.theme.border.fg.clone();
+    let mut result = String::new();
+
+    if !rows.is_empty() {
+        let cols = column_widths.len();
+
+        let build_line = |left: &str, mid: &str, right: &str, fill: &str| -> String {
+            let mut line = String::new();
+            line.push_str(color);
+            line.push_str(left);
+            for (i, &width) in column_widths.iter().enumerate() {
+                line.push_str(&fill.repeat(width + 2));
+                if i < cols - 1 {
+                    line.push_str(mid);
+                }
+            }
+            line.push_str(right);
+            line.push_str(RESET);
+            line
+        };
+
+        let top_border = build_line("╭", "┬", "╮", "─");
+        let middle_border = build_line("├", "┼", "┤", "─");
+        let bottom_border = build_line("╰", "┴", "╯", "─");
+
+        result.push_str(&top_border);
+        result.push('\n');
+
+        for (i, row) in rows.iter().enumerate() {
+            result.push_str(&format!("{color}│{RESET}"));
+            for (j, cell) in row.iter().enumerate() {
+                let width = column_widths[j];
+                let padding = width - string_len(cell);
+                let (left_pad, right_pad) = match alignments[j] {
+                    comrak::nodes::TableAlignment::Center => (padding / 2, padding - (padding / 2)),
+                    comrak::nodes::TableAlignment::Right => (padding, 0),
+                    _ => (0, padding),
+                };
+                result.push_str(&format!(
+                    " {}{}{} {color}│{RESET}",
+                    " ".repeat(left_pad),
+                    cell,
+                    " ".repeat(right_pad)
+                ));
+            }
+            result.push('\n');
+
+            if i == 0 {
+                result.push_str(&middle_border);
+                result.push('\n');
+            }
+        }
+        result.push_str(&bottom_border);
+    }
+
+    result
+}
+
+fn format_strong<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let content = collect(node, ctx);
+    format!("{BOLD}{content}{RESET}")
+}
+
+fn format_emph<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let content = collect(node, ctx);
+    format!("{ITALIC}{content}{RESET}")
+}
+
+fn format_strikethrough<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let content = collect(node, ctx);
+    format!("{STRIKETHROUGH}{content}{RESET}")
+}
+
+fn format_link<'a>(
+    node: &'a AstNode<'a>,
+    _n: &comrak::nodes::NodeLink,
+    ctx: &AnsiContext,
+) -> String {
+    let content = collect(node, ctx);
+    let cyan = ctx.theme.cyan.fg.clone();
+    format!("{UNDERLINE}{cyan}\u{f0339} {content}{RESET}")
+}
+
+fn format_image<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let content = collect(node, ctx);
+    let cyan = ctx.theme.cyan.fg.clone();
+    format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content)
+}
+
+fn format_task_item<'a>(
+    node: &'a AstNode<'a>,
+    task: &Option<char>,
+    ctx: &AnsiContext,
+    sps: Sourcepos,
+) -> String {
+    let offset = " ".repeat(sps.start.column - 1);
+    let checked = task.as_ref().map_or(false, |t| *t == 'x');
+    let green = ctx.theme.green.fg.clone();
+    let red = ctx.theme.red.fg.clone();
+    let checkbox = if checked {
+        format!("{offset}{green}\u{f4a7}{RESET}  ")
+    } else {
+        format!("{offset}{red}\u{e640}{RESET}  ")
+    };
+
+    let content = collect(node, ctx);
+    format!("{}{}", checkbox, content)
+}
+
+fn format_html_inline(html: &str, ctx: &AnsiContext) -> String {
+    let string_color = ctx.theme.string.fg.clone();
+    format!("{string_color}{html}{RESET}")
+}
+
+fn format_superscript<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    // no way to do it that I know of
+    collect(node, ctx)
+}
+
+fn format_multiline_block_quote<'a>(
+    node: &'a AstNode<'a>,
+    node_multi_line: &comrak::nodes::NodeMultilineBlockQuote,
+    ctx: &AnsiContext,
+) -> String {
+    let offset = node_multi_line.fence_offset;
+    format_blockquote(node, ctx, offset)
+}
+
+fn format_wiki_link<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let content = collect(node, ctx);
+    let cyan = &ctx.theme.cyan.fg;
+    format!("{cyan}\u{f15d6} {}{RESET}", content)
+}
+
+fn format_spoilered_text<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
+    let content = collect(node, ctx);
+    let comment = &ctx.theme.comment.fg;
+    format!("{FAINT}{comment}{content}{RESET}")
+}
+
+fn format_alert<'a>(
+    node: &'a AstNode<'a>,
+    node_alert: &comrak::nodes::NodeAlert,
+    ctx: &AnsiContext,
+) -> String {
+    let kind = &node_alert.alert_type;
+    let blue = ctx.theme.blue.fg.clone();
+    let red = ctx.theme.red.fg.clone();
+    let green = ctx.theme.green.fg.clone();
+    let cyan = ctx.theme.cyan.fg.clone();
+    let yellow = ctx.theme.yellow.fg.clone();
+
+    let (prefix, color) = match kind {
+        comrak::nodes::AlertType::Note => ("\u{f05d6} NOTE", blue),
+        comrak::nodes::AlertType::Tip => ("\u{f400} TIP", green),
+        comrak::nodes::AlertType::Important => ("\u{f017e} INFO", cyan),
+        comrak::nodes::AlertType::Warning => ("\u{ea6c} WARNING", yellow),
+        comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", red),
+    };
+
+    let mut result = format!("{}▌ {BOLD}{}{RESET}", color, prefix);
+
+    for child in node.children() {
+        let alert_content = collect(child, ctx);
+        for line in alert_content.lines() {
+            result.push_str(&format!("\n{}▌{RESET} {}", color, line));
+        }
+    }
+
+    result
+}
+
+fn format_tb(ctx: &AnsiContext, offset: usize) -> String {
     let br = br(offset);
     let border = &ctx.theme.guide.fg;
-    ctx.write(&format!("{border}{br}{RESET}"), None);
+    format!("{border}{br}{RESET}")
 }
 
-fn format_blockquote(ctx: &mut AnsiContext, fence_offset: usize, content: String) {
+fn format_blockquote<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext, fence_offset: usize) -> String {
+    let content = collect(node, ctx);
     let guide = ctx.theme.guide.fg.clone();
     let comment = ctx.theme.comment.fg.clone();
-    for (i, line) in content.lines().enumerate() {
-        if i != 0 {
-            ctx.cr();
-        }
-        let offset = " ".repeat(fence_offset + 1);
-        ctx.write(&format!("{guide}▌{offset}{comment}{line}{RESET}"), None);
-    }
+    content
+        .lines()
+        .map(|line| {
+            let offset = " ".repeat(fence_offset + 1);
+            format!("{guide}▌{offset}{comment}{line}{RESET}")
+        })
+        .join("\n")
 }
 
 fn string_len(str: &str) -> usize {
@@ -698,6 +739,110 @@ fn trim_ansi_string(mut str: String) -> String {
     }
 
     str
+}
+
+fn format_code_simple(code: &str, lang: &str, ctx: &AnsiContext, indent: usize) -> String {
+    let (title, color) = match get_lang_icon_and_color(lang) {
+        Some((icon, color)) => (format!("{color}{icon} {lang}"), color),
+        None => (lang.to_owned(), ""),
+    };
+
+    let top = format!(" {color}{}{RESET}\n", title);
+    let surface = ctx.theme.surface.bg.clone();
+
+    let ts = ctx.theme.to_syntect_theme();
+    let syntax = ctx
+        .ps
+        .find_syntax_by_token(lang)
+        .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
+    let mut highlighter = HighlightLines::new(syntax, &ts);
+
+    let mut buf = String::new();
+    let twidth = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
+    buf.push_str(&top);
+    let count = code.lines().count();
+    for (i, line) in LinesWithEndings::from(code).enumerate() {
+        if i == count && line.trim().is_empty() {
+            continue;
+        }
+        let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
+        let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
+        let highlighted = wrap_highlighted_line(highlighted, twidth as usize - 4, "  ");
+        buf.push_str(&highlighted);
+    }
+
+    let mut bg_formatted_lines = String::new();
+    for (i, line) in buf.lines().enumerate() {
+        let left_space = (twidth as usize).saturating_sub(string_len(line));
+        if i == 0 {
+            let suffix = format!("{surface}{}", " ".repeat(left_space));
+            bg_formatted_lines.push_str(&format!("{surface}{line}{suffix}{RESET}"));
+        } else {
+            let suffix = format!("{surface}{}", " ".repeat(left_space.saturating_sub(2)));
+            bg_formatted_lines.push_str(&format!("\n{surface}  {line}{suffix}{RESET}"));
+        }
+    }
+
+    bg_formatted_lines
+}
+fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent: usize) -> String {
+    let ts = ctx.theme.to_syntect_theme();
+    let syntax = ctx
+        .ps
+        .find_syntax_by_token(lang)
+        .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
+    let mut highlighter = HighlightLines::new(syntax, &ts);
+
+    let header = match get_lang_icon_and_color(lang) {
+        Some((icon, color)) => &format!("{color}{icon} {lang}",),
+        None => lang,
+    };
+
+    let max_lines = code.lines().count();
+    let num_width = max_lines.to_string().chars().count() + 2;
+    let term_width = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
+    let text_size = term_width as usize - num_width;
+    let color = ctx.theme.border.fg.clone();
+    let mut buffer = String::new();
+
+    let top_header = format!(
+        "{color}{}┬{}{RESET}",
+        "─".repeat(num_width),
+        "─".repeat(term_width as usize - num_width - 1)
+    );
+    let middle_header = format!("{color}{}│ {header}{RESET}", " ".repeat(num_width),);
+    let bottom_header = format!(
+        "{color}{}┼{}{RESET}",
+        "─".repeat(num_width),
+        "─".repeat(term_width as usize - num_width - 1)
+    );
+    buffer.push_str(&format!("{top_header}\n{middle_header}\n{bottom_header}\n"));
+
+    let mut num = 1;
+    let prefix = format!("{}{color}│{RESET}  ", " ".repeat(num_width));
+    for line in LinesWithEndings::from(code) {
+        let left_space = num_width - num.to_string().chars().count();
+        let left_offset = left_space / 2;
+        let right_offset = left_space - left_offset;
+        let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
+        let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
+        let highlighted = wrap_highlighted_line(highlighted, text_size - 2, &prefix);
+        buffer.push_str(&format!(
+            "{color}{}{num}{}│ {RESET}{}",
+            " ".repeat(left_offset),
+            " ".repeat(right_offset),
+            highlighted
+        ));
+        num += 1;
+    }
+
+    let last_border = format!(
+        "{color}{}┴{}{RESET}",
+        "─".repeat(num_width),
+        "─".repeat(term_width as usize - num_width - 1)
+    );
+    buffer.push_str(&last_border);
+    buffer
 }
 
 pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
@@ -889,114 +1034,6 @@ fn wrap_highlighted_line(original: String, width: usize, sub_prefix: &str) -> St
     }
     buf.push('\n');
     buf
-}
-fn format_code_simple(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
-    let (title, color) = match get_lang_icon_and_color(lang) {
-        Some((icon, color)) => (format!("{color}{icon} {lang}"), color),
-        None => (lang.to_owned(), ""),
-    };
-
-    let top = format!(" {color}{}{RESET}\n", title);
-    let surface = ctx.theme.surface.bg.clone();
-
-    let ts = ctx.theme.to_syntect_theme();
-    let syntax = ctx
-        .ps
-        .find_syntax_by_token(lang)
-        .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
-    let mut highlighter = HighlightLines::new(syntax, &ts);
-
-    let mut buf = String::new();
-    let twidth = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
-    buf.push_str(&top);
-    let count = code.lines().count();
-    for (i, line) in LinesWithEndings::from(code).enumerate() {
-        if i == count && line.trim().is_empty() {
-            continue;
-        }
-        let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
-        let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-        let highlighted = wrap_highlighted_line(highlighted, twidth as usize - 4, "  ");
-        buf.push_str(&highlighted);
-    }
-
-    let mut bg_formatted_lines = String::new();
-    for (i, line) in buf.lines().enumerate() {
-        let left_space = (twidth as usize).saturating_sub(string_len(line));
-        if i == 0 {
-            let suffix = format!("{surface}{}", " ".repeat(left_space));
-            bg_formatted_lines.push_str(&format!("{surface}{line}{suffix}{RESET}"));
-        } else {
-            let suffix = format!("{surface}{}", " ".repeat(left_space.saturating_sub(2)));
-            bg_formatted_lines.push_str(&format!("\n{surface}  {line}{suffix}{RESET}"));
-        }
-    }
-    ctx.write(&bg_formatted_lines, None);
-}
-fn format_code(code: &str, lang: &str, ctx: &mut AnsiContext, indent: usize) {
-    let ts = ctx.theme.to_syntect_theme();
-    let syntax = ctx
-        .ps
-        .find_syntax_by_token(lang)
-        .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
-    let mut highlighter = HighlightLines::new(syntax, &ts);
-
-    let header = match get_lang_icon_and_color(lang) {
-        Some((icon, color)) => &format!("{color}{icon} {lang}",),
-        None => lang,
-    };
-
-    let max_lines = code.lines().count();
-    let num_width = max_lines.to_string().chars().count() + 2;
-    let term_width = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
-    let text_size = term_width as usize - num_width;
-    let color = ctx.theme.border.fg.clone();
-
-    let top_header = format!(
-        "{color}{}┬{}{RESET}",
-        "─".repeat(num_width),
-        "─".repeat(term_width as usize - num_width - 1)
-    );
-    let middle_header = format!("{color}{}│ {header}{RESET}", " ".repeat(num_width),);
-    let bottom_header = format!(
-        "{color}{}┼{}{RESET}",
-        "─".repeat(num_width),
-        "─".repeat(term_width as usize - num_width - 1)
-    );
-    ctx.write(&top_header, None);
-    ctx.cr();
-    ctx.write(&middle_header, None);
-    ctx.cr();
-    ctx.write(&bottom_header, None);
-    ctx.cr();
-
-    let mut num = 1;
-    let prefix = format!("{}{color}│{RESET}  ", " ".repeat(num_width));
-    for line in LinesWithEndings::from(code) {
-        let left_space = num_width - num.to_string().chars().count();
-        let left_offset = left_space / 2;
-        let right_offset = left_space - left_offset;
-        let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
-        let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-        let highlighted = wrap_highlighted_line(highlighted, text_size - 2, &prefix);
-        ctx.write(
-            &format!(
-                "{color}{}{num}{}│ {RESET}{}",
-                " ".repeat(left_offset),
-                " ".repeat(right_offset),
-                highlighted
-            ),
-            None,
-        );
-        num += 1;
-    }
-
-    let last_border = format!(
-        "{color}{}┴{}{RESET}",
-        "─".repeat(num_width),
-        "─".repeat(term_width as usize - num_width - 1)
-    );
-    ctx.write(&last_border, None);
 }
 
 fn br(indent: usize) -> String {
