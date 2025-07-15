@@ -109,9 +109,10 @@ fn comrak_options<'a>() -> ComrakOptions<'a> {
     options.extension.wikilinks_title_after_pipe = true;
     options.extension.spoiler = true;
     options.extension.multiline_block_quotes = true;
+    options.parse.relaxed_tasklist_matching = true;
 
     // 🎯 Parsing options
-    options.parse.smart = true; // fancy quotes, dashes, ellipses
+    options.parse.smart = true;
 
     // 💄 Render options
     options.render.unsafe_ = true;
@@ -280,11 +281,12 @@ fn format_list<'a>(
         comrak::nodes::ListType::Bullet => 0,
         comrak::nodes::ListType::Ordered => node_list.start as i32,
     };
-    let bullet = if node_list.is_task_list { "" } else { "●" };
     let content = collect(node, ctx);
     let mut result = String::new();
-
+    let bullets = ["●", "○", "◆", "◇"];
+    let mut depth = 0;
     let mut pre_offset = 0;
+
     for (i, line) in content.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
@@ -293,29 +295,21 @@ fn format_list<'a>(
             result.push('\n');
         }
 
-        let mut offset = 0;
-        for c in line.chars() {
-            match c {
-                ' ' => offset += 1,
-                '\t' => offset += 2,
-                _ => break,
-            }
-        }
+        let offset = line.chars().take_while(|c| *c == ' ' || *c == '\t').count();
+
         let is_nested = offset > pre_offset && i != 0;
         if is_nested {
+            depth += 1;
             index -= 1;
-        } else {
-            pre_offset = offset;
+        } else if offset < pre_offset {
+            depth = 0;
         }
-        let new_index = index + i as i32;
+        pre_offset = offset;
+
         let line = line.trim();
-        let bullet = if is_nested {
-            ""
-        } else {
-            match list_type {
-                comrak::nodes::ListType::Bullet => bullet,
-                comrak::nodes::ListType::Ordered => &format!("{new_index}."),
-            }
+        let bullet = match list_type {
+            comrak::nodes::ListType::Bullet => bullets[depth % 4],
+            comrak::nodes::ListType::Ordered => &format!("{}.", index + i as i32),
         };
         let offset = " ".repeat(offset);
 
@@ -323,31 +317,19 @@ fn format_list<'a>(
             result.push_str(&format!("{offset}{line}"));
         } else {
             let line = if line.contains("\0") {
-                let line = line.replace("\0", &format!("{bullet}{RESET}"));
-                line
+                line.replace("\0", bullet)
             } else {
-                format!("  {line}")
+                let mut l = line.to_owned();
+                for b in bullets {
+                    if l.contains(b) {
+                        l = l.replace(b, bullet);
+                    }
+                }
+                l
             };
             result.push_str(&format!("{offset}{line}"));
         }
     }
-
-    let mut current = node.parent();
-    let mut is_first = true;
-    while let Some(parent) = current {
-        match parent.data.borrow().value {
-            comrak::nodes::NodeValue::Item(_) => {
-                is_first = false;
-                break;
-            }
-            comrak::nodes::NodeValue::Document => break,
-            _ => current = parent.parent(),
-        }
-    }
-    if is_first {
-        result.push('\n');
-    }
-
     result
 }
 
@@ -356,7 +338,7 @@ fn format_item<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
     let yellow = ctx.theme.yellow.fg.clone();
     let content = collect(node, ctx);
     format!(
-        "{}{yellow}\0 {content}",
+        "{}{yellow}\0{RESET} {content}",
         " ".repeat(data.sourcepos.start.column - 1)
     )
 }
@@ -421,22 +403,25 @@ fn format_html_block(
 
 fn format_paragraph<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext, sps: Sourcepos) -> String {
     let lines = collect(node, ctx);
-    if ctx.centered_lines.contains(&sps.start.line) {
-        let sw = term_misc::get_wininfo().sc_width;
-        return lines
-            .lines()
-            .map(|line| {
+    let sw = term_misc::get_wininfo().sc_width;
+
+    lines
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            let current_line_num = sps.start.line + i;
+            if ctx.centered_lines.contains(&current_line_num) {
                 let line = trim_ansi_string(line.into());
                 let le = string_len(&line);
                 // 1 based index
                 let offset = sps.start.column.saturating_sub(1);
                 let offset = (sw as usize - offset).saturating_sub(le).saturating_div(2);
                 format!("{}{line}", " ".repeat(offset))
-            })
-            .join("\n");
-    } else {
-        lines
-    }
+            } else {
+                line.into()
+            }
+        })
+        .join("\n")
 }
 
 fn format_heading<'a>(
@@ -446,13 +431,14 @@ fn format_heading<'a>(
     sps: Sourcepos,
 ) -> String {
     let content = collect(node, ctx);
+    let nh = node_heading.level as usize - 1;
     let content = match node_heading.level {
-        1 => format!(" 󰲡 {content}"),
-        2 => format!(" 󰲣 {content}"),
-        3 => format!(" 󰲥 {content}"),
-        4 => format!(" 󰲧 {content}"),
-        5 => format!(" 󰲩 {content}"),
-        6 => format!(" 󰲫 {content}"),
+        1 => format!("{}󰲡 {content}", " ".repeat(nh)),
+        2 => format!("{}󰲣 {content}", " ".repeat(nh)),
+        3 => format!("{}󰲥 {content}", " ".repeat(nh)),
+        4 => format!("{}󰲧 {content}", " ".repeat(nh)),
+        5 => format!("{}󰲩 {content}", " ".repeat(nh)),
+        6 => format!("{}󰲫 {content}", " ".repeat(nh)),
         _ => unreachable!(),
     };
     let bg = &ctx.theme.keyword_bg.bg;
@@ -606,17 +592,16 @@ fn format_task_item<'a>(
     sps: Sourcepos,
 ) -> String {
     let offset = " ".repeat(sps.start.column - 1);
-    let checked = task.as_ref().map_or(false, |t| *t == 'x');
-    let green = ctx.theme.green.fg.clone();
-    let red = ctx.theme.red.fg.clone();
-    let checkbox = if checked {
-        format!("{offset}{green}\u{f4a7}{RESET}  ")
-    } else {
-        format!("{offset}{red}\u{e640}{RESET}  ")
+
+    let (icon, colour) = match task.map(|c| c.to_ascii_lowercase()) {
+        Some('x') => ("󰱒", &ctx.theme.green.fg),
+        Some('-') | Some('~') => ("󰛲", &ctx.theme.yellow.fg),
+        Some('!') => ("󰳤", &ctx.theme.red.fg),
+        _ => ("󰄱", &ctx.theme.red.fg),
     };
 
     let content = collect(node, ctx);
-    format!("{}{}", checkbox, content)
+    format!("{offset}{colour}{icon}{RESET}  {content}")
 }
 
 fn format_html_inline(html: &str, ctx: &AnsiContext) -> String {
@@ -625,7 +610,7 @@ fn format_html_inline(html: &str, ctx: &AnsiContext) -> String {
 }
 
 fn format_superscript<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
-    // no way to do it that I know of
+    // mostly for html
     collect(node, ctx)
 }
 
