@@ -219,7 +219,7 @@ fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
         NodeValue::Heading(node_heading) => format_heading(node, node_heading, ctx, sps),
         NodeValue::ThematicBreak => format_tb(ctx, sps.start.column),
         NodeValue::FootnoteDefinition(_) => String::new(),
-        NodeValue::Table(table) => format_table(node, table, ctx),
+        NodeValue::Table(table) => format_table(node, table, ctx, sps),
         NodeValue::Text(literal) => literal.clone(),
         NodeValue::SoftBreak => " ".to_string(),
         NodeValue::LineBreak => String::new(),
@@ -473,6 +473,7 @@ fn format_table<'a>(
     node: &'a AstNode<'a>,
     table: &comrak::nodes::NodeTable,
     ctx: &AnsiContext,
+    sps: Sourcepos,
 ) -> String {
     let alignments = &table.alignments;
     let mut rows: Vec<Vec<String>> = Vec::new();
@@ -481,6 +482,7 @@ fn format_table<'a>(
         let mut row_cells: Vec<String> = Vec::new();
         for cell_node in child.children() {
             let cell_content = collect(cell_node, ctx);
+            let cell_content = cell_content.trim();
             row_cells.push(cell_content.to_string());
         }
         rows.push(row_cells);
@@ -549,6 +551,18 @@ fn format_table<'a>(
             }
         }
         result.push_str(&bottom_border);
+    }
+
+    if ctx.centered_lines.contains(&sps.start.line) {
+        let le = string_len(result.lines().nth(1).unwrap_or_default());
+        let tw = term_misc::get_wininfo().sc_width;
+        let offset = sps.start.column.saturating_sub(1);
+        let offset = (tw as usize - offset).saturating_sub(le).saturating_div(2);
+
+        return result
+            .lines()
+            .map(|line| format!("{}{line}", " ".repeat(offset)))
+            .join("\n");
     }
 
     result
