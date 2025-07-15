@@ -36,7 +36,7 @@ struct AnsiContext<'a> {
     theme: CustomTheme,
     hide_line_numbers: bool,
     line: AtomicUsize,
-    config: &'a McatConfig,
+    _config: &'a McatConfig,
     centered_lines: &'a [usize],
 }
 impl<'a> AnsiContext<'a> {
@@ -78,7 +78,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         theme,
         hide_line_numbers: config.no_linenumbers,
         line: AtomicUsize::new(1),
-        config,
+        _config: config,
         centered_lines: &res.centered_lines,
     };
 

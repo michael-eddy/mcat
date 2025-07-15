@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use regex::Regex;
 use scraper::{ElementRef, Html};
 use std::collections::HashMap;
@@ -9,16 +10,20 @@ pub struct ProcessingResult {
 
 pub struct ProcessingContext {
     output: String,
+    collect_stack: Vec<String>,
     rules: HashMap<String, Box<dyn Fn(ElementRef, &mut ProcessingContext)>>,
     centered_lines: Vec<usize>,
+    ensure_space_flag: bool,
 }
 
 impl ProcessingContext {
     fn new() -> Self {
         let mut ctx = Self {
             output: String::new(),
+            collect_stack: Vec::new(),
             rules: HashMap::new(),
             centered_lines: Vec::new(),
+            ensure_space_flag: false,
         };
 
         ctx.add_div_rules();
@@ -35,29 +40,57 @@ impl ProcessingContext {
     }
 
     fn write(&mut self, text: &str) {
-        self.output.push_str(text);
+        if self.ensure_space_flag && !text.starts_with("\n") {
+            self.ensure_empty_line();
+        }
+
+        // spaces and tabs after a block element only cause issues
+        let text = if self.ensure_space_flag && text.trim_matches([' ', '\t']).is_empty() {
+            ""
+        } else {
+            text
+        };
+        if let Some(buffer) = self.collect_stack.last_mut() {
+            buffer.push_str(&text);
+        } else {
+            self.output.push_str(&text);
+        }
+
+        self.ensure_space_flag = false;
+    }
+
+    fn ensure_empty_line(&mut self) {
+        let mut target_index = None;
+        for i in (0..self.collect_stack.len()).rev() {
+            if !self.collect_stack[i].is_empty() {
+                target_index = Some(i);
+                break;
+            }
+        }
+
+        if let Some(index) = target_index {
+            // Found a non-empty buffer, check if it needs a newline
+            if !self.collect_stack[index].ends_with('\n') {
+                self.collect_stack[index].push('\n');
+            }
+        } else {
+            // All buffers are empty (or no buffers), check main output
+            if !self.output.ends_with('\n') && !self.output.is_empty() {
+                self.output.push('\n');
+            }
+        }
+    }
+
+    fn ensure_space(&mut self) {
+        self.ensure_space_flag = true;
     }
 
     fn collect(&mut self, element: ElementRef) -> String {
-        let mut temp_output = String::new();
-        let original_output = std::mem::replace(&mut self.output, temp_output);
+        self.collect_stack.push(String::new());
 
         self.process_children(element);
 
-        temp_output = std::mem::replace(&mut self.output, original_output);
-
-        let start = self
-            .output
-            .lines()
-            .last()
-            .unwrap_or_default()
-            .trim()
-            .is_empty();
-        if start {
-            temp_output = temp_output.trim().into();
-        }
-
-        temp_output
+        self.collect_stack.pop().unwrap()
     }
 
     fn add_img_rules(&mut self) {
@@ -86,7 +119,10 @@ impl ProcessingContext {
             "pre".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                ctx.write(&format!("```\n{}\n```\n\n", content));
+                let content = content.trim();
+                ctx.ensure_empty_line();
+                ctx.write(&format!("```\n{}\n```", content));
+                ctx.ensure_space();
             }),
         );
 
@@ -118,9 +154,13 @@ impl ProcessingContext {
             "blockquote".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
-                for line in content.lines() {
-                    ctx.write(&format!("> {}\n", line));
-                }
+                let content = content.trim();
+                ctx.ensure_empty_line();
+
+                let content = content.lines().map(|line| format!("> {line}")).join("\n");
+                ctx.write(&content);
+
+                ctx.ensure_space();
             }),
         );
     }
@@ -128,8 +168,8 @@ impl ProcessingContext {
     fn add_formatting_rules(&mut self) {
         self.rules.insert(
             "br".to_string(),
-            Box::new(|_element, _ctx| {
-                // Line breaks are handled by not writing anything
+            Box::new(|_element, ctx| {
+                ctx.ensure_space();
             }),
         );
 
@@ -144,17 +184,9 @@ impl ProcessingContext {
         self.rules.insert(
             "hr".to_string(),
             Box::new(|_element, ctx| {
-                if !ctx
-                    .output
-                    .lines()
-                    .last()
-                    .unwrap_or_default()
-                    .trim()
-                    .is_empty()
-                {
-                    ctx.write("\n");
-                }
+                ctx.ensure_empty_line();
                 ctx.write("<!--HR-->");
+                ctx.ensure_space();
             }),
         );
 
@@ -215,8 +247,10 @@ impl ProcessingContext {
             self.rules.insert(
                 tag,
                 Box::new(move |element, ctx| {
-                    let content = ctx.collect(element);
+                    // headings cannot be multi lines in markdown
+                    let content = ctx.collect(element).replace("\n", " ");
                     let result = format!("{} {}", prefix, content.trim());
+                    ctx.ensure_empty_line();
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
@@ -227,6 +261,7 @@ impl ProcessingContext {
                     }
 
                     ctx.write(&result);
+                    ctx.ensure_space();
                 }),
             );
         }
@@ -246,8 +281,10 @@ impl ProcessingContext {
         for item in ["div", "p"] {
             self.rules.insert(
                 item.to_string(),
-                Box::new(|element, ctx| {
+                Box::new(move |element, ctx| {
                     let content = ctx.collect(element);
+                    let content = content.trim();
+                    ctx.ensure_empty_line();
 
                     if let Some(align) = element.value().attr("align") {
                         if align.trim().to_lowercase() == "center" {
@@ -263,6 +300,7 @@ impl ProcessingContext {
                         }
                     }
                     ctx.write(&content);
+                    ctx.ensure_space();
                 }),
             );
         }
@@ -273,10 +311,16 @@ impl ProcessingContext {
             "details".to_string(),
             Box::new(|element, ctx| {
                 let content = ctx.collect(element);
+                ctx.ensure_empty_line();
 
-                for line in content.lines() {
-                    ctx.write(&format!("> {}\n", line));
-                }
+                let content = content
+                    .trim()
+                    .lines()
+                    .map(|line| format!("> {line}"))
+                    .join("\n");
+                ctx.write(&content);
+
+                ctx.ensure_space();
             }),
         );
 
@@ -344,7 +388,42 @@ impl ProcessingContext {
     }
 }
 
-// Global process function
+/// # the tags handled:
+/// img, pre, code, a, blockquote, br, var, hr, b, strong, em, del, s, strike, h1-6, q, div, p, deatils, summary
+/// elements not included will remain the same.
+///
+/// # for attributes:
+/// * img: i do src, alt, width, height: should be normal markdown, but the width and height are encoded into the url like url#{width}x{height} but can also be url#x{height} or url#{width}x
+/// * div,p,headings: align=center -- doesn't reflect in the markdown itself.
+/// * a: href, should be same as markdown.
+///
+/// <inline> -- just writes into the buffer
+/// <block>  -- calls ensure_empty_line before the write and ensure_space after the write
+/// <v>      -- the content (can be nested, elements but after formatting)
+///
+/// # elements formatting:
+/// img:        <inline>,  as mentioned in the atrributes section
+/// pre:        <block>,   ```{v}```
+/// code:       <inline>,  `{v}`
+/// a:          <inline>,  with href: [{v}]({href}) without href {v}
+/// blockquote: <block>,   maps each line to "> {v}"
+/// br:         <N>,       calls ensure_space
+/// var:        <inline>,  *{v}*
+/// hr:         <block>,   <!--HR-->
+/// b:          <inline>,  **{v}**
+/// strong:     <inline>,  **{v}**
+/// em:         <inline>,  *{v}*
+/// del:        <inline>,  ~~{v}~~
+/// s:          <inline>,  ~~{v}~~
+/// strike:     <inline>,  ~~{v}~~
+/// h1-6:       <?>,       #*N{v} (partial block, just calls ensure_empty_line)
+/// p,div:      <block>,   {v}
+/// q:          <block>,   "{v}" (quoted)
+/// details:    <block>,   maps each line to "> {v}"
+/// summary:    <inline>,  "▼ {v}"
+///
+/// # NOTE
+/// paragraphs don't enforce a \n\n like it should in markdown spec.
 pub fn process(markdown: &str) -> ProcessingResult {
     let mut ctx = ProcessingContext::new();
 
@@ -358,5 +437,107 @@ pub fn process(markdown: &str) -> ProcessingResult {
     ProcessingResult {
         content: final_content,
         centered_lines: ctx.centered_lines,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::html2md::process;
+
+    #[test]
+    fn converts_complex_html_to_markdown_correctly() {
+        let html = r#"
+<h1>Big&nbsp;Title</h1>Text before.  
+<h3>
+multi line
+title
+</h3>
+
+<p>
+Some <b>bold <em>and *nested*</em></b> text
+plus an <a href="https://example.com">inline link</a>
+and one without href: <a>bare link</a>.
+</p>
+
+<div>
+<h1>Big&nbsp;Title</h1>
+<h2>Subtitle</h2>
+<blockquote>
+<p>A quoted<br>paragraph.</p>
+</blockquote>
+
+<details>
+<summary>Details&nbsp;title</summary>
+<p>Hidden <var>code</var> goes here.</p>
+</details>
+</div>
+
+<p>hello world</p><p>this sure is a good day</p>
+
+<pre>&lt;raw code block&gt;</pre>
+
+<code>inline_code()</code>
+
+<b>hello</b> <em>world</em>
+
+<img src="pic.png" alt="alt" width="640" height="480"> <img src="half.png" alt="h" height="120">
+<img src="half.png" alt="h" height="120">
+<img src="wide.png" alt="w" width="320"> <hr>
+
+<hr> <hr>
+
+<q>Inline quotation</q>
+
+<s>strike</s>, <del>delete</del>, <strike>old‑strike</strike>
+
+Text after.
+"#;
+
+        let expected = r#"
+# Big Title
+Text before.  
+### multi line title
+
+Some **bold *and *nested**** text
+plus an [inline link](https://example.com)
+and one without href: bare link.
+
+# Big Title
+## Subtitle
+> A quoted
+> paragraph.
+
+> ▼ Details title
+> Hidden *code* goes here.
+
+hello world
+this sure is a good day
+
+```
+<raw code block>
+```
+
+`inline_code()`
+
+**hello** *world*
+
+![alt](pic.png#640x480) ![h](half.png#x120)
+![h](half.png#x120)
+![w](wide.png#320x) 
+<!--HR-->
+
+<!--HR-->
+<!--HR-->
+
+"Inline quotation"
+
+~~strike~~, ~~delete~~, ~~old‑strike~~
+
+Text after.
+"#;
+
+        let res = process(html);
+
+        assert_eq!(res.content, expected);
     }
 }
