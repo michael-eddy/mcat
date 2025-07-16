@@ -94,7 +94,9 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         .into_iter()
         .map(|cow| cow.into_owned())
         .collect();
-    let res = lines.join("\n");
+    let res = lines
+        .join("\n")
+        .replace(RESET, &format!("{RESET}{}", &ctx.theme.foreground.fg));
 
     // force at max 2 \n at a row (we're adding newlines based on sourcepos)
     let re = Regex::new(r"\n{2,}").unwrap();
