@@ -11,9 +11,33 @@ pub struct ProcessingResult {
 pub struct ProcessingContext {
     output: String,
     collect_stack: Vec<String>,
-    rules: HashMap<String, Box<dyn Fn(ElementRef, &mut ProcessingContext)>>,
+    rules: HashMap<String, ProcessorFn>,
     centered_lines: Vec<usize>,
     ensure_space_flag: bool,
+}
+
+type ProcessorFn = fn(ElementRef, &mut ProcessingContext);
+
+// to avoid doing a move
+macro_rules! heading_processor {
+    ($level:expr) => {
+        |element, ctx| {
+            let prefix = "#".repeat($level);
+            let content = ctx.collect(element).replace("\n", " ");
+            let result = format!("{} {}", prefix, content.trim());
+            ctx.ensure_empty_line();
+
+            if let Some(align) = element.value().attr("align") {
+                if align.trim().to_lowercase() == "center" {
+                    let line_num = ctx.output.lines().count() + 1;
+                    ctx.centered_lines.push(line_num);
+                }
+            }
+
+            ctx.write(&result);
+            ctx.ensure_space();
+        }
+    };
 }
 
 impl ProcessingContext {
@@ -94,243 +118,170 @@ impl ProcessingContext {
     }
 
     fn add_img_rules(&mut self) {
-        self.rules.insert(
-            "img".to_string(),
-            Box::new(|element, ctx| {
-                let src = element.value().attr("src").unwrap_or("");
-                let alt = element.value().attr("alt").unwrap_or("IMG");
-                let width = element.value().attr("width");
-                let height = element.value().attr("height");
+        self.rules.insert("img".to_string(), |element, ctx| {
+            let src = element.value().attr("src").unwrap_or("");
+            let alt = element.value().attr("alt").unwrap_or("IMG");
+            let width = element.value().attr("width");
+            let height = element.value().attr("height");
 
-                let enhanced_src = match (width, height) {
-                    (Some(w), Some(h)) => format!("{}#{}x{}", src, w, h),
-                    (Some(w), None) => format!("{}#{}x", src, w),
-                    (None, Some(h)) => format!("{}#x{}", src, h),
-                    (None, None) => src.to_string(),
-                };
+            let enhanced_src = match (width, height) {
+                (Some(w), Some(h)) => format!("{}#{}x{}", src, w, h),
+                (Some(w), None) => format!("{}#{}x", src, w),
+                (None, Some(h)) => format!("{}#x{}", src, h),
+                (None, None) => src.to_string(),
+            };
 
-                ctx.write(&format!("![{}]({})", alt, enhanced_src));
-            }),
-        );
+            ctx.write(&format!("![{}]({})", alt, enhanced_src));
+        });
     }
 
     fn add_code_rules(&mut self) {
-        self.rules.insert(
-            "pre".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                let content = content.trim();
-                ctx.ensure_empty_line();
-                ctx.write(&format!("```\n{}\n```", content));
-                ctx.ensure_space();
-            }),
-        );
+        self.rules.insert("pre".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            let content = content.trim();
+            ctx.ensure_empty_line();
+            ctx.write(&format!("```\n{}\n```", content));
+            ctx.ensure_space();
+        });
 
-        self.rules.insert(
-            "code".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("`{}`", content));
-            }),
-        );
+        self.rules.insert("code".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("`{}`", content));
+        });
     }
 
     fn add_link_rules(&mut self) {
-        self.rules.insert(
-            "a".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                if let Some(href) = element.value().attr("href") {
-                    ctx.write(&format!("[{}]({})", content.trim(), href.trim()));
-                } else {
-                    ctx.write(&content);
-                }
-            }),
-        );
+        self.rules.insert("a".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            if let Some(href) = element.value().attr("href") {
+                ctx.write(&format!("[{}]({})", content.trim(), href.trim()));
+            } else {
+                ctx.write(&content);
+            }
+        });
     }
 
     fn add_block_rules(&mut self) {
-        self.rules.insert(
-            "blockquote".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                let content = content.trim();
-                ctx.ensure_empty_line();
+        self.rules.insert("blockquote".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            let content = content.trim();
+            ctx.ensure_empty_line();
 
-                let content = content.lines().map(|line| format!("> {line}")).join("\n");
-                ctx.write(&content);
+            let content = content.lines().map(|line| format!("> {line}")).join("\n");
+            ctx.write(&content);
 
-                ctx.ensure_space();
-            }),
-        );
+            ctx.ensure_space();
+        });
     }
 
     fn add_formatting_rules(&mut self) {
-        self.rules.insert(
-            "br".to_string(),
-            Box::new(|_element, ctx| {
-                ctx.ensure_space();
-            }),
-        );
+        self.rules.insert("br".to_string(), |_element, ctx| {
+            ctx.ensure_space();
+        });
 
-        self.rules.insert(
-            "var".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("*{}*", content.trim()));
-            }),
-        );
+        self.rules.insert("var".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("*{}*", content.trim()));
+        });
 
-        self.rules.insert(
-            "hr".to_string(),
-            Box::new(|_element, ctx| {
-                ctx.ensure_empty_line();
-                ctx.write("<!--HR-->");
-                ctx.ensure_space();
-            }),
-        );
+        self.rules.insert("hr".to_string(), |_element, ctx| {
+            ctx.ensure_empty_line();
+            ctx.write("<!--HR-->");
+            ctx.ensure_space();
+        });
 
-        self.rules.insert(
-            "b".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("**{}**", content.trim()));
-            }),
-        );
+        self.rules.insert("b".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("**{}**", content.trim()));
+        });
 
-        self.rules.insert(
-            "strong".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("**{}**", content.trim()));
-            }),
-        );
+        self.rules.insert("strong".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("**{}**", content.trim()));
+        });
 
-        self.rules.insert(
-            "em".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("*{}*", content.trim()));
-            }),
-        );
+        self.rules.insert("em".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("*{}*", content.trim()));
+        });
 
-        self.rules.insert(
-            "del".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("~~{}~~", content.trim()));
-            }),
-        );
+        self.rules.insert("del".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("~~{}~~", content.trim()));
+        });
 
-        self.rules.insert(
-            "s".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("~~{}~~", content.trim()));
-            }),
-        );
+        self.rules.insert("s".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("~~{}~~", content.trim()));
+        });
 
-        self.rules.insert(
-            "strike".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("~~{}~~", content.trim()));
-            }),
-        );
+        self.rules.insert("strike".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("~~{}~~", content.trim()));
+        });
     }
 
     fn add_heading_rules(&mut self) {
-        for level in 1..=6 {
-            let tag = format!("h{}", level);
-            let prefix = "#".repeat(level);
-
-            self.rules.insert(
-                tag,
-                Box::new(move |element, ctx| {
-                    // headings cannot be multi lines in markdown
-                    let content = ctx.collect(element).replace("\n", " ");
-                    let result = format!("{} {}", prefix, content.trim());
-                    ctx.ensure_empty_line();
-
-                    if let Some(align) = element.value().attr("align") {
-                        if align.trim().to_lowercase() == "center" {
-                            // Mark this heading as centered
-                            let line_num = ctx.output.lines().count() + 1;
-                            ctx.centered_lines.push(line_num);
-                        }
-                    }
-
-                    ctx.write(&result);
-                    ctx.ensure_space();
-                }),
-            );
-        }
+        self.rules.insert("h1".to_string(), heading_processor!(1));
+        self.rules.insert("h2".to_string(), heading_processor!(2));
+        self.rules.insert("h3".to_string(), heading_processor!(3));
+        self.rules.insert("h4".to_string(), heading_processor!(4));
+        self.rules.insert("h5".to_string(), heading_processor!(5));
+        self.rules.insert("h6".to_string(), heading_processor!(6));
     }
 
     fn add_quote_rules(&mut self) {
-        self.rules.insert(
-            "q".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("\"{}\"", content));
-            }),
-        );
+        self.rules.insert("q".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("\"{}\"", content));
+        });
     }
 
     fn add_div_rules(&mut self) {
         for item in ["div", "p"] {
-            self.rules.insert(
-                item.to_string(),
-                Box::new(move |element, ctx| {
-                    let content = ctx.collect(element);
-                    let content = content.trim();
-                    ctx.ensure_empty_line();
+            self.rules.insert(item.to_string(), |element, ctx| {
+                let content = ctx.collect(element);
+                let content = content.trim();
+                ctx.ensure_empty_line();
 
-                    if let Some(align) = element.value().attr("align") {
-                        if align.trim().to_lowercase() == "center" {
-                            // Mark all lines of this section as centered
-                            let start_line = ctx.output.lines().count() + 1;
-                            ctx.write(&content);
-                            let end_line = ctx.output.lines().count();
+                if let Some(align) = element.value().attr("align") {
+                    if align.trim().to_lowercase() == "center" {
+                        // Mark all lines of this section as centered
+                        let start_line = ctx.output.lines().count() + 1;
+                        ctx.write(&content);
+                        let end_line = ctx.output.lines().count();
 
-                            for line_num in start_line..=end_line {
-                                ctx.centered_lines.push(line_num);
-                            }
-                            return;
+                        for line_num in start_line..=end_line {
+                            ctx.centered_lines.push(line_num);
                         }
+                        return;
                     }
-                    ctx.write(&content);
-                    ctx.ensure_space();
-                }),
-            );
+                }
+                ctx.write(&content);
+                ctx.ensure_space();
+            });
         }
     }
 
     fn add_details_rules(&mut self) {
-        self.rules.insert(
-            "details".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.ensure_empty_line();
+        self.rules.insert("details".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.ensure_empty_line();
 
-                let content = content
-                    .trim()
-                    .lines()
-                    .map(|line| format!("> {line}"))
-                    .join("\n");
-                ctx.write(&content);
+            let content = content
+                .trim()
+                .lines()
+                .map(|line| format!("> {line}"))
+                .join("\n");
+            ctx.write(&content);
 
-                ctx.ensure_space();
-            }),
-        );
+            ctx.ensure_space();
+        });
 
-        self.rules.insert(
-            "summary".to_string(),
-            Box::new(|element, ctx| {
-                let content = ctx.collect(element);
-                ctx.write(&format!("▼ {}", content.trim()));
-            }),
-        );
+        self.rules.insert("summary".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("▼ {}", content.trim()));
+        });
     }
 
     fn escape_unknown_elements(&self, markdown: &str) -> String {
@@ -373,14 +324,7 @@ impl ProcessingContext {
                     let tag_name = child_element.value().name();
 
                     if let Some(rule) = self.rules.get(tag_name) {
-                        // We need to clone the rule to avoid borrow checker issues
-                        let rule_clone = unsafe {
-                            std::mem::transmute::<
-                                &Box<dyn Fn(ElementRef, &mut ProcessingContext)>,
-                                &Box<dyn Fn(ElementRef, &mut ProcessingContext)>,
-                            >(rule)
-                        };
-                        rule_clone(child_element, self);
+                        rule(child_element, self);
                     } else {
                         // For unknown elements, process their children
                         self.process_children(child_element);

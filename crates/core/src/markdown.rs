@@ -91,7 +91,11 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         .into_iter()
         .map(|cow| cow.into_owned())
         .collect();
-    lines.join("\n")
+    let res = lines.join("\n");
+
+    // force at max 2 \n at a row (we're adding newlines based on sourcepos)
+    let re = Regex::new(r"\n{2,}").unwrap();
+    re.replace_all(&res, "\n\n").to_string()
 }
 
 fn comrak_options<'a>() -> ComrakOptions<'a> {
