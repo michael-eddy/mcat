@@ -334,10 +334,22 @@ impl ProcessingContext {
     }
 
     fn escape_unknown_elements(&self, markdown: &str) -> String {
-        let tag_regex = Regex::new(r"</?([a-zA-Z][a-zA-Z0-9]*)[^>]*>").unwrap();
-
-        tag_regex
+        // escape S-TITLE comments (special formating in mcat)
+        let comment_regex = Regex::new(r"<!--\s*S-TITLE:[^>]*-->").unwrap();
+        let markdown_with_escaped_comments = comment_regex
             .replace_all(markdown, |caps: &regex::Captures| {
+                caps.get(0)
+                    .unwrap()
+                    .as_str()
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
+            })
+            .to_string();
+
+        // escape tags we don't parse here (rather them staying)
+        let tag_regex = Regex::new(r"</?([a-zA-Z][a-zA-Z0-9]*)[^>]*>").unwrap();
+        tag_regex
+            .replace_all(&markdown_with_escaped_comments, |caps: &regex::Captures| {
                 let tag_name = caps.get(1).unwrap().as_str().to_lowercase();
 
                 if self.rules.contains_key(&tag_name) {
@@ -346,16 +358,11 @@ impl ProcessingContext {
                     caps.get(0)
                         .unwrap()
                         .as_str()
-                        .replace("<", "___ESCAPED_LT___")
-                        .replace(">", "___ESCAPED_GT___")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
                 }
             })
             .to_string()
-    }
-
-    fn unescape_text(&self, text: &str) -> String {
-        text.replace("___ESCAPED_LT___", "<")
-            .replace("___ESCAPED_GT___", ">")
     }
 
     fn process_children(&mut self, element: ElementRef) {
@@ -432,10 +439,8 @@ pub fn process(markdown: &str) -> ProcessingResult {
 
     ctx.process_children(document.root_element());
 
-    let final_content = ctx.unescape_text(&ctx.output);
-
     ProcessingResult {
-        content: final_content,
+        content: ctx.output,
         centered_lines: ctx.centered_lines,
     }
 }
