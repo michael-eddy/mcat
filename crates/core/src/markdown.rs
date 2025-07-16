@@ -30,6 +30,9 @@ const ITALIC: &str = "\x1B[3m";
 const UNDERLINE: &str = "\x1B[4m";
 const STRIKETHROUGH: &str = "\x1B[9m";
 const FAINT: &str = "\x1b[2m";
+const NORMAL: &str = "\x1B[22m";
+const ITALIC_OFF: &str = "\x1B[23m";
+const STRIKETHROUGH_OFF: &str = "\x1B[29m";
 
 struct AnsiContext<'a> {
     ps: SyntaxSet,
@@ -502,8 +505,10 @@ fn format_table<'a>(
         }
     }
 
-    let color = &ctx.theme.border.fg.clone();
+    let color = &ctx.theme.border.fg;
+    let header_color = &ctx.theme.yellow.fg;
     let mut result = String::new();
+    let is_only_headers = rows.iter().count() == 1;
 
     if !rows.is_empty() {
         let cols = column_widths.len();
@@ -524,13 +529,18 @@ fn format_table<'a>(
         };
 
         let top_border = build_line("╭", "┬", "╮", "─");
-        let middle_border = build_line("├", "┼", "┤", "─");
         let bottom_border = build_line("╰", "┴", "╯", "─");
+        let middle_border = if is_only_headers {
+            bottom_border.clone()
+        } else {
+            build_line("├", "┼", "┤", "─")
+        };
 
         result.push_str(&top_border);
         result.push('\n');
 
         for (i, row) in rows.iter().enumerate() {
+            let text_color = if i == 0 { header_color } else { "" };
             result.push_str(&format!("{color}│{RESET}"));
             for (j, cell) in row.iter().enumerate() {
                 let width = column_widths[j];
@@ -541,7 +551,7 @@ fn format_table<'a>(
                     _ => (0, padding),
                 };
                 result.push_str(&format!(
-                    " {}{}{} {color}│{RESET}",
+                    " {}{text_color}{}{} {color}│{RESET}",
                     " ".repeat(left_pad),
                     cell,
                     " ".repeat(right_pad)
@@ -554,7 +564,11 @@ fn format_table<'a>(
                 result.push('\n');
             }
         }
-        result.push_str(&bottom_border);
+        if !is_only_headers {
+            result.push_str(&bottom_border);
+        }
+        // clearing the forced \n at the end
+        result.pop();
     }
 
     if ctx.centered_lines.contains(&sps.start.line) {
@@ -574,17 +588,17 @@ fn format_table<'a>(
 
 fn format_strong<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
     let content = collect(node, ctx);
-    format!("{BOLD}{content}{RESET}")
+    format!("{BOLD}{content}{NORMAL}")
 }
 
 fn format_emph<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
     let content = collect(node, ctx);
-    format!("{ITALIC}{content}{RESET}")
+    format!("{ITALIC}{content}{ITALIC_OFF}")
 }
 
 fn format_strikethrough<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext) -> String {
     let content = collect(node, ctx);
-    format!("{STRIKETHROUGH}{content}{RESET}")
+    format!("{STRIKETHROUGH}{content}{STRIKETHROUGH_OFF}")
 }
 
 fn format_link<'a>(
@@ -692,9 +706,9 @@ fn format_tb(ctx: &AnsiContext, offset: usize) -> String {
 }
 
 fn format_blockquote<'a>(node: &'a AstNode<'a>, ctx: &AnsiContext, fence_offset: usize) -> String {
-    let content = collect(node, ctx);
-    let guide = ctx.theme.guide.fg.clone();
-    let comment = ctx.theme.comment.fg.clone();
+    let guide = &ctx.theme.guide.fg;
+    let comment = &ctx.theme.comment.fg;
+    let content = collect(node, ctx).replace(RESET, &format!("{RESET}{comment}"));
     content
         .lines()
         .map(|line| {

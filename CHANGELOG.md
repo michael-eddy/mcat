@@ -1,5 +1,7 @@
 ## Src
-- 🎉 markdown_viewer now parses some HTML!
+- 🎉 markdown_viewer now parses some HTML! -- including align=center attributes on some elements
+- 📈 improved the markdown viewer - tasklist (now includes '-' and '!' tasks), lists (now has a different caret depends on the depth), tables (highlight the headers and handles only header tables better)
+- 🐛 fixed an issue in the markdown viewer when certain styles would reset others
 - [ ] planned: images in markdown
 
 ## V0.3.8
