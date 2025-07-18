@@ -57,6 +57,38 @@ impl<'a> AnsiContext<'a> {
         out
     }
 }
+
+// #[derive(Debug)]
+// struct ImageUrl {
+//     base_url: String,
+//     width: Option<u16>,
+//     height: Option<u16>,
+// }
+// fn extract_image_urls<'a>(node: &'a AstNode<'a>, urls: &mut Vec<ImageUrl>) {
+//     let data = node.data.borrow();
+//
+//     if let NodeValue::Image(image_node) = &data.value {
+//         // regex for; <URL>#<Width>x<Height>
+//         // width and height are optional.
+//         let regex = Regex::new(r"^(.+?)(?:#(\d+)?x(\d+)?)?$").unwrap();
+//         if let Some(captures) = regex.captures(&image_node.url) {
+//             if let Some(base_url) = captures.get(1) {
+//                 let width = captures.get(2).and_then(|v| v.as_str().parse::<u16>().ok());
+//                 let height = captures.get(3).and_then(|v| v.as_str().parse::<u16>().ok());
+//                 urls.push(ImageUrl {
+//                     base_url: base_url.as_str().to_owned(),
+//                     width,
+//                     height,
+//                 });
+//             }
+//         }
+//     }
+//
+//     for child in node.children() {
+//         extract_image_urls(child, urls);
+//     }
+// }
+
 pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
     let res = &html2md::process(md);
     let md = &res.content;
