@@ -1,0 +1,580 @@
+use comrak::nodes::{
+    AstNode, NodeAlert, NodeCode, NodeCodeBlock, NodeHeading, NodeHtmlBlock, NodeLink, NodeMath,
+    NodeValue, NodeWikiLink,
+};
+use itertools::Itertools;
+use regex::Regex;
+use syntect::parsing::SyntaxSet;
+
+use crate::markdown_viewer::utils::{string_len, trim_ansi_string, wrap_lines};
+
+use super::{
+    themes::CustomTheme,
+    utils::{format_code_full, format_code_simple, format_tb},
+};
+
+pub const RESET: &str = "\x1B[0m";
+const BOLD: &str = "\x1B[1m";
+const ITALIC: &str = "\x1B[3m";
+const UNDERLINE: &str = "\x1B[4m";
+const STRIKETHROUGH: &str = "\x1B[9m";
+const FAINT: &str = "\x1b[2m";
+const NORMAL: &str = "\x1B[22m";
+const ITALIC_OFF: &str = "\x1B[23m";
+const STRIKETHROUGH_OFF: &str = "\x1B[29m";
+const INDENT: usize = 2;
+
+pub struct AnsiContext<'a> {
+    pub ps: SyntaxSet,
+    pub theme: CustomTheme,
+    pub hide_line_numbers: bool,
+    pub centered_lines: &'a [usize],
+    pub term_width: usize,
+
+    pub blockquote_fenced_offset: Option<usize>,
+    pub is_multi_block_quote: bool,
+    pub paragraph_collecting_line: Option<usize>,
+    pub collecting_depth: usize,
+}
+
+fn collect<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    ctx.collecting_depth += 1;
+    let content = node
+        .children()
+        .map(|child| parse_node(child, ctx))
+        .collect();
+    ctx.collecting_depth -= 1;
+
+    content
+}
+
+pub fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let data = node.data.borrow();
+    let mut buffer = match ctx.paragraph_collecting_line {
+        Some(line) => {
+            if data.sourcepos.start.line != line {
+                ctx.paragraph_collecting_line = Some(data.sourcepos.start.line);
+                "\n"
+            } else {
+                ""
+            }
+        }
+        None => "",
+    }
+    .to_owned();
+
+    let content = match &data.value {
+        NodeValue::Document => render_document(node, ctx),
+        NodeValue::FrontMatter(_) => render_front_matter(node, ctx),
+        NodeValue::BlockQuote => render_block_quote(node, ctx),
+        NodeValue::List(_) => render_list(node, ctx),
+        NodeValue::Item(_) => render_item(node, ctx),
+        NodeValue::CodeBlock(_) => render_code_block(node, ctx),
+        NodeValue::HtmlBlock(_) => render_html_block(node, ctx),
+        NodeValue::Paragraph => render_paragraph(node, ctx),
+        NodeValue::Heading(_) => render_heading(node, ctx),
+        NodeValue::ThematicBreak => render_thematic_break(node, ctx),
+        NodeValue::Table(_) => render_table(node, ctx),
+        NodeValue::Strong => render_strong(node, ctx),
+        NodeValue::Emph => render_emph(node, ctx),
+        NodeValue::Strikethrough => render_strikethrough(node, ctx),
+        NodeValue::Link(_) => render_link(node, ctx),
+        NodeValue::Image(_) => render_image(node, ctx),
+        NodeValue::Code(_) => render_code(node, ctx),
+        NodeValue::TaskItem(_) => render_task_item(node, ctx),
+        NodeValue::HtmlInline(_) => render_html_inline(node, ctx),
+        NodeValue::Superscript => render_superscript(node, ctx),
+        NodeValue::MultilineBlockQuote(_) => render_multiline_block_quote(node, ctx),
+        NodeValue::WikiLink(_) => render_wiki_link(node, ctx),
+        NodeValue::SpoileredText => render_spoilered_text(node, ctx),
+        NodeValue::Alert(_) => render_alert(node, ctx),
+        // leave as is
+        NodeValue::Text(literal) => literal.to_owned(),
+        NodeValue::Raw(literal) => literal.to_owned(),
+        NodeValue::SoftBreak => " ".to_owned(),
+        NodeValue::Math(NodeMath { literal, .. }) => literal.to_owned(),
+        NodeValue::FootnoteDefinition(_) => String::new(),
+        NodeValue::LineBreak => "".to_owned(),
+        NodeValue::TableRow(_) => String::new(),
+        NodeValue::TableCell => String::new(),
+        NodeValue::Escaped => String::new(),
+        NodeValue::DescriptionList => String::new(),
+        NodeValue::DescriptionItem(_) => String::new(),
+        NodeValue::DescriptionTerm => String::new(),
+        NodeValue::DescriptionDetails => String::new(),
+        NodeValue::EscapedTag(_) => String::new(),
+        NodeValue::Underline => String::new(),
+        NodeValue::Subscript => String::new(),
+        NodeValue::FootnoteReference(_) => String::new(),
+    };
+    buffer.push_str(&content);
+
+    buffer
+}
+
+fn render_document<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    node.children()
+        .map(|child| parse_node(child, ctx))
+        .collect()
+}
+
+fn render_front_matter<'a>(node: &'a AstNode<'a>, _ctx: &mut AnsiContext) -> String {
+    let NodeValue::FrontMatter(ref literal) = node.data.borrow().value else {
+        panic!()
+    };
+
+    literal.to_owned()
+}
+
+fn render_block_quote<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let guide = ctx.theme.guide.fg.clone();
+    let comment = ctx.theme.comment.fg.clone();
+    let content = collect(node, ctx).replace(RESET, &format!("{RESET}{comment}"));
+    let content = content.trim();
+    let fence_offset = ctx.blockquote_fenced_offset.unwrap_or_default();
+
+    content
+        .lines()
+        .map(|line| {
+            let offset = " ".repeat(fence_offset + 1);
+            format!("{guide}▌{offset}{comment}{line}{RESET}")
+        })
+        .join("\n")
+        + "\n\n"
+}
+
+fn render_list<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::List(..) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let content = collect(node, ctx);
+
+    if ctx.is_multi_block_quote {
+        content
+    } else {
+        content + "\n"
+    }
+}
+
+fn render_item<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Item(ref item) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let sps_col = node.data.borrow().sourcepos.start.column - 1;
+    let offset = if item.marker_offset == 0 {
+        sps_col.saturating_div(2)
+    } else {
+        sps_col.saturating_div(2).saturating_div(item.marker_offset)
+    };
+
+    let yellow = ctx.theme.yellow.fg.clone();
+    let content = collect(node, ctx);
+    // let content = wrap_lines(content.trim(), width, sub_prefix);
+    let content = content.trim();
+
+    let bullets = ["●", "○", "◆", "◇"];
+    let bullet = match item.list_type {
+        comrak::nodes::ListType::Bullet => bullets[offset % 4],
+        comrak::nodes::ListType::Ordered => &format!("{}.", item.start),
+    };
+
+    format!(
+        "{}{yellow}{bullet}{RESET} {content}\n",
+        " ".repeat(offset * 4)
+    )
+}
+
+fn render_task_item<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::TaskItem(ref task) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let offset = " ".repeat(node.data.borrow().sourcepos.start.column - 1);
+    let content = collect(node, ctx);
+    let content = content.trim();
+    let (icon, colour) = match task.map(|c| c.to_ascii_lowercase()) {
+        Some('x') => ("󰱒", &ctx.theme.green.fg),
+        Some('-') | Some('~') => ("󰛲", &ctx.theme.yellow.fg),
+        Some('!') => ("󰳤", &ctx.theme.red.fg),
+        _ => ("󰄱", &ctx.theme.red.fg),
+    };
+
+    format!("{offset}{colour}{icon}{RESET}  {content}\n")
+}
+
+fn render_code_block<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::CodeBlock(NodeCodeBlock {
+        ref literal,
+        ref info,
+        ..
+    }) = node.data.borrow().value
+    else {
+        panic!()
+    };
+
+    let indent = node.data.borrow().sourcepos.start.column;
+
+    if ctx.hide_line_numbers || literal.lines().count() < 10 {
+        format_code_simple(literal, info, ctx, indent)
+    } else {
+        format_code_full(literal, info, ctx, indent)
+    }
+}
+
+fn render_html_block<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::HtmlBlock(NodeHtmlBlock { ref literal, .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
+    if let Some(caps) = re.captures(literal) {
+        let title = caps.get(1).unwrap().as_str();
+        let text_size = string_len(title);
+        let border_width = text_size + 4;
+        let center_padding = (ctx.term_width - border_width) / 2;
+
+        let fg_yellow = ctx.theme.yellow.fg.clone();
+        let border_line = "─".repeat(border_width);
+        let spaces = " ".repeat(center_padding);
+
+        return format!(
+            "{spaces}┌{border_line}┐\n{spaces}│  {fg_yellow}{BOLD}{title}{RESET}  │\n{spaces}└{border_line}┘\n"
+        );
+    }
+
+    let sps = node.data.borrow().sourcepos;
+    if literal.contains("<!--HR-->") {
+        return format_tb(ctx, sps.start.column);
+    }
+
+    let mut result = String::new();
+    let comment = &ctx.theme.comment.fg;
+    for line in literal.lines() {
+        result.push_str(&format!("{comment}{line}{RESET}\n"));
+    }
+    if result.ends_with('\n') {
+        result.pop();
+    }
+    result
+}
+
+fn render_paragraph<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let sps = node.data.borrow().sourcepos;
+    ctx.paragraph_collecting_line = Some(sps.start.line);
+    let lines = collect(node, ctx);
+    ctx.paragraph_collecting_line = None;
+
+    let suffix = if ctx.collecting_depth == 0 {
+        "\n\n"
+    } else {
+        "\n"
+    };
+
+    lines
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            let current_line_num = sps.start.line + i;
+            if ctx.centered_lines.contains(&current_line_num) {
+                let line = trim_ansi_string(line.into());
+                let le = string_len(&line);
+                // 1 based index
+                let offset = sps.start.column.saturating_sub(1);
+                let offset = (ctx.term_width - offset)
+                    .saturating_sub(le)
+                    .saturating_div(2);
+                format!("{}{line}", " ".repeat(offset))
+            } else {
+                line.into()
+            }
+        })
+        .join("\n")
+        + suffix
+}
+
+fn render_heading<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Heading(NodeHeading { level, .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let content = collect(node, ctx);
+    let content = content.trim();
+    let content = match level {
+        1 => format!(" 󰎤 {content}"),
+        2 => format!(" 󰎧 {content}"),
+        3 => format!(" 󰎬 {content}"),
+        4 => format!(" 󰎮 {content}"),
+        5 => format!(" 󰎰 {content}"),
+        6 => format!(" 󰎵 {content}"),
+        _ => unreachable!(),
+    };
+    let bg = &ctx.theme.keyword_bg.bg;
+    let main_color = &ctx.theme.keyword.fg;
+    let content = content.replace(RESET, &format!("{RESET}{bg}"));
+    let sps = &node.data.borrow().sourcepos;
+
+    let mut header = if !ctx.centered_lines.contains(&sps.start.line) {
+        let padding = " ".repeat(
+            ctx.term_width
+                .saturating_sub(string_len(&content) as usize)
+                .into(),
+        );
+        format!("{main_color}{bg}{content}{padding}{RESET}")
+    } else {
+        // center here
+        let le = string_len(&content);
+        let left_space = ctx.term_width.saturating_sub(le);
+        let padding_left = left_space.saturating_div(2);
+        let padding_rigth = left_space - padding_left;
+        format!(
+            "{main_color}{bg}{}{content}{}{RESET}",
+            " ".repeat(padding_left),
+            " ".repeat(padding_rigth)
+        )
+    };
+    header.push_str("\n\n");
+    if sps.start.line != 1 {
+        format!("\n{header}")
+    } else {
+        header
+    }
+}
+
+fn render_thematic_break<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let offset = node.data.borrow().sourcepos.start.column;
+    format_tb(ctx, offset) + "\n"
+}
+
+fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Table(ref table) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let alignments = &table.alignments;
+    let mut rows: Vec<Vec<String>> = Vec::new();
+
+    for child in node.children() {
+        let mut row_cells: Vec<String> = Vec::new();
+        for cell_node in child.children() {
+            let cell_content = collect(cell_node, ctx);
+            let cell_content = cell_content.trim();
+            row_cells.push(cell_content.to_string());
+        }
+        rows.push(row_cells);
+    }
+
+    let mut column_widths: Vec<usize> = vec![0; alignments.len()];
+    for row in &rows {
+        for (i, cell) in row.iter().enumerate() {
+            let c = string_len(cell.trim());
+            if c > column_widths[i] {
+                column_widths[i] = c;
+            }
+        }
+    }
+
+    let color = &ctx.theme.border.fg;
+    let header_color = &ctx.theme.yellow.fg;
+    let mut result = String::new();
+    let is_only_headers = rows.iter().count() == 1;
+
+    if !rows.is_empty() {
+        let cols = column_widths.len();
+
+        let build_line = |left: &str, mid: &str, right: &str, fill: &str| -> String {
+            let mut line = String::new();
+            line.push_str(color);
+            line.push_str(left);
+            for (i, &width) in column_widths.iter().enumerate() {
+                line.push_str(&fill.repeat(width + 2));
+                if i < cols - 1 {
+                    line.push_str(mid);
+                }
+            }
+            line.push_str(right);
+            line.push_str(RESET);
+            line
+        };
+
+        let top_border = build_line("╭", "┬", "╮", "─");
+        let bottom_border = build_line("╰", "┴", "╯", "─");
+        let middle_border = if is_only_headers {
+            bottom_border.clone()
+        } else {
+            build_line("├", "┼", "┤", "─")
+        };
+
+        result.push_str(&top_border);
+        result.push('\n');
+
+        for (i, row) in rows.iter().enumerate() {
+            let text_color = if i == 0 { header_color } else { "" };
+            result.push_str(&format!("{color}│{RESET}"));
+            for (j, cell) in row.iter().enumerate() {
+                let width = column_widths[j];
+                let padding = width - string_len(cell);
+                let (left_pad, right_pad) = match alignments[j] {
+                    comrak::nodes::TableAlignment::Center => (padding / 2, padding - (padding / 2)),
+                    comrak::nodes::TableAlignment::Right => (padding, 0),
+                    _ => (0, padding),
+                };
+                result.push_str(&format!(
+                    " {}{text_color}{}{} {color}│{RESET}",
+                    " ".repeat(left_pad),
+                    cell,
+                    " ".repeat(right_pad)
+                ));
+            }
+            result.push('\n');
+
+            if i == 0 {
+                result.push_str(&middle_border);
+                result.push('\n');
+            }
+        }
+        if !is_only_headers {
+            result.push_str(&bottom_border);
+        }
+        // clearing the forced \n at the end
+        result.pop();
+    }
+
+    let sps = node.data.borrow().sourcepos;
+    if ctx.centered_lines.contains(&sps.start.line) {
+        let le = string_len(result.lines().nth(1).unwrap_or_default());
+        let offset = sps.start.column.saturating_sub(1);
+        let offset = (ctx.term_width - offset)
+            .saturating_sub(le)
+            .saturating_div(2);
+
+        return result
+            .lines()
+            .map(|line| format!("{}{line}", " ".repeat(offset)))
+            .join("\n");
+    }
+
+    result
+}
+
+fn render_strong<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let content = collect(node, ctx);
+    format!("{BOLD}{content}{NORMAL}")
+}
+
+fn render_emph<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let content = collect(node, ctx);
+    format!("{ITALIC}{content}{ITALIC_OFF}")
+}
+
+fn render_strikethrough<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let content = collect(node, ctx);
+    format!("{STRIKETHROUGH}{content}{STRIKETHROUGH_OFF}")
+}
+
+fn render_link<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Link(NodeLink { .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let content = collect(node, ctx);
+    let cyan = ctx.theme.cyan.fg.clone();
+    format!("{UNDERLINE}{cyan}\u{f0339} {content}{RESET}")
+}
+
+fn render_image<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Image(NodeLink { .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let content = collect(node, ctx);
+    let cyan = ctx.theme.cyan.fg.clone();
+    format!("{UNDERLINE}{cyan}\u{f0976} {}{RESET}", content)
+}
+
+fn render_code<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Code(NodeCode { ref literal, .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let fg = &ctx.theme.green.fg;
+    format!("{fg}{}{RESET}", literal)
+}
+
+fn render_html_inline<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::HtmlInline(ref literal) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let string_color = ctx.theme.string.fg.clone();
+    format!("{string_color}{literal}{RESET}")
+}
+
+fn render_superscript<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    // no real thing I can do
+    collect(node, ctx)
+}
+
+fn render_multiline_block_quote<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::MultilineBlockQuote(ref multiline_block_quote) = node.data.borrow().value else {
+        panic!()
+    };
+    let fenced_offset = multiline_block_quote.fence_offset;
+    ctx.blockquote_fenced_offset = Some(fenced_offset);
+    ctx.is_multi_block_quote = true;
+
+    let res = render_block_quote(node, ctx);
+    ctx.blockquote_fenced_offset = None;
+    ctx.is_multi_block_quote = false;
+
+    res
+}
+
+fn render_wiki_link<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::WikiLink(NodeWikiLink { .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let content = collect(node, ctx);
+    let cyan = &ctx.theme.cyan.fg;
+    format!("{cyan}\u{f15d6} {}{RESET}", content)
+}
+
+fn render_spoilered_text<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let content = collect(node, ctx);
+    let comment = &ctx.theme.comment.fg;
+    format!("{FAINT}{comment}{content}{RESET}")
+}
+
+fn render_alert<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::Alert(NodeAlert { ref alert_type, .. }) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let kind = alert_type;
+    let blue = ctx.theme.blue.fg.clone();
+    let red = ctx.theme.red.fg.clone();
+    let green = ctx.theme.green.fg.clone();
+    let cyan = ctx.theme.cyan.fg.clone();
+    let yellow = ctx.theme.yellow.fg.clone();
+
+    let (prefix, color) = match kind {
+        comrak::nodes::AlertType::Note => ("\u{f05d6} NOTE", blue),
+        comrak::nodes::AlertType::Tip => ("\u{f400} TIP", green),
+        comrak::nodes::AlertType::Important => ("\u{f017e} INFO", cyan),
+        comrak::nodes::AlertType::Warning => ("\u{ea6c} WARNING", yellow),
+        comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", red),
+    };
+
+    let mut result = format!("{}▌ {BOLD}{}{RESET}", color, prefix);
+
+    for child in node.children() {
+        let alert_content = collect(child, ctx);
+        for line in alert_content.lines() {
+            result.push_str(&format!("\n{}▌{RESET} {}", color, line));
+        }
+    }
+
+    result + "\n\n"
+}

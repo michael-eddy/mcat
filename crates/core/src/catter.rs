@@ -23,7 +23,7 @@ use crate::{
     config::McatConfig,
     converter::{self},
     image_viewer::{clear_screen, run_interactive_viewer, show_help_prompt},
-    markdown,
+    markdown_viewer,
 };
 
 pub enum CatType {
@@ -138,25 +138,25 @@ pub fn cat(
             Ok(CatType::Markdown)
         }
         ("md", "html") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), if opts.style_html {Some(opts.theme.as_ref())} else {None});
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), if opts.style_html {Some(opts.theme.as_ref())} else {None});
             out.write_all(html.as_bytes())?;
             Ok(CatType::Html)
         },
         ("md", "image") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
             let image = converter::html_to_image(&html)?;
             out.write_all(&image)?;
             Ok(CatType::Image)
         },
         ("md", "inline") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
             let image = converter::html_to_image(&html)?;
             let dyn_img = image::load_from_memory(&image)?;
             print_image(out, dyn_img, opts)?;
             Ok(CatType::InlineImage)
         },
         ("md", "interactive") => {
-            let html = markdown::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
             let img_bytes = converter::html_to_image(&html)?;
             let img = image::load_from_memory(&img_bytes)?;
             interact_with_image(img, opts, out)?;
@@ -199,7 +199,7 @@ pub fn cat(
             let is_tty = stdout().is_tty();
             let use_color = opts.color.should_use(is_tty);
             let content = match use_color {
-                true => markdown::md_to_ansi(&res, &opts),
+                true => markdown_viewer::md_to_ansi(&res, &opts),
                 false => res,
             };
             let use_pager = opts.paging.should_use(is_tty && content.lines().count() > term_misc::get_wininfo().sc_height as usize);

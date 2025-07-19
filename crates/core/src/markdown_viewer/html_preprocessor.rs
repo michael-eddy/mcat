@@ -391,7 +391,7 @@ pub fn process(markdown: &str) -> ProcessingResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::html2md::process;
+    use crate::markdown_viewer::html_preprocessor::process;
 
     #[test]
     fn converts_complex_html_to_markdown_correctly() {

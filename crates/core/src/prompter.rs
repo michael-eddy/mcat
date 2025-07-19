@@ -3,7 +3,7 @@ use inquire::MultiSelect;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use crate::markdown::get_lang_icon_and_color;
+use crate::markdown_viewer::utils::get_lang_icon_and_color;
 
 pub fn prompt_for_files(
     dir: &Path,
