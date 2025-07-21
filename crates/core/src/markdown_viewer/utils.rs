@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, usize};
 
 use itertools::Itertools;
 use rasteroid::term_misc;
@@ -213,21 +213,77 @@ fn find_last_fg_color_sequence(text: &str) -> Option<String> {
     last_fg_color
 }
 
-/// first_width: the space for text on the first line.
-/// sub:width:   the space for left for sub lines. doesn't factor in sub_prefix width, calc yourself.
-pub fn wrap_lines(
+pub fn wrap_char_based(
     original: &str,
-    first_width: usize,
-    sub_width: usize,
+    char: char,
+    indent: usize,
+    prefix: &str,
     sub_prefix: &str,
 ) -> String {
+    let (space, sub_space, indent, sub_indent) = info_for_wrapping(indent, prefix, sub_prefix);
+    let suffix = if original.ends_with("\n") { "\n" } else { "" };
+
     original
         .lines()
-        .map(|line| wrap_highlighted_line(line.to_owned(), first_width, sub_width, sub_prefix))
+        .map(|line| {
+            let char_index = line.rfind(char).map(|v| v + char.len_utf8()).unwrap_or(0);
+            let str_to_char = line.get(..char_index).unwrap_or("");
+            let line = format!("{indent}{line}");
+            let sub_prefix = format!("{sub_indent}{str_to_char} ");
+            let sub_space = sub_space.saturating_sub(string_len(&sub_prefix));
+            wrap_highlighted_line(line, space, sub_space, &sub_prefix, false)
+                .trim_matches('\n')
+                .to_owned()
+        })
         .join("\n")
+        + suffix
 }
 
-fn wrap_with_sub(original: String, first_width: usize, sub_width: usize) -> (Vec<String>, usize) {
+fn info_for_wrapping(
+    indent: usize,
+    prefix: &str,
+    sub_prefix: &str,
+) -> (usize, usize, String, String) {
+    let space = (term_misc::get_wininfo().sc_width as usize).saturating_sub(indent * 2);
+    let sub_space = space.saturating_sub(string_len(sub_prefix));
+    let space = space.saturating_sub(string_len(prefix));
+
+    let indent = " ".repeat(indent);
+    let sub_indent = format!("{indent}{sub_prefix}");
+    let indent = format!("{indent}{prefix}");
+
+    (space, sub_space, indent, sub_indent)
+}
+
+/// for braindead indenting any element.
+pub fn wrap_lines(
+    original: &str,
+    multi_line: bool,
+    indent: usize,
+    prefix: &str,
+    sub_prefix: &str,
+) -> String {
+    let (space, sub_space, indent, sub_indent) = info_for_wrapping(indent, prefix, sub_prefix);
+    let suffix = if original.ends_with("\n") { "\n" } else { "" };
+
+    if multi_line {
+        original
+            .lines()
+            .map(|line| {
+                let line = format!("{indent}{line}");
+                wrap_highlighted_line(line, space, sub_space, &sub_indent, false)
+                    .trim_matches('\n')
+                    .to_owned()
+            })
+            .join("\n")
+            + suffix
+    } else {
+        let line = format!("{indent}{original}");
+        wrap_highlighted_line(line, space, sub_space, &indent, false)
+    }
+}
+
+fn wrap_with_sub(original: String, first_width: usize, sub_width: usize) -> Vec<String> {
     let lines: Vec<String> = textwrap::wrap(&original, first_width)
         .into_iter()
         .map(|cow| cow.into_owned())
@@ -235,15 +291,11 @@ fn wrap_with_sub(original: String, first_width: usize, sub_width: usize) -> (Vec
 
     let first_line = match lines.first() {
         Some(v) => v.clone(),
-        None => return (vec![original], 0),
+        None => return vec![original],
     };
     let sub_lines = lines.into_iter().skip(1).join(" ");
 
-    let pre_padding = strip_str(&first_line)
-        .find(|c: char| !c.is_whitespace())
-        .map(|v| v + 3) // +4 for visual indent, -1 because index is 1 based
-        .unwrap_or(0);
-    let sub_width = sub_width - pre_padding - 1; // TEST -1
+    let sub_width = sub_width;
     let lines: Vec<String> = textwrap::wrap(&sub_lines, sub_width)
         .into_iter()
         .map(|cow| cow.into_owned())
@@ -252,23 +304,35 @@ fn wrap_with_sub(original: String, first_width: usize, sub_width: usize) -> (Vec
     let mut res = vec![first_line];
     res.extend_from_slice(&lines);
 
-    (res, pre_padding)
+    res
 }
 
 /// first_width: the space for text on the first line.
-/// sub:width:   the space for left for sub lines. doesn't factor in sub_prefix width, calc yourself.
-fn wrap_highlighted_line(
+/// sub_width:   the space for left for sub lines. doesn't factor in sub_prefix width, calc yourself.
+/// auto_indent: add the firstline indent to the sub lines.
+pub fn wrap_highlighted_line(
     original: String,
     first_width: usize,
     sub_width: usize,
     sub_prefix: &str,
+    auto_indent: bool,
 ) -> String {
     if string_len(&original) <= first_width {
         return original;
     }
 
+    let suffix = if original.ends_with("\n") { "\n" } else { "" };
+
     // wrap lines
-    let (lines, pre_padding) = wrap_with_sub(original, first_width, sub_width);
+    let pre_padding = if auto_indent {
+        strip_str(&original)
+            .find(|c: char| !c.is_whitespace())
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let lines = wrap_with_sub(original, first_width, sub_width.saturating_sub(pre_padding));
+
     let padding = " ".repeat(pre_padding);
     let mut buf = String::new();
     let mut pre_last_color = "".to_owned();
@@ -285,19 +349,16 @@ fn wrap_highlighted_line(
             None => {}
         }
     }
-    buf.push('\n');
+    buf.push_str(suffix);
 
     buf
 }
 
-pub fn format_code_simple(code: &str, lang: &str, ctx: &AnsiContext, indent: usize) -> String {
-    let (title, color) = match get_lang_icon_and_color(lang) {
-        Some((icon, color)) => (format!("{color}{icon} {lang}"), color),
-        None => (lang.to_owned(), ""),
+pub fn format_code_simple<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent: usize) -> String {
+    let header = match get_lang_icon_and_color(lang) {
+        Some((icon, color)) => &format!("{color}{icon} {lang}{RESET}",),
+        None => lang,
     };
-
-    let top = format!(" {color}{}{RESET}\n", title);
-    let surface = ctx.theme.surface.bg.clone();
 
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
@@ -306,37 +367,31 @@ pub fn format_code_simple(code: &str, lang: &str, ctx: &AnsiContext, indent: usi
         .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
     let mut highlighter = HighlightLines::new(syntax, &ts);
 
-    let mut buf = String::new();
-    let twidth = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
-    let text_width = twidth as usize - 4; // -4 for 2 spaces each side.
-    buf.push_str(&top);
-    let count = code.lines().count();
-    for (i, line) in LinesWithEndings::from(code).enumerate() {
-        if i == count && line.trim().is_empty() {
-            continue;
-        }
-        let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
-        let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-        let highlighted = wrap_highlighted_line(highlighted, text_width, text_width, "  ");
-        buf.push_str(&highlighted);
-    }
+    let content = LinesWithEndings::from(code)
+        .map(|line| {
+            let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
+            let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
+            format!("  {}", highlighted.trim_matches('\n'))
+        })
+        .join("\n");
 
-    let mut bg_formatted_lines = String::new();
-    for (i, line) in buf.lines().enumerate() {
-        let left_space = (twidth as usize).saturating_sub(string_len(line));
-        if i == 0 {
-            let suffix = format!("{surface}{}", " ".repeat(left_space));
-            bg_formatted_lines.push_str(&format!("{surface}{line}{suffix}{RESET}"));
-        } else {
-            let suffix = format!("{surface}{}", " ".repeat(left_space.saturating_sub(2)));
-            bg_formatted_lines.push_str(&format!("\n{surface}  {line}{suffix}{RESET}"));
-        }
-    }
+    let sub_indent = 4usize;
+    let sub_indent = " ".repeat(sub_indent.saturating_sub(indent));
+    let (space, sub_space, indent, sub_indent) = info_for_wrapping(indent, "", &sub_indent);
+    let content = content
+        .lines()
+        .map(|line| {
+            let line = format!("{indent}{line}");
+            wrap_highlighted_line(line, space, sub_space, &sub_indent, true)
+                .trim_matches('\n')
+                .to_owned()
+        })
+        .join("\n");
 
-    bg_formatted_lines + "\n"
+    format!("{indent}{header}\n{content}\n\n")
 }
 
-pub fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent: usize) -> String {
+pub fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext) -> String {
     let ts = ctx.theme.to_syntect_theme();
     let syntax = ctx
         .ps
@@ -351,33 +406,41 @@ pub fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent: u
 
     let max_lines = code.lines().count();
     let num_width = max_lines.to_string().chars().count() + 2;
-    let term_width = term_misc::get_wininfo().sc_width - indent.saturating_sub(1) as u16;
-    let text_size = term_width as usize - num_width - 3; // -2 for indent both ways, -1 for |
+    // -1 because the indent is 1 based
+    let term_width = term_misc::get_wininfo().sc_width;
+    let text_size = (term_width as usize)
+        .saturating_sub(num_width)
+        .saturating_sub(3); // -2 for spacing both ways, -1 for the | char after line num
     let color = ctx.theme.border.fg.clone();
     let mut buffer = String::new();
 
+    let after_num_width = (term_width as usize)
+        .saturating_sub(num_width)
+        .saturating_sub(1); // because the connected char ┬
     let top_header = format!(
         "{color}{}┬{}{RESET}",
         "─".repeat(num_width),
-        "─".repeat(term_width as usize - num_width - 1)
+        "─".repeat(after_num_width)
     );
     let middle_header = format!("{color}{}│ {header}{RESET}", " ".repeat(num_width),);
     let bottom_header = format!(
         "{color}{}┼{}{RESET}",
         "─".repeat(num_width),
-        "─".repeat(term_width as usize - num_width - 1)
+        "─".repeat(after_num_width)
     );
     buffer.push_str(&format!("{top_header}\n{middle_header}\n{bottom_header}\n"));
 
     let mut num = 1;
-    let prefix = format!("{}{color}│{RESET}  ", " ".repeat(num_width));
+    let prefix = format!("{}{color}│{RESET}     ", " ".repeat(num_width));
+    let sub_text_size = text_size.saturating_sub(4); // 4 extra space for visual indent.
     for line in LinesWithEndings::from(code) {
         let left_space = num_width - num.to_string().chars().count();
         let left_offset = left_space / 2;
         let right_offset = left_space - left_offset;
         let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
         let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-        let highlighted = wrap_highlighted_line(highlighted, text_size, text_size, &prefix);
+        let highlighted =
+            wrap_highlighted_line(highlighted, text_size, sub_text_size, &prefix, true);
         buffer.push_str(&format!(
             "{color}{}{num}{}│ {RESET}{}",
             " ".repeat(left_offset),
@@ -393,7 +456,7 @@ pub fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent: u
         "─".repeat(term_width as usize - num_width - 1)
     );
     buffer.push_str(&last_border);
-    buffer + "\n"
+    format!("{buffer}\n\n")
 }
 
 pub fn format_tb(ctx: &AnsiContext, offset: usize) -> String {

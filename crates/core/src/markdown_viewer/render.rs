@@ -10,7 +10,7 @@ use crate::markdown_viewer::utils::{string_len, trim_ansi_string, wrap_lines};
 
 use super::{
     themes::CustomTheme,
-    utils::{format_code_full, format_code_simple, format_tb},
+    utils::{format_code_full, format_code_simple, format_tb, wrap_char_based},
 };
 
 pub const RESET: &str = "\x1B[0m";
@@ -35,6 +35,16 @@ pub struct AnsiContext<'a> {
     pub is_multi_block_quote: bool,
     pub paragraph_collecting_line: Option<usize>,
     pub collecting_depth: usize,
+    pub under_header: bool,
+    pub force_simple_code_block: usize,
+    pub list_depth: usize,
+}
+
+impl<'a> AnsiContext<'a> {
+    pub fn should_indent(&self) -> bool {
+        // root level element, and under an header
+        self.under_header && self.collecting_depth == 0
+    }
 }
 
 fn collect<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
@@ -70,7 +80,7 @@ pub fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         NodeValue::List(_) => render_list(node, ctx),
         NodeValue::Item(_) => render_item(node, ctx),
         NodeValue::CodeBlock(_) => render_code_block(node, ctx),
-        NodeValue::HtmlBlock(_) => render_html_block(node, ctx),
+        NodeValue::HtmlBlock(_) => render_html_block(node, ctx), //TODO add indent
         NodeValue::Paragraph => render_paragraph(node, ctx),
         NodeValue::Heading(_) => render_heading(node, ctx),
         NodeValue::ThematicBreak => render_thematic_break(node, ctx),
@@ -129,18 +139,27 @@ fn render_front_matter<'a>(node: &'a AstNode<'a>, _ctx: &mut AnsiContext) -> Str
 fn render_block_quote<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
     let guide = ctx.theme.guide.fg.clone();
     let comment = ctx.theme.comment.fg.clone();
+    ctx.force_simple_code_block += 1;
     let content = collect(node, ctx).replace(RESET, &format!("{RESET}{comment}"));
-    let content = content.trim();
+    ctx.force_simple_code_block -= 1;
+    let content = content.trim_matches('\n');
     let fence_offset = ctx.blockquote_fenced_offset.unwrap_or_default();
 
-    content
+    let content = content
         .lines()
         .map(|line| {
             let offset = " ".repeat(fence_offset + 1);
             format!("{guide}▌{offset}{comment}{line}{RESET}")
         })
-        .join("\n")
-        + "\n\n"
+        .join("\n");
+
+    let content = if ctx.should_indent() {
+        wrap_char_based(&content, '▌', INDENT, "", "")
+    } else {
+        content.to_owned()
+    };
+
+    content + "\n\n"
 }
 
 fn render_list<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
@@ -148,7 +167,14 @@ fn render_list<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         panic!()
     };
 
+    ctx.list_depth += 1;
     let content = collect(node, ctx);
+    ctx.list_depth -= 1;
+    let content = if ctx.should_indent() {
+        wrap_lines(&content, true, INDENT, "", "  ") // 2 space extra because of the bullet
+    } else {
+        content
+    };
 
     if ctx.is_multi_block_quote {
         content
@@ -162,27 +188,20 @@ fn render_item<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         panic!()
     };
 
-    let sps_col = node.data.borrow().sourcepos.start.column - 1;
-    let offset = if item.marker_offset == 0 {
-        sps_col.saturating_div(2)
-    } else {
-        sps_col.saturating_div(2).saturating_div(item.marker_offset)
-    };
-
     let yellow = ctx.theme.yellow.fg.clone();
     let content = collect(node, ctx);
-    // let content = wrap_lines(content.trim(), width, sub_prefix);
     let content = content.trim();
+    let depth = ctx.list_depth - 1;
 
     let bullets = ["●", "○", "◆", "◇"];
     let bullet = match item.list_type {
-        comrak::nodes::ListType::Bullet => bullets[offset % 4],
+        comrak::nodes::ListType::Bullet => bullets[depth % 4],
         comrak::nodes::ListType::Ordered => &format!("{}.", item.start),
     };
 
     format!(
         "{}{yellow}{bullet}{RESET} {content}\n",
-        " ".repeat(offset * 4)
+        " ".repeat(depth * 4)
     )
 }
 
@@ -214,12 +233,14 @@ fn render_code_block<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String
         panic!()
     };
 
-    let indent = node.data.borrow().sourcepos.start.column;
+    let info = if info.trim().is_empty() { "text" } else { info };
 
-    if ctx.hide_line_numbers || literal.lines().count() < 10 {
+    // force_simple_code_block is a number because it may be recursive
+    if literal.lines().count() <= 10 || ctx.force_simple_code_block > 0 || ctx.hide_line_numbers {
+        let indent = if ctx.should_indent() { INDENT } else { 0 };
         format_code_simple(literal, info, ctx, indent)
     } else {
-        format_code_full(literal, info, ctx, indent)
+        format_code_full(literal, info, ctx)
     }
 }
 
@@ -287,7 +308,11 @@ fn render_paragraph<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String 
                     .saturating_div(2);
                 format!("{}{line}", " ".repeat(offset))
             } else {
-                line.into()
+                if ctx.should_indent() {
+                    wrap_lines(&line, false, INDENT, "", "")
+                } else {
+                    line.into()
+                }
             }
         })
         .join("\n")
@@ -299,6 +324,7 @@ fn render_heading<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         panic!()
     };
 
+    ctx.under_header = true;
     let content = collect(node, ctx);
     let content = content.trim();
     let content = match level {
@@ -344,6 +370,11 @@ fn render_heading<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
 
 fn render_thematic_break<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
     let offset = node.data.borrow().sourcepos.start.column;
+    let offset = if ctx.should_indent() {
+        offset
+    } else {
+        offset + INDENT
+    };
     format_tb(ctx, offset) + "\n"
 }
 
@@ -437,25 +468,30 @@ fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         if !is_only_headers {
             result.push_str(&bottom_border);
         }
-        // clearing the forced \n at the end
-        result.pop();
     }
 
     let sps = node.data.borrow().sourcepos;
-    if ctx.centered_lines.contains(&sps.start.line) {
+    let result = if ctx.centered_lines.contains(&sps.start.line) {
         let le = string_len(result.lines().nth(1).unwrap_or_default());
         let offset = sps.start.column.saturating_sub(1);
         let offset = (ctx.term_width - offset)
             .saturating_sub(le)
             .saturating_div(2);
 
-        return result
+        result
             .lines()
             .map(|line| format!("{}{line}", " ".repeat(offset)))
-            .join("\n");
-    }
+            .join("\n")
+    } else if ctx.should_indent() {
+        result
+            .lines()
+            .map(|line| format!("{}{line}", " ".repeat(INDENT)))
+            .join("\n")
+    } else {
+        result
+    };
 
-    result
+    format!("\n{result}\n")
 }
 
 fn render_strong<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
@@ -569,12 +605,26 @@ fn render_alert<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
 
     let mut result = format!("{}▌ {BOLD}{}{RESET}", color, prefix);
 
-    for child in node.children() {
-        let alert_content = collect(child, ctx);
-        for line in alert_content.lines() {
-            result.push_str(&format!("\n{}▌{RESET} {}", color, line));
-        }
+    ctx.force_simple_code_block += 1;
+    let alert_content = collect(node, ctx);
+    ctx.force_simple_code_block -= 1;
+    let alert_content = alert_content.trim();
+    if alert_content.is_empty() {
+        return result;
     }
 
-    result + "\n\n"
+    result.push('\n');
+    let alert_content = alert_content
+        .lines()
+        .map(|line| format!("{color}▌{RESET} {line}"))
+        .join("\n");
+    result.push_str(&alert_content);
+
+    let content = if ctx.should_indent() {
+        wrap_char_based(&result, '▌', INDENT, "", "")
+    } else {
+        result
+    };
+
+    content + "\n\n"
 }

@@ -45,6 +45,9 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         is_multi_block_quote: false,
         paragraph_collecting_line: None,
         collecting_depth: 0,
+        under_header: false,
+        force_simple_code_block: 0,
+        list_depth: 0,
     };
 
     let mut output = String::new();
