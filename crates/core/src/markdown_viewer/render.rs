@@ -80,7 +80,7 @@ pub fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         NodeValue::List(_) => render_list(node, ctx),
         NodeValue::Item(_) => render_item(node, ctx),
         NodeValue::CodeBlock(_) => render_code_block(node, ctx),
-        NodeValue::HtmlBlock(_) => render_html_block(node, ctx), //TODO add indent
+        NodeValue::HtmlBlock(_) => render_html_block(node, ctx),
         NodeValue::Paragraph => render_paragraph(node, ctx),
         NodeValue::Heading(_) => render_heading(node, ctx),
         NodeValue::ThematicBreak => render_thematic_break(node, ctx),
@@ -271,15 +271,13 @@ fn render_html_block<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String
         return format_tb(ctx, sps.start.column);
     }
 
-    let mut result = String::new();
     let comment = &ctx.theme.comment.fg;
-    for line in literal.lines() {
-        result.push_str(&format!("{comment}{line}{RESET}\n"));
-    }
-    if result.ends_with('\n') {
-        result.pop();
-    }
-    result
+    let result = literal
+        .lines()
+        .map(|line| format!("{comment}{line}{RESET}"))
+        .join("\n");
+    let result = wrap_lines(&result, true, INDENT, "", "");
+    format!("\n\n{result}\n\n")
 }
 
 fn render_paragraph<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
