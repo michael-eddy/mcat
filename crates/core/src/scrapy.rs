@@ -1,6 +1,7 @@
 use clap::error::Result;
 use futures::StreamExt;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use regex::Regex;
 use reqwest::{Client, Response};
 use scraper::Html;
 use std::io::Write;
@@ -10,6 +11,8 @@ use tempfile::NamedTempFile;
 use tokio::runtime::Builder;
 
 use crate::catter;
+
+static GITHUB_BLOB_URL: OnceLock<Regex> = OnceLock::new();
 
 fn extension_from_mime(mime: &str) -> Option<&'static str> {
     if mime.contains("image/avif") {
@@ -137,6 +140,14 @@ pub fn scrape_biggest_media(
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         .build()?;
     let rt = Builder::new_current_thread().enable_all().build()?;
+
+    let re =
+        GITHUB_BLOB_URL.get_or_init(|| Regex::new(r"^.*github\.com.*[\\\/]blob[\\\/].*$").unwrap());
+    let url = if re.is_match(url) && !url.contains("?raw=true") {
+        &format!("{url}?raw=true")
+    } else {
+        url
+    };
 
     rt.block_on(async {
         let response = get_response(&client, url, silent).await?;

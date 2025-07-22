@@ -1,4 +1,5 @@
 pub mod html_preprocessor;
+pub mod image_preprocessor;
 pub mod render;
 pub mod themes;
 pub mod utils;
@@ -7,6 +8,7 @@ use comrak::{
     Arena, ComrakOptions, ComrakPlugins, markdown_to_html_with_plugins,
     plugins::syntect::SyntectAdapterBuilder,
 };
+use image_preprocessor::ImagePreprocessor;
 use rasteroid::term_misc::{self, break_size_string};
 use render::{AnsiContext, RESET, parse_node};
 use syntect::{highlighting::ThemeSet, parsing::SyntaxSet};
@@ -34,12 +36,14 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
 
     let ps = SyntaxSet::load_defaults_newlines();
     let theme = CustomTheme::from(config.theme.as_ref());
+    let image_preprocessor = ImagePreprocessor::new(root, config);
     let mut ctx = AnsiContext {
         ps,
         theme,
         hide_line_numbers: config.no_linenumbers,
         centered_lines: &res.centered_lines,
         term_width: term_misc::get_wininfo().sc_width as usize,
+        image_preprocessor: &image_preprocessor,
 
         blockquote_fenced_offset: None,
         is_multi_block_quote: false,
@@ -64,7 +68,15 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         .replace(RESET, &format!("{RESET}{}", &ctx.theme.foreground.fg));
 
     // force at max 2 \n at a row (we're adding newlines based on sourcepos)
-    limit_newlines(&res).to_string()
+    let mut res = limit_newlines(&res).to_string();
+
+    // replace images
+    for (_, img) in image_preprocessor.mapper {
+        if img.is_ok {
+            res = res.replace(&img.placeholder, &img.img)
+        }
+    }
+    res
 }
 
 pub fn md_to_html(markdown: &str, style: Option<&str>) -> String {

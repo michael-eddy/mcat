@@ -3,12 +3,12 @@ use comrak::nodes::{
     NodeValue, NodeWikiLink,
 };
 use itertools::Itertools;
-use regex::Regex;
 use syntect::parsing::SyntaxSet;
 
-use crate::markdown_viewer::utils::{string_len, trim_ansi_string, wrap_lines};
+use crate::markdown_viewer::utils::{get_title_box, string_len, trim_ansi_string, wrap_lines};
 
 use super::{
+    image_preprocessor::ImagePreprocessor,
     themes::CustomTheme,
     utils::{format_code_full, format_code_simple, format_tb, limit_newlines, wrap_char_based},
 };
@@ -30,6 +30,7 @@ pub struct AnsiContext<'a> {
     pub hide_line_numbers: bool,
     pub centered_lines: &'a [usize],
     pub term_width: usize,
+    pub image_preprocessor: &'a ImagePreprocessor,
 
     pub blockquote_fenced_offset: Option<usize>,
     pub is_multi_block_quote: bool,
@@ -250,9 +251,7 @@ fn render_html_block<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String
         panic!()
     };
 
-    let re = Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap();
-    if let Some(caps) = re.captures(literal) {
-        let title = caps.get(1).unwrap().as_str();
+    if let Some(title) = get_title_box(literal) {
         let text_size = string_len(title);
         let border_width = text_size + 4;
         let center_padding = (ctx.term_width - border_width) / 2;
@@ -519,9 +518,15 @@ fn render_link<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
 }
 
 fn render_image<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
-    let NodeValue::Image(NodeLink { .. }) = node.data.borrow().value else {
+    let NodeValue::Image(NodeLink { ref url, .. }) = node.data.borrow().value else {
         panic!()
     };
+
+    if let Some(img) = ctx.image_preprocessor.mapper.get(url) {
+        if img.is_ok {
+            return img.placeholder.clone();
+        }
+    }
 
     let content = collect(node, ctx);
     let cyan = ctx.theme.cyan.fg.clone();

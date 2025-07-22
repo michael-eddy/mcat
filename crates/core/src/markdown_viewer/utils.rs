@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, usize};
+use std::{borrow::Cow, collections::HashMap, sync::OnceLock, usize};
 
 use itertools::Itertools;
 use rasteroid::term_misc;
@@ -12,6 +12,10 @@ use syntect::{
 use unicode_width::UnicodeWidthStr;
 
 use super::render::{AnsiContext, RESET};
+
+static NEWLINE_REGEX: OnceLock<Regex> = OnceLock::new();
+static ANSI_ESCAPE_REGEX: OnceLock<Regex> = OnceLock::new();
+static TITLE_REGEX: OnceLock<Regex> = OnceLock::new();
 
 pub fn get_lang_icon_and_color(lang: &str) -> Option<(&'static str, &'static str)> {
     let map: HashMap<&str, (&str, &str)> = [
@@ -189,7 +193,7 @@ pub fn string_len(str: &str) -> usize {
 }
 
 fn find_last_fg_color_sequence(text: &str) -> Option<String> {
-    let re = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+    let re = ANSI_ESCAPE_REGEX.get_or_init(|| Regex::new(r"\x1b\[[0-9;]*m").unwrap());
     let mut last_fg_color = None;
 
     for m in re.find_iter(text) {
@@ -472,6 +476,13 @@ pub fn format_tb(ctx: &AnsiContext, offset: usize) -> String {
 }
 
 pub fn limit_newlines<'a>(original: &'a str) -> Cow<'a, str> {
-    let re = Regex::new(r"\n([ \t]*\n){2,}").unwrap();
+    let re = NEWLINE_REGEX.get_or_init(|| Regex::new(r"\n([ \t]*\n){2,}").unwrap());
     re.replace_all(&original, "\n\n")
+}
+
+pub fn get_title_box<'a>(literal: &'a str) -> Option<&'a str> {
+    let re = TITLE_REGEX.get_or_init(|| Regex::new(r#"<!--\s*S-TITLE:\s*(.*?)\s*-->"#).unwrap());
+
+    let caps = re.captures(literal)?;
+    caps.get(1).map(|v| v.as_str())
 }
