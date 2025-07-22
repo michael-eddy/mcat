@@ -1,4 +1,4 @@
-use std::{collections::HashMap, usize};
+use std::{borrow::Cow, collections::HashMap, usize};
 
 use itertools::Itertools;
 use rasteroid::term_misc;
@@ -367,11 +367,16 @@ pub fn format_code_simple<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent:
         .unwrap_or_else(|| ctx.ps.find_syntax_plain_text());
     let mut highlighter = HighlightLines::new(syntax, &ts);
 
+    let line_count = code.lines().count().saturating_sub(1);
     let content = LinesWithEndings::from(code)
-        .map(|line| {
+        .enumerate()
+        .filter_map(|(i, line)| {
+            if line_count == i && line.trim().is_empty() {
+                return None;
+            }
             let ranges: Vec<(Style, &str)> = highlighter.highlight_line(line, &ctx.ps).unwrap();
             let highlighted = as_24_bit_terminal_escaped(&ranges[..], false);
-            format!("  {}", highlighted.trim_matches('\n'))
+            Some(format!("  {}", highlighted.trim_matches('\n')))
         })
         .join("\n");
 
@@ -388,7 +393,7 @@ pub fn format_code_simple<'a>(code: &str, lang: &str, ctx: &AnsiContext, indent:
         })
         .join("\n");
 
-    format!("{indent}{header}\n{content}\n\n")
+    format!("\n\n{indent}{header}\n{content}\n\n")
 }
 
 pub fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext) -> String {
@@ -456,7 +461,7 @@ pub fn format_code_full<'a>(code: &str, lang: &str, ctx: &AnsiContext) -> String
         "─".repeat(term_width as usize - num_width - 1)
     );
     buffer.push_str(&last_border);
-    format!("{buffer}\n\n")
+    format!("\n\n{buffer}\n\n")
 }
 
 pub fn format_tb(ctx: &AnsiContext, offset: usize) -> String {
@@ -464,4 +469,9 @@ pub fn format_tb(ctx: &AnsiContext, offset: usize) -> String {
     let br = "━".repeat(w.saturating_sub(offset.saturating_sub(1)));
     let border = &ctx.theme.guide.fg;
     format!("{border}{br}{RESET}")
+}
+
+pub fn limit_newlines<'a>(original: &'a str) -> Cow<'a, str> {
+    let re = Regex::new(r"\n([ \t]*\n){2,}").unwrap();
+    re.replace_all(&original, "\n\n")
 }

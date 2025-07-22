@@ -10,7 +10,7 @@ use crate::markdown_viewer::utils::{string_len, trim_ansi_string, wrap_lines};
 
 use super::{
     themes::CustomTheme,
-    utils::{format_code_full, format_code_simple, format_tb, wrap_char_based},
+    utils::{format_code_full, format_code_simple, format_tb, limit_newlines, wrap_char_based},
 };
 
 pub const RESET: &str = "\x1B[0m";
@@ -141,6 +141,7 @@ fn render_block_quote<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> Strin
     let comment = ctx.theme.comment.fg.clone();
     ctx.force_simple_code_block += 1;
     let content = collect(node, ctx).replace(RESET, &format!("{RESET}{comment}"));
+    let content = limit_newlines(&content);
     ctx.force_simple_code_block -= 1;
     let content = content.trim_matches('\n');
     let fence_offset = ctx.blockquote_fenced_offset.unwrap_or_default();
@@ -159,7 +160,7 @@ fn render_block_quote<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> Strin
         content.to_owned()
     };
 
-    content + "\n\n"
+    format!("\n\n{content}\n\n")
 }
 
 fn render_list<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
@@ -362,7 +363,7 @@ fn render_heading<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
     };
     header.push_str("\n\n");
     if sps.start.line != 1 {
-        format!("\n{header}")
+        format!("\n\n{header}")
     } else {
         header
     }
@@ -491,7 +492,7 @@ fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         result
     };
 
-    format!("\n{result}\n")
+    format!("\n\n{result}\n\n")
 }
 
 fn render_strong<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
@@ -603,10 +604,11 @@ fn render_alert<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         comrak::nodes::AlertType::Caution => ("\u{f0ce6} DANGER", red),
     };
 
-    let mut result = format!("{}▌ {BOLD}{}{RESET}", color, prefix);
+    let mut result = format!("\n\n{}▌ {BOLD}{}{RESET}", color, prefix);
 
     ctx.force_simple_code_block += 1;
     let alert_content = collect(node, ctx);
+    let alert_content = limit_newlines(&alert_content);
     ctx.force_simple_code_block -= 1;
     let alert_content = alert_content.trim();
     if alert_content.is_empty() {

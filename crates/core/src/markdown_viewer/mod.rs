@@ -8,10 +8,10 @@ use comrak::{
     plugins::syntect::SyntectAdapterBuilder,
 };
 use rasteroid::term_misc::{self, break_size_string};
-use regex::Regex;
 use render::{AnsiContext, RESET, parse_node};
 use syntect::{highlighting::ThemeSet, parsing::SyntaxSet};
 use themes::CustomTheme;
+use utils::limit_newlines;
 
 use crate::{UnwrapOrExit, config::McatConfig};
 
@@ -64,8 +64,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
         .replace(RESET, &format!("{RESET}{}", &ctx.theme.foreground.fg));
 
     // force at max 2 \n at a row (we're adding newlines based on sourcepos)
-    let re = Regex::new(r"\n{2,}").unwrap();
-    re.replace_all(&res, "\n\n").to_string()
+    limit_newlines(&res).to_string()
 }
 
 pub fn md_to_html(markdown: &str, style: Option<&str>) -> String {
