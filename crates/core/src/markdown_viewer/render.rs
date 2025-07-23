@@ -465,12 +465,17 @@ fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
                     let cell_line = cell.get(line_idx).map(|s| s.as_str()).unwrap_or("");
 
                     let padding = width.saturating_sub(string_len(cell_line));
-                    let (left_pad, right_pad) = match alignments[col_idx] {
-                        comrak::nodes::TableAlignment::Center => {
-                            (padding / 2, padding - (padding / 2))
+                    let (left_pad, right_pad) = if row_idx == 0 {
+                        // Header row - always center
+                        (padding / 2, padding - (padding / 2))
+                    } else {
+                        match alignments[col_idx] {
+                            comrak::nodes::TableAlignment::Center => {
+                                (padding / 2, padding - (padding / 2))
+                            }
+                            comrak::nodes::TableAlignment::Right => (padding, 0),
+                            _ => (0, padding),
                         }
-                        comrak::nodes::TableAlignment::Right => (padding, 0),
-                        _ => (0, padding),
                     };
 
                     result.push_str(&format!(
