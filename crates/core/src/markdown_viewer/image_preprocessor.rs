@@ -18,6 +18,8 @@ use crate::{
     scrapy::scrape_biggest_media,
 };
 
+use super::render::UNDERLINE_OFF;
+
 pub struct ImagePreprocessor {
     pub mapper: HashMap<String, ImageElement>,
 }
@@ -95,12 +97,13 @@ fn create_placeholder(img: &str, id: usize) -> String {
     let first_line = img.lines().next().unwrap_or("");
     let count = first_line.matches(placeholder).count();
 
-    format!(
+    let line = format!(
         "\x1b[38;5;{}m\x1b[48;5;{}m{}\x1b[0m",
         fg_color,
         bg_color,
         "█".repeat(count)
-    )
+    );
+    vec![line; img.lines().count()].join("\n")
 }
 
 fn render_image(
@@ -128,6 +131,21 @@ pub struct ImageElement {
     pub is_ok: bool,
     pub placeholder: String,
     pub img: String,
+}
+
+impl ImageElement {
+    pub fn insert_into_text(&self, text: &mut String) {
+        if !self.is_ok {
+            return;
+        }
+
+        let img = format!("{UNDERLINE_OFF}{}", self.img);
+
+        let placeholder_line = self.placeholder.lines().nth(0).unwrap_or_default();
+        for img_line in img.lines() {
+            *text = text.replacen(placeholder_line, img_line, 1);
+        }
+    }
 }
 
 #[derive(Debug)]

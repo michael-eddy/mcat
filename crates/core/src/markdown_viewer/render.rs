@@ -22,6 +22,7 @@ const FAINT: &str = "\x1b[2m";
 const NORMAL: &str = "\x1B[22m";
 const ITALIC_OFF: &str = "\x1B[23m";
 const STRIKETHROUGH_OFF: &str = "\x1B[29m";
+pub const UNDERLINE_OFF: &str = "\x1B[24m";
 const INDENT: usize = 2;
 
 pub struct AnsiContext<'a> {
@@ -291,12 +292,10 @@ fn render_paragraph<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String 
         "\n"
     };
 
-    lines
-        .lines()
-        .enumerate()
-        .map(|(i, line)| {
-            let current_line_num = sps.start.line + i;
-            if ctx.centered_lines.contains(&current_line_num) {
+    if ctx.centered_lines.contains(&sps.start.line) {
+        lines
+            .lines()
+            .map(|line| {
                 let line = trim_ansi_string(line.into());
                 let le = string_len(&line);
                 // 1 based index
@@ -305,16 +304,22 @@ fn render_paragraph<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String 
                     .saturating_sub(le)
                     .saturating_div(2);
                 format!("{}{line}", " ".repeat(offset))
-            } else {
+            })
+            .join("\n")
+            + suffix
+    } else {
+        lines
+            .lines()
+            .map(|line| {
                 if ctx.should_indent() {
                     wrap_lines(&line, false, INDENT, "", "")
                 } else {
                     line.into()
                 }
-            }
-        })
-        .join("\n")
-        + suffix
+            })
+            .join("\n")
+            + suffix
+    }
 }
 
 fn render_heading<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
@@ -382,24 +387,33 @@ fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
     };
 
     let alignments = &table.alignments;
-    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut rows: Vec<Vec<Vec<String>>> = Vec::new(); // Now Vec<Vec<Vec<String>>> for multiline cells
+    let mut row_heights: Vec<usize> = Vec::new();
 
+    // First pass: collect all cell contents and calculate row heights
     for child in node.children() {
-        let mut row_cells: Vec<String> = Vec::new();
+        let mut row_cells: Vec<Vec<String>> = Vec::new();
+        let mut max_lines_in_row = 1;
+
         for cell_node in child.children() {
             let cell_content = collect(cell_node, ctx);
-            let cell_content = cell_content.trim();
-            row_cells.push(cell_content.to_string());
+            let cell_lines: Vec<String> =
+                cell_content.lines().map(|s| s.trim().to_string()).collect();
+            max_lines_in_row = max_lines_in_row.max(cell_lines.len());
+            row_cells.push(cell_lines);
         }
+
         rows.push(row_cells);
+        row_heights.push(max_lines_in_row);
     }
 
+    // Calculate column widths based on the longest line in any cell of the column
     let mut column_widths: Vec<usize> = vec![0; alignments.len()];
     for row in &rows {
         for (i, cell) in row.iter().enumerate() {
-            let c = string_len(cell.trim());
-            if c > column_widths[i] {
-                column_widths[i] = c;
+            let max_width_in_cell = cell.iter().map(|line| string_len(line)).max().unwrap_or(0);
+            if max_width_in_cell > column_widths[i] {
+                column_widths[i] = max_width_in_cell;
             }
         }
     }
@@ -407,7 +421,7 @@ fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
     let color = &ctx.theme.border.fg;
     let header_color = &ctx.theme.yellow.fg;
     let mut result = String::new();
-    let is_only_headers = rows.iter().count() == 1;
+    let is_only_headers = rows.len() == 1;
 
     if !rows.is_empty() {
         let cols = column_widths.len();
@@ -438,31 +452,43 @@ fn render_table<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         result.push_str(&top_border);
         result.push('\n');
 
-        for (i, row) in rows.iter().enumerate() {
-            let text_color = if i == 0 { header_color } else { "" };
-            result.push_str(&format!("{color}│{RESET}"));
-            for (j, cell) in row.iter().enumerate() {
-                let width = column_widths[j];
-                let padding = width - string_len(cell);
-                let (left_pad, right_pad) = match alignments[j] {
-                    comrak::nodes::TableAlignment::Center => (padding / 2, padding - (padding / 2)),
-                    comrak::nodes::TableAlignment::Right => (padding, 0),
-                    _ => (0, padding),
-                };
-                result.push_str(&format!(
-                    " {}{text_color}{}{} {color}│{RESET}",
-                    " ".repeat(left_pad),
-                    cell,
-                    " ".repeat(right_pad)
-                ));
-            }
-            result.push('\n');
+        for (row_idx, row) in rows.iter().enumerate() {
+            let text_color = if row_idx == 0 { header_color } else { "" };
+            let row_height = row_heights[row_idx];
 
-            if i == 0 {
+            // For each line in the row (handles multiline cells)
+            for line_idx in 0..row_height {
+                result.push_str(&format!("{color}│{RESET}"));
+
+                for (col_idx, cell) in row.iter().enumerate() {
+                    let width = column_widths[col_idx];
+                    let cell_line = cell.get(line_idx).map(|s| s.as_str()).unwrap_or("");
+
+                    let padding = width.saturating_sub(string_len(cell_line));
+                    let (left_pad, right_pad) = match alignments[col_idx] {
+                        comrak::nodes::TableAlignment::Center => {
+                            (padding / 2, padding - (padding / 2))
+                        }
+                        comrak::nodes::TableAlignment::Right => (padding, 0),
+                        _ => (0, padding),
+                    };
+
+                    result.push_str(&format!(
+                        " {}{text_color}{}{} {color}│{RESET}",
+                        " ".repeat(left_pad),
+                        cell_line,
+                        " ".repeat(right_pad)
+                    ));
+                }
+                result.push('\n');
+            }
+
+            if row_idx == 0 {
                 result.push_str(&middle_border);
                 result.push('\n');
             }
         }
+
         if !is_only_headers {
             result.push_str(&bottom_border);
         }

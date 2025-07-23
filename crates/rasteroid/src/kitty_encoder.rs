@@ -227,7 +227,8 @@ pub fn create_unicode_placeholder(
     let r = (image_id >> 16) & 255;
     let g = (image_id >> 8) & 255;
     let b = image_id & 255;
-    result.push_str(&format!("\x1b[38;2;{};{};{}m", r, g, b));
+    let id = &format!("\x1b[38;2;{};{};{}m", r, g, b);
+    result.push_str(id);
 
     let id_char = get_diacritic(((image_id >> 24) & 255) as usize);
     let is_controlled = print_at.is_some();
@@ -238,6 +239,7 @@ pub fn create_unicode_placeholder(
         let print_at_string = loc_to_terminal(print_at_for_row);
         result.push_str(&print_at_string);
         result.push_str(&offset_string);
+        result.push_str(id);
 
         for col in 0..columns {
             result.push(PLACEHOLDER);

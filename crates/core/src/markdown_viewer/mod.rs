@@ -72,9 +72,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
 
     // replace images
     for (_, img) in image_preprocessor.mapper {
-        if img.is_ok {
-            res = res.replace(&img.placeholder, &img.img)
-        }
+        img.insert_into_text(&mut res);
     }
     res
 }
