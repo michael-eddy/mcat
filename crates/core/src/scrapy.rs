@@ -275,20 +275,20 @@ async fn download_media(
     }
 
     // Setup progress bar if not silent and content length is known
-    let progress_bar = if !options.silent {
-        let pb =
-            get_global_multi_progress().add(ProgressBar::new(content_length.unwrap_or_default()));
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template(
-                    "{spinner:.green} [{bar:50.blue/white}] {bytes}/{total_bytes} ({percent}%)",
-                )?
-                .progress_chars("█▓▒░"),
-        );
-        Some(pb)
-    } else {
-        None
-    };
+    let progress_bar =
+        if !options.silent && content_length.is_some() && content_length.unwrap() > 500_000 {
+            let pb = get_global_multi_progress().add(ProgressBar::new(content_length.unwrap()));
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template(
+                        "{spinner:.green} [{bar:50.blue/white}] {bytes}/{total_bytes} ({percent}%)",
+                    )?
+                    .progress_chars("█▓▒░"),
+            );
+            Some(pb)
+        } else {
+            None
+        };
 
     // Stream the response body
     let mut stream = response.bytes_stream();
