@@ -1,4 +1,4 @@
-## Src
+## V0.4.0
 - 🎉 markdown_viewer now parses some HTML!, including align=center attributes on some elements
 - 🎉 markdown_viewer now includes Images! -- can be modified using `--md-image all/small/none/auto` the default is "auto"
 - 📈 markdown_viewer improved -- better formatting for some elements and now indents content under headers.
