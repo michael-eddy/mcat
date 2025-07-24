@@ -19,6 +19,7 @@ use config::McatConfig;
 use crossterm::tty::IsTty;
 use dirs::home_dir;
 use rasteroid::term_misc;
+use scrapy::MediaScrapeOptions;
 use std::{
     io::{BufWriter, Read, Write},
     path::Path,
@@ -346,9 +347,11 @@ fn main() {
             inspector::InspectedBytes::Path(path_buf) => path_bufs.push((path_buf, None)),
         };
     }
+    let mut scraper_opts = MediaScrapeOptions::default();
+    scraper_opts.silent = config.silent;
     for i in config.input.iter() {
         if i.starts_with("https://") {
-            if let Ok(tmp) = scrapy::scrape_biggest_media(&i, config.silent) {
+            if let Ok(tmp) = scrapy::scrape_biggest_media(&i, &scraper_opts) {
                 let path = tmp.path().to_path_buf();
                 tmp_files.push(tmp);
                 path_bufs.push((path, Some(i.clone())));

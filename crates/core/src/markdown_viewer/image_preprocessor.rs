@@ -15,7 +15,7 @@ use tempfile::NamedTempFile;
 use crate::{
     config::{McatConfig, MdImageRender},
     converter::svg_to_image,
-    scrapy::scrape_biggest_media,
+    scrapy::{MediaScrapeOptions, scrape_biggest_media},
 };
 
 use super::render::UNDERLINE_OFF;
@@ -29,6 +29,11 @@ impl ImagePreprocessor {
         let mut urls = Vec::new();
         extract_image_urls(node, &mut urls);
 
+        let mut scrape_opts = MediaScrapeOptions::default();
+        scrape_opts.silent = conf.silent;
+        scrape_opts.videos = false;
+        scrape_opts.documents = false;
+
         let items: Vec<(&ImageUrl, Vec<u8>)> = urls
             .par_iter()
             .filter_map(|url| {
@@ -40,7 +45,7 @@ impl ImagePreprocessor {
                     return None;
                 }
 
-                let tmp = scrape_biggest_media(&url.base_url, conf.silent).ok()?;
+                let tmp = scrape_biggest_media(&url.base_url, &scrape_opts).ok()?;
                 let img = render_image(tmp, url.width, url.height)?;
 
                 let (width, height) = img.dimensions();
