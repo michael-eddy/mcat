@@ -8,11 +8,13 @@ use std::io::Write;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tempfile::NamedTempFile;
-use tokio::runtime::Builder;
+use tokio::runtime::{Builder, Runtime};
 
 use crate::catter;
 
 static GITHUB_BLOB_URL: OnceLock<Regex> = OnceLock::new();
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 fn extension_from_mime(mime: &str) -> Option<&'static str> {
     if mime.contains("image/avif") {
@@ -181,10 +183,12 @@ pub fn scrape_biggest_media(
     url: &str,
     options: &MediaScrapeOptions,
 ) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
-    let client = Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-        .build()?;
-    let rt = Builder::new_current_thread().enable_all().build()?;
+    let client = HTTP_CLIENT.get_or_init(|| {
+        Client::builder()
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+            .build().unwrap_or_default()
+    });
+    let rt = RUNTIME.get_or_init(|| Builder::new_current_thread().enable_all().build().unwrap());
 
     let re =
         GITHUB_BLOB_URL.get_or_init(|| Regex::new(r"^.*github\.com.*[\\\/]blob[\\\/].*$").unwrap());
@@ -271,20 +275,20 @@ async fn download_media(
     }
 
     // Setup progress bar if not silent and content length is known
-    let progress_bar =
-        if !options.silent && content_length.is_some() && content_length.unwrap() > 2_000_000 {
-            let pb = get_global_multi_progress().add(ProgressBar::new(content_length.unwrap()));
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template(
-                        "{spinner:.green} [{bar:50.blue/white}] {bytes}/{total_bytes} ({percent}%)",
-                    )?
-                    .progress_chars("█▓▒░"),
-            );
-            Some(pb)
-        } else {
-            None
-        };
+    let progress_bar = if !options.silent {
+        let pb =
+            get_global_multi_progress().add(ProgressBar::new(content_length.unwrap_or_default()));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner:.green} [{bar:50.blue/white}] {bytes}/{total_bytes} ({percent}%)",
+                )?
+                .progress_chars("█▓▒░"),
+        );
+        Some(pb)
+    } else {
+        None
+    };
 
     // Stream the response body
     let mut stream = response.bytes_stream();

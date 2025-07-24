@@ -1,3 +1,6 @@
+## Src
+- 🐛 fixed a cleanup issue that causes the markdown viewer to take longer when images are included.
+
 ## V0.4.0
 - 🎉 markdown_viewer now parses some HTML!, including align=center attributes on some elements
 - 🎉 markdown_viewer now includes Images! -- can be modified using `--md-image all/small/none/auto` the default is "auto"
