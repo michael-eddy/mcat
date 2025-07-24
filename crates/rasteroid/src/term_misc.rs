@@ -229,7 +229,7 @@ pub fn dim_to_px(dim: &str, direction: SizeDirection) -> Result<u32, String> {
 
     // only call it if needed
     let not_px = dim.ends_with("c") || dim.ends_with("%");
-    let (width, height) = if not_px {
+    let (spx, sc) = if not_px {
         let winsize = get_wininfo();
         match direction {
             SizeDirection::Width => (winsize.spx_width, winsize.sc_width),
@@ -245,13 +245,13 @@ pub fn dim_to_px(dim: &str, direction: SizeDirection) -> Result<u32, String> {
         }
     } else if dim.ends_with("c") {
         if let Ok(num) = dim.trim_end_matches("c").parse::<u16>() {
-            let value = (width as f32 / height as f32 * num as f32).ceil() as u32;
+            let value = (spx as f32 / sc as f32 * num as f32).ceil() as u32;
             return Ok(value.into());
         }
     } else if dim.ends_with("%") {
         if let Ok(num) = dim.trim_end_matches("%").parse::<f32>() {
             let normalized_percent = num / 100.0;
-            let value = (width as f32 * normalized_percent).ceil() as u32;
+            let value = (spx as f32 * normalized_percent).ceil() as u32;
             return Ok(value);
         }
     }

@@ -1826,7 +1826,7 @@ dependencies = [
 
 [[package]]
 name = "mcat"
-version = "0.3.9"
+version = "0.4.0"
 dependencies = [
  "base64",
  "clap",
@@ -2455,7 +2455,7 @@ checksum = "f60fcc7d6849342eff22c4350c8b9a989ee8ceabc4b481253e8946b9fe83d684"
 
 [[package]]
 name = "rasteroid"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "base64",
  "color_quant",

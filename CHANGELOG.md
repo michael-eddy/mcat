@@ -1,8 +1,8 @@
 ## Src
-- 🎉 markdown_viewer now parses some HTML! -- including align=center attributes on some elements
-- 📈 improved the markdown viewer - tasklist (now includes '-' and '!' tasks), lists (now has a different caret depends on the depth), tables (highlight the headers and handles only header tables better)
+- 🎉 markdown_viewer now parses some HTML!, including align=center attributes on some elements
+- 🎉 markdown_viewer now includes Images! -- can be modified using `--md-image all/small/none/auto` the default is "auto"
+- 📈 markdown_viewer improved -- better formatting for some elements and now indents content under headers.
 - 🐛 fixed an issue in the markdown viewer when certain styles would reset others
-- [ ] planned: images in markdown
 
 ## V0.3.8
 - 🎉 added autumn and spring themes

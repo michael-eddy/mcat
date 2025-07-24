@@ -29,19 +29,30 @@ impl ImagePreprocessor {
         let mut urls = Vec::new();
         extract_image_urls(node, &mut urls);
 
+        let render_mode = if conf.md_image_render != MdImageRender::Auto {
+            conf.md_image_render
+        } else {
+            match conf.inline_encoder {
+                InlineEncoder::Kitty => MdImageRender::All,
+                InlineEncoder::Iterm => MdImageRender::Small,
+                InlineEncoder::Sixel => MdImageRender::Small,
+                InlineEncoder::Ascii => MdImageRender::None,
+            }
+        };
         let mut scrape_opts = MediaScrapeOptions::default();
         scrape_opts.silent = conf.silent;
         scrape_opts.videos = false;
         scrape_opts.documents = false;
+        scrape_opts.max_content_length = match render_mode {
+            MdImageRender::All => None,
+            _ => Some(50_000), // filter complex images -- won't scale down good
+        };
 
-        let items: Vec<(&ImageUrl, Vec<u8>)> = urls
+        let items: Vec<(&ImageUrl, Vec<u8>, u32)> = urls
             .par_iter()
             .filter_map(|url| {
                 // fail everything early if needed.
-                if conf.md_image_render == MdImageRender::None
-                    || conf.inline_encoder == InlineEncoder::Sixel
-                    || conf.inline_encoder == InlineEncoder::Ascii
-                {
+                if render_mode == MdImageRender::None {
                     return None;
                 }
 
@@ -56,37 +67,36 @@ impl ImagePreprocessor {
                 } else {
                     &format!("{width}px")
                 };
-                let height_fm = if height as f32 > term_misc::get_wininfo().spx_height as f32 * 0.4
-                {
+                let height_fm = if render_mode == MdImageRender::Small {
+                    let px = term_misc::dim_to_px("1c", term_misc::SizeDirection::Height)
+                        .unwrap_or_default()
+                        .saturating_sub(1); // it ceils, so we must make sure 1c
+                    &format!("{px}px")
+                } else if height as f32 > term_misc::get_wininfo().spx_height as f32 * 0.4 {
                     "40%"
                 } else {
                     &format!("{height}px")
                 };
 
-                // let cols = term_misc::dim_to_cells(width_fm, term_misc::SizeDirection::Width)
-                //     .unwrap_or_default();
-                // let rows = term_misc::dim_to_cells(height_fm, term_misc::SizeDirection::Height)
-                //     .unwrap_or_default();
-
-                let img = img
+                let (img, _, new_width, _) = img
                     .resize_plus(Some(&width_fm), Some(&height_fm), false, false)
                     .ok()?;
 
-                return Some((url, img.0));
+                return Some((url, img, new_width));
             })
             .collect();
 
         let mut mapper: HashMap<String, ImageElement> = HashMap::new();
-        for (i, item) in items.iter().enumerate() {
+        for (i, (url, img, width)) in items.iter().enumerate() {
             let mut buffer = Vec::new();
-            if inline_an_image(&item.1, &mut buffer, None, None, &conf.inline_encoder).is_ok() {
+            if inline_an_image(&img, &mut buffer, None, None, &conf.inline_encoder).is_ok() {
                 let img = String::from_utf8(buffer).unwrap_or_default();
                 let img = ImageElement {
                     is_ok: true,
-                    placeholder: create_placeholder(&img, i),
+                    placeholder: create_placeholder(&img, i, &conf.inline_encoder, width.clone()),
                     img,
                 };
-                mapper.insert(item.0.original_url.clone(), img);
+                mapper.insert(url.original_url.clone(), img);
             }
         }
 
@@ -94,21 +104,33 @@ impl ImagePreprocessor {
     }
 }
 
-fn create_placeholder(img: &str, id: usize) -> String {
-    let fg_color = 16 + (id % 216); // 256-color palette (16-231)
+fn create_placeholder(img: &str, id: usize, inline_encoder: &InlineEncoder, width: u32) -> String {
+    let fg_color = 16 + (id % 216);
     let bg_color = 16 + ((id / 216) % 216);
 
-    let placeholder = "\u{10EEEE}";
-    let first_line = img.lines().next().unwrap_or("");
-    let count = first_line.matches(placeholder).count();
+    let (width, height) = match inline_encoder {
+        InlineEncoder::Kitty => {
+            let placeholder = "\u{10EEEE}";
+            let first_line = img.lines().next().unwrap_or("");
+            let width = first_line.matches(placeholder).count();
+            let count = img.lines().count();
+            (width, count)
+        }
+        _ => {
+            let width =
+                term_misc::dim_to_cells(&format!("{width}px"), term_misc::SizeDirection::Width)
+                    .unwrap_or(1) as usize;
+            (width, 1)
+        }
+    };
 
     let line = format!(
         "\x1b[38;5;{}m\x1b[48;5;{}m{}\x1b[0m",
         fg_color,
         bg_color,
-        "█".repeat(count)
+        "█".repeat(width)
     );
-    vec![line; img.lines().count()].join("\n")
+    vec![line; height].join("\n")
 }
 
 fn render_image(
