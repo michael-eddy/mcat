@@ -1,3 +1,6 @@
+## Src
+- 🎉 now latex/typst file can also be converted into images / inline images
+
 ## V0.4.1
 - 🐛 fixed a cleanup issue that causes the markdown viewer to take longer when images are included.
 

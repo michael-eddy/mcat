@@ -75,8 +75,29 @@ pub fn cat(
         return Ok(CatType::InlineVideo);
     }
     // pdf to images
-    if ext == "pdf" && matches!(to, "inline" | "image") {
-        // tries if pdftoppm or pdftocairo is installed, if not comes back to normal pdf parsing..
+    if matches!(ext.as_ref(), "pdf" | "tex" | "typ")
+        && matches!(to, "inline" | "image")
+        && converter::get_pdf_command().is_ok()
+    {
+        let (path, _tmpfile, _tmpfolder) = match ext.as_ref() {
+            "pdf" => (path.to_path_buf(), None, None),
+            "typ" => {
+                if let Some(pdf) = converter::typst_to_pdf(path) {
+                    (pdf.path().to_path_buf(), Some(pdf), None)
+                } else {
+                    (path.to_path_buf(), None, None)
+                }
+            }
+            "tex" => {
+                if let Some((tmpdir, p)) = converter::latex_to_pdf(path) {
+                    (p, None, Some(tmpdir))
+                } else {
+                    (path.to_path_buf(), None, None)
+                }
+            }
+            _ => unreachable!(),
+        };
+        // goes back to normal parsing if fails.
         if let Ok(img_data) = converter::pdf_to_image(&path.to_string_lossy().to_owned(), 1) {
             match to {
                 "inline" => {

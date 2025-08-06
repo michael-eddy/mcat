@@ -20,14 +20,14 @@ use std::{
     error,
     fs::{self},
     io::{BufRead, Cursor, Read},
-    path::Path,
+    path::{Path, PathBuf},
     process::Stdio,
 };
 use std::{
     io::{Write, stdout},
     process::Command,
 };
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
 
 use crate::{catter, cdp::ChromeHeadless, config::LsixOptions, fetch_manager};
 
@@ -86,6 +86,75 @@ pub fn svg_to_image(
     Ok(DynamicImage::ImageRgba8(image_buffer))
 }
 
+pub fn latex_to_pdf<P: AsRef<Path>>(input_path: P) -> Option<(TempDir, PathBuf)> {
+    let input_path = input_path.as_ref();
+
+    if !input_path.exists() {
+        return None;
+    }
+
+    let temp_dir = TempDir::new().ok()?;
+    let name = input_path.file_stem()?.to_string_lossy().to_string();
+    let temp_pdf = temp_dir.path().join(format!("{name}.pdf"));
+
+    // Try Tectonic first
+    let tectonic = Command::new("tectonic")
+        .args(&["--outdir", temp_dir.path().to_str()?, input_path.to_str()?])
+        .output();
+
+    if let Ok(output) = tectonic {
+        if output.status.success() && temp_pdf.exists() {
+            return Some((temp_dir, temp_pdf));
+        }
+    }
+
+    // Fallback to pdflatex
+    let pdflatex = Command::new("pdflatex")
+        .args(&[
+            &format!("-output-directory={}", temp_dir.path().to_str()?),
+            "-interaction=nonstopmode",
+            input_path.to_str()?,
+        ])
+        .output();
+
+    if let Ok(output) = pdflatex {
+        if output.status.success() && temp_pdf.exists() {
+            return Some((temp_dir, temp_pdf));
+        }
+    }
+
+    None
+}
+
+pub fn typst_to_pdf<P: AsRef<Path>>(input_path: P) -> Option<NamedTempFile> {
+    let input_path = input_path.as_ref();
+
+    if !input_path.exists() {
+        return None;
+    }
+
+    let temp_pdf = NamedTempFile::with_suffix(".pdf").ok()?;
+    let output_path = temp_pdf.path().to_path_buf();
+
+    let result = Command::new("typst")
+        .args(&[
+            "compile",
+            "--format",
+            "pdf",
+            input_path.to_str()?,
+            output_path.to_str()?,
+        ])
+        .output();
+
+    if let Ok(output) = result {
+        if output.status.success() && output_path.exists() {
+            return Some(temp_pdf);
+        }
+    }
+
+    None
+}
+
 pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut tmp_file = NamedTempFile::with_suffix(".html").expect("failed to create tmp file");
     tmp_file.write_all(html.as_bytes())?;
@@ -101,14 +170,17 @@ pub fn html_to_image(html: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> 
         Ok(img_data)
     })
 }
+pub fn get_pdf_command() -> Result<&'static str, String> {
+    which::which("pdftocairo")
+        .map(|_| "pdftocairo")
+        .or_else(|_| which::which("pdftoppm").map(|_| "pdftoppm"))
+        .map_err(|_| "Neither pdftocairo nor pdftoppm found in PATH".to_string())
+}
 pub fn pdf_to_image(
     pdf_path: &str,
     page_number: usize,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let tool = which::which("pdftocairo")
-        .map(|_| "pdftocairo")
-        .or_else(|_| which::which("pdftoppm").map(|_| "pdftoppm"))
-        .map_err(|_| "Neither pdftocairo nor pdftoppm found in PATH".to_string())?;
+    let tool = get_pdf_command()?;
 
     let output = Command::new(tool)
         .args(&[
