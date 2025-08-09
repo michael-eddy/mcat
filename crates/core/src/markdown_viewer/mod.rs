@@ -15,9 +15,10 @@ use syntect::{highlighting::ThemeSet, parsing::SyntaxSet};
 use themes::CustomTheme;
 use utils::limit_newlines;
 
+use std::path::Path;
 use crate::{UnwrapOrExit, config::McatConfig};
 
-pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
+pub fn md_to_ansi(md: &str, config: &McatConfig, markdown_file_path: Option<&Path>) -> String {
     let res = &html_preprocessor::process(md);
     let md = &res.content;
 
@@ -36,7 +37,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig) -> String {
 
     let ps = SyntaxSet::load_defaults_newlines();
     let theme = CustomTheme::from(config.theme.as_ref());
-    let image_preprocessor = ImagePreprocessor::new(root, config);
+    let image_preprocessor = ImagePreprocessor::new(root, config, markdown_file_path);
     let mut ctx = AnsiContext {
         ps,
         theme,
