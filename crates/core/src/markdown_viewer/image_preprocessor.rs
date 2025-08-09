@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, io::Write, path::Path};
 
 use comrak::nodes::{AstNode, NodeValue};
 use image::{DynamicImage, GenericImageView, ImageFormat};
@@ -20,12 +20,51 @@ use crate::{
 
 use super::render::UNDERLINE_OFF;
 
+fn is_local_path(url: &str) -> bool {
+    !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("data:")
+}
+
+fn handle_local_image(path: &str, markdown_file_dir: Option<&Path>) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
+    let original_path = Path::new(path);
+    
+    // Get the file extension
+    let extension = original_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("");
+    
+    // Try absolute or CWD-relative path first
+    if original_path.exists() {
+        let file_data = fs::read(original_path)?;
+        let mut temp_file = NamedTempFile::with_suffix(&format!(".{}", extension))?;
+        temp_file.write_all(&file_data)?;
+        temp_file.flush()?;
+        return Ok(temp_file);
+    }
+    
+    // If that fails and we have a markdown file directory, try relative to that
+    if let Some(md_dir) = markdown_file_dir {
+        let relative_path = md_dir.join(path);
+        if relative_path.exists() {
+            let file_data = fs::read(&relative_path)?;
+            let mut temp_file = NamedTempFile::with_suffix(&format!(".{}", extension))?;
+            temp_file.write_all(&file_data)?;
+            temp_file.flush()?;
+            return Ok(temp_file);
+        } else {
+            return Err(format!("Local image file not found: {} (tried {} and {})", 
+                path, path, relative_path.display()).into());
+        }
+    }
+    
+    Err(format!("Local image file not found: {}", path).into())
+}
+
 pub struct ImagePreprocessor {
     pub mapper: HashMap<String, ImageElement>,
 }
 
 impl ImagePreprocessor {
-    pub fn new<'a>(node: &'a AstNode<'a>, conf: &McatConfig) -> Self {
+    pub fn new<'a>(node: &'a AstNode<'a>, conf: &McatConfig, markdown_file_path: Option<&Path>) -> Self {
         let mut urls = Vec::new();
         extract_image_urls(node, &mut urls);
 
@@ -39,6 +78,7 @@ impl ImagePreprocessor {
                 InlineEncoder::Ascii => MdImageRender::None,
             }
         };
+        let markdown_dir = markdown_file_path.and_then(|p| p.parent());
         let mut scrape_opts = MediaScrapeOptions::default();
         scrape_opts.silent = conf.silent;
         scrape_opts.videos = false;
@@ -56,7 +96,11 @@ impl ImagePreprocessor {
                     return None;
                 }
 
-                let tmp = scrape_biggest_media(&url.base_url, &scrape_opts).ok()?;
+                let tmp = if is_local_path(&url.base_url) {
+                    handle_local_image(&url.base_url, markdown_dir).ok()?
+                } else {
+                    scrape_biggest_media(&url.base_url, &scrape_opts).ok()?
+                };
                 let img = render_image(tmp, url.width, url.height)?;
 
                 let (width, height) = img.dimensions();
@@ -89,12 +133,16 @@ impl ImagePreprocessor {
         let mut mapper: HashMap<String, ImageElement> = HashMap::new();
         for (i, (url, img, width)) in items.iter().enumerate() {
             let mut buffer = Vec::new();
-            if inline_an_image(&img, &mut buffer, None, None, &conf.inline_encoder).is_ok() {
-                let img = String::from_utf8(buffer).unwrap_or_default();
+            if let Err(e) = inline_an_image(&img, &mut buffer, None, None, &conf.inline_encoder) {
+                if !conf.silent {
+                    eprintln!("Failed to encode image '{}': {}", url.original_url, e);
+                }
+            } else {
+                let img_str = String::from_utf8(buffer).unwrap_or_default();
                 let img = ImageElement {
                     is_ok: true,
-                    placeholder: create_placeholder(&img, i, &conf.inline_encoder, width.clone()),
-                    img,
+                    placeholder: create_placeholder(&img_str, i, &conf.inline_encoder, width.clone()),
+                    img: img_str,
                 };
                 mapper.insert(url.original_url.clone(), img);
             }
@@ -167,8 +215,8 @@ impl ImageElement {
         }
 
         let img = format!("{UNDERLINE_OFF}{}", self.img);
-
         let placeholder_line = self.placeholder.lines().nth(0).unwrap_or_default();
+        
         for img_line in img.lines() {
             *text = text.replacen(placeholder_line, img_line, 1);
         }
