@@ -100,12 +100,13 @@ pub fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         NodeValue::WikiLink(_) => render_wiki_link(node, ctx),
         NodeValue::SpoileredText => render_spoilered_text(node, ctx),
         NodeValue::Alert(_) => render_alert(node, ctx),
+        NodeValue::FootnoteDefinition(_) => render_footnote_def(node, ctx),
+        NodeValue::FootnoteReference(_) => render_footnote_ref(node, ctx),
         // leave as is
         NodeValue::Text(literal) => literal.to_owned(),
         NodeValue::Raw(literal) => literal.to_owned(),
         NodeValue::SoftBreak => " ".to_owned(),
         NodeValue::Math(NodeMath { literal, .. }) => literal.to_owned(),
-        NodeValue::FootnoteDefinition(_) => String::new(),
         NodeValue::LineBreak => "".to_owned(),
         NodeValue::TableRow(_) => String::new(),
         NodeValue::TableCell => String::new(),
@@ -117,7 +118,6 @@ pub fn parse_node<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
         NodeValue::EscapedTag(_) => String::new(),
         NodeValue::Underline => String::new(),
         NodeValue::Subscript => String::new(),
-        NodeValue::FootnoteReference(_) => String::new(),
     };
     buffer.push_str(&content);
 
@@ -136,6 +136,61 @@ fn render_front_matter<'a>(node: &'a AstNode<'a>, _ctx: &mut AnsiContext) -> Str
     };
 
     literal.to_owned()
+}
+
+fn render_footnote_def<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::FootnoteDefinition(ref item) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let content = collect(node, ctx);
+    let cyan = &ctx.theme.cyan.fg;
+    let content = format!("{cyan}[{}]{RESET}: {content}", item.name);
+    let sps = node.data.borrow().sourcepos;
+
+    let suffix = if ctx.collecting_depth == 0 {
+        "\n\n"
+    } else {
+        "\n"
+    };
+
+    if ctx.centered_lines.contains(&sps.start.line) {
+        content
+            .lines()
+            .map(|line| {
+                let line = trim_ansi_string(line.into());
+                let le = string_len(&line);
+                // 1 based index
+                let offset = sps.start.column.saturating_sub(1);
+                let offset = (ctx.term_width - offset)
+                    .saturating_sub(le)
+                    .saturating_div(2);
+                format!("{}{line}", " ".repeat(offset))
+            })
+            .join("\n")
+            + suffix
+    } else {
+        content
+            .lines()
+            .map(|line| {
+                if ctx.should_indent() {
+                    wrap_lines(&line, false, INDENT, "", "")
+                } else {
+                    line.into()
+                }
+            })
+            .join("\n")
+            + suffix
+    }
+}
+
+fn render_footnote_ref<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
+    let NodeValue::FootnoteReference(ref item) = node.data.borrow().value else {
+        panic!()
+    };
+
+    let cyan = &ctx.theme.cyan.fg;
+    format!("{cyan}[{}]{RESET}", item.name)
 }
 
 fn render_block_quote<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {

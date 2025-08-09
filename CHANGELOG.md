@@ -1,6 +1,7 @@
 ## Src
 - 🎉 now latex/typst files can also be converted into images / inline images
 - 📈 markdown viewer now handles local images too! (#24) by @Alb-O
+- 📈 markdown viewer now also handles footnotes
 
 ## V0.4.1
 - 🐛 fixed a cleanup issue that causes the markdown viewer to take longer when images are included.

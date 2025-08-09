@@ -15,8 +15,8 @@ use syntect::{highlighting::ThemeSet, parsing::SyntaxSet};
 use themes::CustomTheme;
 use utils::limit_newlines;
 
-use std::path::Path;
 use crate::{UnwrapOrExit, config::McatConfig};
+use std::path::Path;
 
 pub fn md_to_ansi(md: &str, config: &McatConfig, markdown_file_path: Option<&Path>) -> String {
     let res = &html_preprocessor::process(md);
@@ -125,6 +125,7 @@ fn comrak_options<'a>() -> ComrakOptions<'a> {
     let mut options = ComrakOptions::default();
     // ➕ Enable extensions
     options.extension.strikethrough = true;
+    options.extension.footnotes = true;
     options.extension.superscript = true;
     options.extension.tagfilter = true;
     options.extension.table = true;
