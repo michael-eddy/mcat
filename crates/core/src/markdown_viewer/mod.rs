@@ -57,7 +57,7 @@ pub fn md_to_ansi(md: &str, config: &McatConfig, markdown_file_path: Option<&Pat
 
     let mut output = String::new();
     output.push_str(&ctx.theme.foreground.fg);
-    output.push_str(&parse_node(root, &mut ctx));
+    output.push_str(&parse_node(root, &mut ctx).trim_matches('\n'));
 
     // making sure its wrapped to fit into the termianl size
     let lines: Vec<String> = textwrap::wrap(&output, term_misc::get_wininfo().sc_width as usize)
