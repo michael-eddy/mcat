@@ -1,3 +1,6 @@
+## Src
+- 📈 markdown viewer now handles multi line links better (link images too)
+
 ## V0.4.2
 - 🎉 now latex/typst files can also be converted into images / inline images
 - 📈 markdown viewer now handles local images too! (#24) by @Alb-O

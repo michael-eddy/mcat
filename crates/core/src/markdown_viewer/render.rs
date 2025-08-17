@@ -600,7 +600,17 @@ fn render_link<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
 
     let content = collect(node, ctx);
     let cyan = ctx.theme.cyan.fg.clone();
-    format!("{UNDERLINE}{cyan}\u{f0339} {content}{RESET}")
+    content
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            if i == 0 {
+                format!("{UNDERLINE}{cyan}\u{f0339} {line}{RESET}")
+            } else {
+                format!("  {UNDERLINE}{cyan}{line}{RESET}")
+            }
+        })
+        .join("\n")
 }
 
 fn render_image<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {

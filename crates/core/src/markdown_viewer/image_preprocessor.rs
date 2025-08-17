@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, io::Write, path::Path};
 
 use comrak::nodes::{AstNode, NodeValue};
 use image::{DynamicImage, GenericImageView, ImageFormat};
+use itertools::Itertools;
 use rasteroid::{
     InlineEncoder,
     image_extended::InlineImage,
@@ -24,14 +25,18 @@ fn is_local_path(url: &str) -> bool {
     !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("data:")
 }
 
-fn handle_local_image(path: &str, markdown_file_dir: Option<&Path>) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
+fn handle_local_image(
+    path: &str,
+    markdown_file_dir: Option<&Path>,
+) -> Result<NamedTempFile, Box<dyn std::error::Error>> {
     let original_path = Path::new(path);
-    
+
     // Get the file extension
-    let extension = original_path.extension()
+    let extension = original_path
+        .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("");
-    
+
     // Try absolute or CWD-relative path first
     if original_path.exists() {
         let file_data = fs::read(original_path)?;
@@ -40,7 +45,7 @@ fn handle_local_image(path: &str, markdown_file_dir: Option<&Path>) -> Result<Na
         temp_file.flush()?;
         return Ok(temp_file);
     }
-    
+
     // If that fails and we have a markdown file directory, try relative to that
     if let Some(md_dir) = markdown_file_dir {
         let relative_path = md_dir.join(path);
@@ -51,11 +56,16 @@ fn handle_local_image(path: &str, markdown_file_dir: Option<&Path>) -> Result<Na
             temp_file.flush()?;
             return Ok(temp_file);
         } else {
-            return Err(format!("Local image file not found: {} (tried {} and {})", 
-                path, path, relative_path.display()).into());
+            return Err(format!(
+                "Local image file not found: {} (tried {} and {})",
+                path,
+                path,
+                relative_path.display()
+            )
+            .into());
         }
     }
-    
+
     Err(format!("Local image file not found: {}", path).into())
 }
 
@@ -64,7 +74,11 @@ pub struct ImagePreprocessor {
 }
 
 impl ImagePreprocessor {
-    pub fn new<'a>(node: &'a AstNode<'a>, conf: &McatConfig, markdown_file_path: Option<&Path>) -> Self {
+    pub fn new<'a>(
+        node: &'a AstNode<'a>,
+        conf: &McatConfig,
+        markdown_file_path: Option<&Path>,
+    ) -> Self {
         let mut urls = Vec::new();
         extract_image_urls(node, &mut urls);
 
@@ -141,7 +155,12 @@ impl ImagePreprocessor {
                 let img_str = String::from_utf8(buffer).unwrap_or_default();
                 let img = ImageElement {
                     is_ok: true,
-                    placeholder: create_placeholder(&img_str, i, &conf.inline_encoder, width.clone()),
+                    placeholder: create_placeholder(
+                        &img_str,
+                        i,
+                        &conf.inline_encoder,
+                        width.clone(),
+                    ),
                     img: img_str,
                 };
                 mapper.insert(url.original_url.clone(), img);
@@ -214,9 +233,13 @@ impl ImageElement {
             return;
         }
 
-        let img = format!("{UNDERLINE_OFF}{}", self.img);
+        let img = self
+            .img
+            .lines()
+            .map(|line| format!("{UNDERLINE_OFF}{}", line))
+            .join("\n");
         let placeholder_line = self.placeholder.lines().nth(0).unwrap_or_default();
-        
+
         for img_line in img.lines() {
             *text = text.replacen(placeholder_line, img_line, 1);
         }
