@@ -1,5 +1,6 @@
 ## Src
 - 📈 markdown viewer now handles multi line links better (link images too)
+- 📈 markdown viewer now creates clickable links
 
 ## V0.4.2
 - 🎉 now latex/typst files can also be converted into images / inline images

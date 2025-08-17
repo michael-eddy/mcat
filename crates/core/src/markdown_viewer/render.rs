@@ -594,20 +594,22 @@ fn render_strikethrough<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> Str
 }
 
 fn render_link<'a>(node: &'a AstNode<'a>, ctx: &mut AnsiContext) -> String {
-    let NodeValue::Link(NodeLink { .. }) = node.data.borrow().value else {
+    let NodeValue::Link(NodeLink { ref url, .. }) = node.data.borrow().value else {
         panic!()
     };
 
     let content = collect(node, ctx);
     let cyan = ctx.theme.cyan.fg.clone();
+    let osc8_start = format!("\x1b]8;;{}\x1b\\", url);
+    let osc8_end = "\x1b]8;;\x1b\\";
     content
         .lines()
         .enumerate()
         .map(|(i, line)| {
             if i == 0 {
-                format!("{UNDERLINE}{cyan}\u{f0339} {line}{RESET}")
+                format!("{osc8_start}{UNDERLINE}{cyan}\u{f0339} {line}{RESET}{osc8_end}")
             } else {
-                format!("  {UNDERLINE}{cyan}{line}{RESET}")
+                format!("  {osc8_start}{UNDERLINE}{cyan}{line}{RESET}{osc8_end}")
             }
         })
         .join("\n")
