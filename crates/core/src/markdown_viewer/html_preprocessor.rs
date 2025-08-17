@@ -184,6 +184,11 @@ impl ProcessingContext {
             ctx.write(&format!("*{}*", content.trim()));
         });
 
+        self.rules.insert("i".to_string(), |element, ctx| {
+            let content = ctx.collect(element);
+            ctx.write(&format!("*{}*", content.trim()));
+        });
+
         self.rules.insert("hr".to_string(), |_element, ctx| {
             ctx.ensure_empty_line();
             ctx.write("<!--HR-->");
@@ -242,6 +247,11 @@ impl ProcessingContext {
             self.rules.insert(item.to_string(), |element, ctx| {
                 let content = ctx.collect(element);
                 let content = content.trim();
+
+                if content.is_empty() {
+                    return;
+                }
+
                 ctx.ensure_empty_line();
 
                 if let Some(align) = element.value().attr("align") {
@@ -254,6 +264,7 @@ impl ProcessingContext {
                         for line_num in start_line..=end_line {
                             ctx.centered_lines.push(line_num);
                         }
+                        ctx.ensure_space();
                         return;
                     }
                 }
@@ -340,7 +351,7 @@ impl ProcessingContext {
 }
 
 /// # the tags handled:
-/// img, pre, code, a, blockquote, br, var, hr, b, strong, em, del, s, strike, h1-6, q, div, p, deatils, summary
+/// img, pre, code, a, blockquote, br, var, i, hr, b, strong, em, del, s, strike, h1-6, q, div, p, deatils, summary
 /// elements not included will remain the same.
 ///
 /// # for attributes:
@@ -360,6 +371,7 @@ impl ProcessingContext {
 /// blockquote: <block>,   maps each line to "> {v}"
 /// br:         <N>,       calls ensure_space
 /// var:        <inline>,  *{v}*
+/// i:          <inline>,  *{v}*
 /// hr:         <block>,   <!--HR-->
 /// b:          <inline>,  **{v}**
 /// strong:     <inline>,  **{v}**
