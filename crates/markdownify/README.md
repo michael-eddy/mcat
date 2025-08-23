@@ -6,22 +6,18 @@ A Rust library for converting various document formats to Markdown, part of the 
 [![Documentation](https://docs.rs/markdownify/badge.svg)](https://docs.rs/markdownify)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Overview
-
-markdownify is a Rust implementation inspired by Microsoft's [markitdown](https://github.com/microsoft/markitdown) Python project. It provides functionality to convert various document formats to Markdown, making them easier to view, share, and integrate into AI prompts.
-
 ## Supported Formats
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| Word Documents | .docx | Microsoft Word documents |
-| OpenDocument Text | .odt, .odp | OpenDocument text files |
-| PDF | .pdf | Portable Document Format files |
-| PowerPoint | .pptx | Microsoft PowerPoint presentations |
-| Excel/Spreadsheets | .xlsx, .xls, .xlsm, .xlsb, .xla, .xlam, .ods | Various spreadsheet formats |
-| CSV | .csv | Comma-separated values (auto-detects delimiter) |
-| ZIP Archives | .zip | Extracts and converts contained files |
-| Other text formats | (various) | Falls back to code block formatting |
+| Format | Extension |
+|--------|-----------|
+| Word Documents | .docx |
+| OpenDocument Text | .odt, .odp |
+| PDF | .pdf |
+| PowerPoint | .pptx |
+| Excel/Spreadsheets | .xlsx, .xls, .xlsm, .xlsb, .xla, .xlam, .ods |
+| CSV | .csv |
+| ZIP Archives | .zip |
+| Other text formats | (various) Falls back to code block formatting |
 
 ## Installation
 

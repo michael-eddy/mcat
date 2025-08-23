@@ -6,17 +6,13 @@ A Rust library for displaying images and videos inline in terminal emulators, pa
 [![Documentation](https://docs.rs/rasteroid/badge.svg)](https://docs.rs/rasteroid)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Overview
-
-rasteroid is a Rust library that enables displaying images and videos directly within terminal emulators. It provides support for multiple terminal graphics protocols, making it easy to integrate rich visual content into terminal applications.
-
 ## Auto Detection
 
-| Protocol | Terminal Emulators | Description |
-|----------|-------------------|-------------|
-| Kitty    | Kitty, Ghostty    | High-performance terminal graphics protocol |
-| iTerm2   | iTerm2, WezTerm, Mintty, Rio, Warp, Konsole | Widely supported protocol for inline images |
-| Sixel    | Foot, Windows Terminal, sixel-tmux | Legacy but widely supported pixel graphics format |
+| Protocol | Terminal Emulators |
+|----------|-------------------|
+| Kitty    | Kitty, Ghostty    |
+| iTerm2   | iTerm2, WezTerm, Mintty, Rio, Warp, Konsole |
+| Sixel    | Foot, Windows Terminal, sixel-tmux |
 
 ## Installation
 
