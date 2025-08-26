@@ -1,17 +1,3 @@
-<div align="center" markdown="1">
-   <sup>Special thanks to:</sup>
-   <br>
-   <br>
-   <a href="https://www.warp.dev/mcat">
-      <img alt="Warp sponsorship" width="400" src="https://github.com/user-attachments/assets/c21102f7-bab9-4344-a731-0cf6b341cab2">
-   </a>
-
-### [Warp, the intelligent terminal for developers](https://www.warp.dev/mcat)
-[Available for MacOS, Linux, & Windows](https://www.warp.dev/mcat)<br>
-
-</div>
-<hr>
-
 <div align="center">
 
 # Mcat
@@ -209,6 +195,18 @@ each variable mimicks its corresponding flag alternative.
 ## 🚧 Roadmap
 - [ ] mcat.nvim: a neovim plugin to use mcat inside neovim
 
-## 📎 License
+## 📎License
 MIT License
 
+---
+
+<div align=center>
+   <p>Thanks to all contributors</p>   
+   <img src="https://contributors-img.web.app/image?repo=skardyy/mcat" height="30"/>
+   <br/>
+   <br/>
+   <p>Thanks to all sponsors</p>
+   <a href="https://www.warp.dev/">
+      <img height="70" src="https://github.com/user-attachments/assets/c21102f7-bab9-4344-a731-0cf6b341cab2">
+   </a>
+</div>
