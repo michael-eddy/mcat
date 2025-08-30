@@ -38,34 +38,61 @@ pub enum CatType {
     Interactive,
 }
 
+pub fn get_album(path: &Path) -> Option<Vec<DynamicImage>> {
+    // pdf
+    let ext = path
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+
+    // pdf
+    if matches!(ext.as_ref(), "pdf" | "tex" | "typ") && converter::get_pdf_command().is_ok() {
+        let (path, _tmpfile, _tmpfolder) = converter::get_pdf(path);
+        let images = converter::pdf_to_vec(&path.to_string_lossy().to_string()).ok()?;
+        if !images.is_empty() {
+            return Some(images);
+        }
+    }
+
+    return None;
+}
+
 pub fn cat(
     paths: Vec<&Path>,
     out: &mut impl Write,
     opts: &McatConfig,
 ) -> Result<CatType, Box<dyn std::error::Error>> {
-    //interactive mode
-    if paths.len() > 1 {
-        let mut new_opts = opts.clone();
-        new_opts.output = Some("image".to_owned());
-
-        let images = paths
-            .par_iter()
-            .filter_map(|path| {
-                let mut buffer = Vec::new();
-                cat(vec![path], &mut buffer, &new_opts).ok()?;
-
-                let dyn_img = image::load_from_memory(&buffer).ok()?;
-                Some(dyn_img)
-            })
-            .collect();
-
-        interact_with_image(images, opts, out)?;
-        return Ok(CatType::Interactive);
-    }
-
     let path = paths
         .get(0)
         .ok_or("This is most likely a bug - no paths are included in the cat function")?;
+
+    //interactive mode
+    if opts.output.clone().unwrap_or_default() == "interactive" {
+        if paths.len() > 1 {
+            let mut new_opts = opts.clone();
+            new_opts.output = Some("image".to_owned());
+
+            let images = paths
+                .par_iter()
+                .filter_map(|path| {
+                    let mut buffer = Vec::new();
+                    cat(vec![path], &mut buffer, &new_opts).ok()?;
+
+                    let dyn_img = image::load_from_memory(&buffer).ok()?;
+                    Some(dyn_img)
+                })
+                .collect();
+
+            interact_with_image(images, opts, out)?;
+            return Ok(CatType::Interactive);
+        }
+        if let Some(images) = get_album(path) {
+            interact_with_image(images, opts, out)?;
+            return Ok(CatType::Interactive);
+        }
+    }
+
     if !path.exists() {
         return Err(format!("invalid path: {}", path.display()).into());
     }
@@ -220,24 +247,8 @@ pub fn load(
         && matches!(to.as_ref(), "inline" | "image" | "interactive")
         && converter::get_pdf_command().is_ok()
     {
-        let (path, _tmpfile, _tmpfolder) = match ext.as_ref() {
-            "pdf" => (path.to_path_buf(), None, None),
-            "typ" => {
-                if let Some(pdf) = converter::typst_to_pdf(path) {
-                    (pdf.path().to_path_buf(), Some(pdf), None)
-                } else {
-                    (path.to_path_buf(), None, None)
-                }
-            }
-            "tex" => {
-                if let Some((tmpdir, p)) = converter::latex_to_pdf(path) {
-                    (p, None, Some(tmpdir))
-                } else {
-                    (path.to_path_buf(), None, None)
-                }
-            }
-            _ => unreachable!(),
-        };
+        let (path, _tmpfile, _tmpfolder) = converter::get_pdf(path);
+
         // goes back to normal parsing if fails.
         if let Ok(img_data) = converter::pdf_to_image(&path.to_string_lossy().to_owned(), 1) {
             match to.as_ref() {

@@ -176,6 +176,71 @@ pub fn get_pdf_command() -> Result<&'static str, String> {
         .or_else(|_| which::which("pdftoppm").map(|_| "pdftoppm"))
         .map_err(|_| "Neither pdftocairo nor pdftoppm found in PATH".to_string())
 }
+pub fn get_pdf(path: &Path) -> (PathBuf, Option<NamedTempFile>, Option<TempDir>) {
+    let ext = path
+        .extension()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    match ext.as_ref() {
+        "pdf" => (path.to_path_buf(), None, None),
+        "typ" => {
+            if let Some(pdf) = typst_to_pdf(path) {
+                (pdf.path().to_path_buf(), Some(pdf), None)
+            } else {
+                (path.to_path_buf(), None, None)
+            }
+        }
+        "tex" => {
+            if let Some((tmpdir, p)) = latex_to_pdf(path) {
+                (p, None, Some(tmpdir))
+            } else {
+                (path.to_path_buf(), None, None)
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+pub fn pdf_to_vec(pdf_path: &str) -> Result<Vec<DynamicImage>, Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let temp_path = temp_dir.path().join("page").to_string_lossy().to_string();
+    let tool = get_pdf_command()?;
+
+    let output = Command::new(tool)
+        .args(&["-jpeg", "-r", "300", pdf_path, &temp_path])
+        .output()
+        .map_err(|e| format!("{} failed to execute: {}", tool, e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "{} error: {}",
+            tool,
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+
+    let mut entries: Vec<_> = fs::read_dir(temp_dir.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext == "jpg" || ext == "jpeg")
+                .unwrap_or(false)
+        })
+        .collect();
+    entries.sort_by_key(|entry| entry.file_name());
+
+    let mut images = Vec::new();
+    for entry in entries {
+        if let Ok(img) = image::open(entry.path()) {
+            images.push(img);
+        }
+    }
+
+    Ok(images)
+}
 pub fn pdf_to_image(
     pdf_path: &str,
     page_number: usize,
