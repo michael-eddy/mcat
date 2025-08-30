@@ -18,6 +18,7 @@ use rasteroid::{
     image_extended::{InlineImage, ZoomPanViewport},
     term_misc,
 };
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     config::McatConfig,
@@ -42,19 +43,21 @@ pub fn cat(
     out: &mut impl Write,
     opts: &McatConfig,
 ) -> Result<CatType, Box<dyn std::error::Error>> {
+    //interactive mode
     if paths.len() > 1 {
-        //interactive mode
-        let mut images = Vec::new();
         let mut new_opts = opts.clone();
         new_opts.output = Some("image".to_owned());
 
-        for path in paths {
-            let mut buffer = Vec::new();
-            cat(vec![path], &mut buffer, &new_opts)?;
+        let images = paths
+            .par_iter()
+            .filter_map(|path| {
+                let mut buffer = Vec::new();
+                cat(vec![path], &mut buffer, &new_opts).ok()?;
 
-            let dyn_img = image::load_from_memory(&buffer)?;
-            images.push(dyn_img);
-        }
+                let dyn_img = image::load_from_memory(&buffer).ok()?;
+                Some(dyn_img)
+            })
+            .collect();
 
         interact_with_image(images, opts, out)?;
         return Ok(CatType::Interactive);
