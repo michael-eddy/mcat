@@ -2,6 +2,7 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use futures::{SinkExt, StreamExt};
 use serde_json::{Value, json};
+use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -19,16 +20,24 @@ pub struct ChromeHeadless {
     port: u16,
 }
 
+fn find_available_port() -> Result<u16, Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    drop(listener);
+    Ok(port)
+}
+
 impl ChromeHeadless {
     pub async fn new(uri: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let browser_config = BrowserConfig::default().ok_or("chromium isn't installed. either install it manually (chrome/msedge will do so too) or call `mcat --fetch-chromium`")?;
         let path = browser_config.path;
+        let port = find_available_port()?;
         let process = Command::new(path)
             .args(&[
                 // Core headless setup
                 "--headless",
                 "--disable-gpu",
-                "--remote-debugging-port=9222",
+                &format!("--remote-debugging-port={}", port),
                 // Stability & crash prevention
                 "--disable-dev-shm-usage",
                 "--disable-breakpad",
@@ -79,7 +88,7 @@ impl ChromeHeadless {
 
         let instance = Self {
             process: pc_arc,
-            port: 9222,
+            port,
         };
 
         instance.wait_for_server().await?;

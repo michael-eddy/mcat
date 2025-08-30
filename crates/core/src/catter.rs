@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fs::{self, File},
-    io::{Write, stdout},
+    io::{Cursor, Write, stdout},
     path::Path,
     process::{Command, Stdio},
 };
@@ -39,7 +39,6 @@ pub enum CatType {
 }
 
 pub fn get_album(path: &Path) -> Option<Vec<DynamicImage>> {
-    // pdf
     let ext = path
         .extension()
         .unwrap_or_default()
@@ -154,8 +153,10 @@ pub fn cat(
             Ok(CatType::Interactive)
         },
         ("image", "image") => {
-            let buf = fs::read(path)?;
-            out.write_all(&buf)?;
+            let img = image_result.unwrap();
+            let mut cursor = Cursor::new(Vec::new());
+            img.write_to(&mut cursor, ImageFormat::Png)?;
+            out.write_all(&cursor.into_inner())?;
             Ok(CatType::Image)
         },
         ("image", "interactive") => {
