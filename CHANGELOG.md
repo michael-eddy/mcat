@@ -1,6 +1,6 @@
 ## V0.4.3
 - 🎉 interactive_viewer now supports albums - passing multiple images with -o interactive can now be viewed as an album (n/p to move between images)
-- 🎉 interactive_viewer now automatically treats pdf/latex/typst as albums so you view multiple pages.
+- 🎉 interactive_viewer now automatically treats pdf/latex/typst as albums so you can view multiple pages.
 - 📈 markdown viewer now handles multi line links better (link images too)
 - 📈 markdown viewer now creates clickable links
 - 🐛 fixed an logic issue that stopped pdf files from being used with -o interactive
