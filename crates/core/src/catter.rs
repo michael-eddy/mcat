@@ -37,6 +37,141 @@ pub enum CatType {
     Interactive,
 }
 
+pub fn cat(
+    paths: Vec<&Path>,
+    out: &mut impl Write,
+    opts: &McatConfig,
+) -> Result<CatType, Box<dyn std::error::Error>> {
+    if paths.len() > 1 {
+        //interactive mode
+        let mut images = Vec::new();
+        let mut new_opts = opts.clone();
+        new_opts.output = Some("image".to_owned());
+
+        for path in paths {
+            let mut buffer = Vec::new();
+            cat(vec![path], &mut buffer, &new_opts)?;
+
+            let dyn_img = image::load_from_memory(&buffer)?;
+            images.push(dyn_img);
+        }
+
+        interact_with_image(images, opts, out)?;
+        return Ok(CatType::Interactive);
+    }
+
+    let path = paths
+        .get(0)
+        .ok_or("This is most likely a bug - no paths are included in the cat function")?;
+    if !path.exists() {
+        return Err(format!("invalid path: {}", path.display()).into());
+    }
+
+    let (result, from, to) = load(path, out, opts)?;
+    let (string_result, image_result) = match result {
+        LoadResult::Image(dynamic_image) => (None, Some(dynamic_image)),
+        LoadResult::Text(text) => (Some(text), None),
+        LoadResult::Handled(cat_type) => return Ok(cat_type),
+    };
+
+    // converting
+    match (from.as_ref(), to.as_ref()) {
+        ("md", "md") => {
+            out.write_all(string_result.unwrap().as_bytes())?;
+            Ok(CatType::Markdown)
+        }
+        ("md", "html") => {
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), if opts.style_html {Some(opts.theme.as_ref())} else {None});
+            out.write_all(html.as_bytes())?;
+            Ok(CatType::Html)
+        },
+        ("md", "image") => {
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
+            let image = converter::html_to_image(&html)?;
+            out.write_all(&image)?;
+            Ok(CatType::Image)
+        },
+        ("md", "inline") => {
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
+            let image = converter::html_to_image(&html)?;
+            let dyn_img = image::load_from_memory(&image)?;
+            print_image(out, dyn_img, opts)?;
+            Ok(CatType::InlineImage)
+        },
+        ("md", "interactive") => {
+            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
+            let img_bytes = converter::html_to_image(&html)?;
+            let img = image::load_from_memory(&img_bytes)?;
+            interact_with_image(vec![img], opts, out)?;
+            Ok(CatType::Interactive)
+        },
+        ("html", "image") => {
+            let image = converter::html_to_image(&string_result.unwrap())?;
+            out.write_all(&image)?;
+            Ok(CatType::Image)
+        },
+        ("html", "inline") => {
+            let image = converter::html_to_image(&string_result.unwrap())?;
+            let dyn_img = image::load_from_memory(&image)?;
+            print_image(out, dyn_img, opts)?;
+            Ok(CatType::InlineImage)
+        },
+        ("html", "interactive") => {
+            let html = &string_result.unwrap();
+            let img_bytes = converter::html_to_image(&html)?;
+            let img = image::load_from_memory(&img_bytes)?;
+            interact_with_image(vec![img], opts, out)?;
+            Ok(CatType::Interactive)
+        },
+        ("image", "image") => {
+            let buf = fs::read(path)?;
+            out.write_all(&buf)?;
+            Ok(CatType::Image)
+        },
+        ("image", "interactive") => {
+            let img = image_result.unwrap();
+            interact_with_image(vec![img], opts, out)?;
+            Ok(CatType::Interactive)
+        },
+        ("md" | "html", _) => {
+            //default for md, html
+            let mut res = string_result.unwrap();
+            if from == "html" {
+                res = format!("```html\n{res}\n```");
+            }
+            let is_tty = stdout().is_tty();
+            let use_color = opts.color.should_use(is_tty);
+            let content = match use_color {
+                true => markdown_viewer::md_to_ansi(&res, &opts, Some(path)),
+                false => res,
+            };
+            let use_pager = opts.paging.should_use(is_tty && content.lines().count() > term_misc::get_wininfo().sc_height as usize);
+            if use_pager {
+                if let Some(pager) = Pager::new(opts.pager.as_ref()) {
+                    if pager.page(&content).is_err() {
+                        out.write_all(content.as_bytes())?;
+                    }
+                } else {
+                    out.write_all(content.as_bytes())?;
+                }
+                Ok(CatType::Pretty)
+            } else {
+                out.write_all(content.as_bytes())?;
+                return Ok(CatType::Markdown)
+            }
+        },
+        ("image", _) => {
+            // default for image
+            print_image(out, image_result.unwrap(), opts)?;
+            Ok(CatType::InlineImage)
+        },
+        _ => Err(format!(
+            "converting: {} to: {}, is not supported.\nsupported pipeline is: any -> md -> html -> image -> inline_image / interactive_image\nor video -> inline_video",
+            from, to
+        ).into()),
+    }
+}
+
 pub enum LoadResult {
     Image(DynamicImage),
     Text(String),
@@ -159,120 +294,6 @@ pub fn load(
     }
 }
 
-pub fn cat(
-    path: &Path,
-    out: &mut impl Write,
-    opts: &McatConfig,
-) -> Result<CatType, Box<dyn std::error::Error>> {
-    if !path.exists() {
-        return Err(format!("invalid path: {}", path.display()).into());
-    }
-
-    let (result, from, to) = load(path, out, opts)?;
-    let (string_result, image_result) = match result {
-        LoadResult::Image(dynamic_image) => (None, Some(dynamic_image)),
-        LoadResult::Text(text) => (Some(text), None),
-        LoadResult::Handled(cat_type) => return Ok(cat_type),
-    };
-
-    // converting
-    match (from.as_ref(), to.as_ref()) {
-        ("md", "md") => {
-            out.write_all(string_result.unwrap().as_bytes())?;
-            Ok(CatType::Markdown)
-        }
-        ("md", "html") => {
-            let html = markdown_viewer::md_to_html(&string_result.unwrap(), if opts.style_html {Some(opts.theme.as_ref())} else {None});
-            out.write_all(html.as_bytes())?;
-            Ok(CatType::Html)
-        },
-        ("md", "image") => {
-            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
-            let image = converter::html_to_image(&html)?;
-            out.write_all(&image)?;
-            Ok(CatType::Image)
-        },
-        ("md", "inline") => {
-            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
-            let image = converter::html_to_image(&html)?;
-            let dyn_img = image::load_from_memory(&image)?;
-            print_image(out, dyn_img, opts)?;
-            Ok(CatType::InlineImage)
-        },
-        ("md", "interactive") => {
-            let html = markdown_viewer::md_to_html(&string_result.unwrap(), Some(opts.theme.as_ref()));
-            let img_bytes = converter::html_to_image(&html)?;
-            let img = image::load_from_memory(&img_bytes)?;
-            interact_with_image(img, opts, out)?;
-            Ok(CatType::Interactive)
-        },
-        ("html", "image") => {
-            let image = converter::html_to_image(&string_result.unwrap())?;
-            out.write_all(&image)?;
-            Ok(CatType::Image)
-        },
-        ("html", "inline") => {
-            let image = converter::html_to_image(&string_result.unwrap())?;
-            let dyn_img = image::load_from_memory(&image)?;
-            print_image(out, dyn_img, opts)?;
-            Ok(CatType::InlineImage)
-        },
-        ("html", "interactive") => {
-            let html = &string_result.unwrap();
-            let img_bytes = converter::html_to_image(&html)?;
-            let img = image::load_from_memory(&img_bytes)?;
-            interact_with_image(img, opts, out)?;
-            Ok(CatType::Interactive)
-        },
-        ("image", "image") => {
-            let buf = fs::read(path)?;
-            out.write_all(&buf)?;
-            Ok(CatType::Image)
-        },
-        ("image", "interactive") => {
-            let img = image_result.unwrap();
-            interact_with_image(img, opts, out)?;
-            Ok(CatType::Interactive)
-        },
-        ("md" | "html", _) => {
-            //default for md, html
-            let mut res = string_result.unwrap();
-            if from == "html" {
-                res = format!("```html\n{res}\n```");
-            }
-            let is_tty = stdout().is_tty();
-            let use_color = opts.color.should_use(is_tty);
-            let content = match use_color {
-                true => markdown_viewer::md_to_ansi(&res, &opts, Some(path)),
-                false => res,
-            };
-            let use_pager = opts.paging.should_use(is_tty && content.lines().count() > term_misc::get_wininfo().sc_height as usize);
-            if use_pager {
-                if let Some(pager) = Pager::new(opts.pager.as_ref()) {
-                    if pager.page(&content).is_err() {
-                        out.write_all(content.as_bytes())?;
-                    }
-                } else {
-                    out.write_all(content.as_bytes())?;
-                }
-                Ok(CatType::Pretty)
-            } else {
-                out.write_all(content.as_bytes())?;
-                return Ok(CatType::Markdown)
-            }
-        },
-        ("image", _) => {
-            // default for image
-            print_image(out, image_result.unwrap(), opts)?;
-            Ok(CatType::InlineImage)
-        },
-        _ => Err(format!(
-            "converting: {} to: {}, is not supported.\nsupported pipeline is: md -> html -> image -> inline_image",
-            from, to
-        ).into()),
-    }
-}
-
 fn print_image(
     out: &mut impl Write,
     dyn_img: DynamicImage,
@@ -332,10 +353,15 @@ fn apply_pan_zoom_once(img: DynamicImage, opts: &McatConfig) -> DynamicImage {
 }
 
 fn interact_with_image(
-    img: DynamicImage,
+    images: Vec<DynamicImage>,
     opts: &McatConfig,
     out: &mut impl Write,
 ) -> Result<(), Box<dyn Error>> {
+    if images.is_empty() {
+        return Err("Most likely a bug - interact_with_image received 0 paths".into());
+    }
+
+    let mut img = &images[0];
     let tinfo = term_misc::get_wininfo();
     let container_width = tinfo.spx_width as u32;
     let container_height = tinfo.spx_height as u32;
@@ -357,13 +383,23 @@ fn interact_with_image(
         InlineEncoder::Ascii => true,
         InlineEncoder::Iterm | InlineEncoder::Sixel => false,
     };
+    let mut current_index = 0;
+    let max_images = images.len();
 
     run_interactive_viewer(
         container_width,
         container_height,
         image_width,
         image_height,
-        |vp| {
+        images.len() as u8,
+        |vp, current_image| {
+            if current_image != current_index {
+                current_index = current_image;
+                img = &images[current_image as usize];
+                let width = img.width();
+                let height = img.height();
+                vp.update_image_size(width, height);
+            }
             let new_img = vp.apply_to_image(&img);
             let (img, center, _, _) = new_img
                 .resize_plus(
@@ -389,7 +425,15 @@ fn interact_with_image(
                 &opts.inline_encoder,
             )
             .ok()?;
-            show_help_prompt(&mut buf, tinfo.sc_width, tinfo.sc_height, vp).ok()?;
+            show_help_prompt(
+                &mut buf,
+                tinfo.sc_width,
+                tinfo.sc_height,
+                vp,
+                current_image,
+                max_images as u8,
+            )
+            .ok()?;
             clear_screen(out, Some(buf)).ok()?;
             out.flush().ok()?;
             if should_disable_raw_mode {

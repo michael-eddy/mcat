@@ -16,10 +16,14 @@ pub fn show_help_prompt(
     term_width: u16,
     term_height: u16,
     state: &ZoomPanViewport,
+    current_image: u8,
+    max_images: u8,
 ) -> io::Result<()> {
-    let help_text = "[Arrow/hjkl] Move [g/G] Start/End  [+/-] Zoom  [0] Reset  [q/ESC] Quit";
+    let current_image = current_image + 1; // 0 based inex to 1
+    let help_text =
+        "[Arrow/hjkl] Move [n/p] Next/Pre [g/G] Start/End  [+/-] Zoom  [0] Reset  [q/ESC] Quit";
     let status_text = format!(
-        "Position: ({}, {}) | Zoom: {}x",
+        "Position: ({}, {}) | Zoom: {}x | image: {current_image}/{max_images}",
         state.pan_x(),
         state.pan_y(),
         state.zoom()
@@ -70,15 +74,17 @@ pub fn run_interactive_viewer(
     container_height: u32,
     image_width: u32,
     image_height: u32,
-    mut callback: impl FnMut(&ZoomPanViewport) -> Option<()>,
+    max_images: u8,
+    mut callback: impl FnMut(&mut ZoomPanViewport, u8) -> Option<()>,
 ) -> std::io::Result<()> {
     enable_raw_mode()?;
 
     let mut viewport =
         ZoomPanViewport::new(container_width, container_height, image_width, image_height);
+    let mut current_image = 0;
 
     // Initial callback
-    let mut should_quit = callback(&viewport);
+    let mut should_quit = callback(&mut viewport, current_image);
     let mut last_callback_time = std::time::Instant::now();
     let callback_throttle = std::time::Duration::from_millis(50);
 
@@ -100,6 +106,30 @@ pub fn run_interactive_viewer(
                     | KeyEvent {
                         code: KeyCode::Esc, ..
                     } => break,
+
+                    // next image
+                    KeyEvent {
+                        code: KeyCode::Char('n'),
+                        modifiers: KeyModifiers::NONE,
+                        ..
+                    } => {
+                        if current_image + 1 < max_images {
+                            clicked_correct_key = true;
+                            current_image += 1;
+                        }
+                    }
+
+                    // previous image
+                    KeyEvent {
+                        code: KeyCode::Char('p'),
+                        modifiers: KeyModifiers::NONE,
+                        ..
+                    } => {
+                        if current_image != 0 {
+                            clicked_correct_key = true;
+                            current_image -= 1;
+                        }
+                    }
 
                     //left
                     KeyEvent {
@@ -252,7 +282,7 @@ pub fn run_interactive_viewer(
                 if clicked_correct_key {
                     let now = std::time::Instant::now();
                     if now.duration_since(last_callback_time) >= callback_throttle {
-                        should_quit = callback(&viewport);
+                        should_quit = callback(&mut viewport, current_image);
                         last_callback_time = now;
                     }
                 }

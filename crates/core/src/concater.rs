@@ -159,49 +159,42 @@ pub fn concat_video(
     }
 }
 
-pub fn check_unified_format(paths: &[(PathBuf, Option<String>)]) -> &'static str {
+pub fn check_unified_format(paths: &[(PathBuf, Option<String>)]) -> Vec<&'static str> {
     if paths.is_empty() {
-        return "text"; // Default if no files
+        return vec!["text"]; // Default if no files
     }
 
-    let mut detected_format: Option<&'static str> = None;
+    let mut detected_formats = Vec::new();
 
     for (path, _) in paths {
-        if let Some(extension) = path.extension() {
+        let current_format = if let Some(extension) = path.extension() {
             if let Some(ext_str) = extension.to_str() {
                 let ext = ext_str.to_lowercase();
-
-                let current_format = if catter::is_video(&ext) {
+                if catter::is_video(&ext) {
                     "video"
                 } else if ImageFormat::from_extension(&ext).is_some() || ext == "svg" {
                     "image"
                 } else {
                     "text"
-                };
-
-                if let Some(prev_format) = detected_format {
-                    if prev_format != current_format {
-                        // Found conflicting formats
-                        eprintln!(
-                            "Error: Cannot have 2 different formats [text / images / videos]"
-                        );
-                        std::process::exit(1);
-                    }
-                } else {
-                    // First file, set the format
-                    detected_format = Some(current_format);
                 }
+            } else {
+                "text" // Files with no extension are considered text
             }
         } else {
-            // Files with no extension are considered text
-            if detected_format.is_some() && detected_format.unwrap() != "text" {
-                eprintln!("Error: Cannot have 2 different formats");
-                std::process::exit(1);
-            }
-            detected_format = Some("text");
+            "text" // Files with no extension are considered text
+        };
+
+        // Add format if not already in the list
+        if !detected_formats.contains(&current_format) {
+            detected_formats.push(current_format);
         }
     }
-    detected_format.unwrap_or("text")
+
+    if detected_formats.is_empty() {
+        vec!["text"]
+    } else {
+        detected_formats
+    }
 }
 
 pub fn assign_names<'a>(

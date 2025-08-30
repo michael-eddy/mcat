@@ -377,18 +377,34 @@ fn main() {
     }
 
     // concating and printing the result
-    let main_format = concater::check_unified_format(&path_bufs);
-    match main_format {
-        "text" => {
+    let formats = concater::check_unified_format(&path_bufs);
+    let is_interactive = config.output.clone().unwrap_or_default() == "interactive";
+    let contains_video = formats.contains(&"video");
+    let contains_image = formats.contains(&"image");
+    let contains_text = formats.contains(&"text");
+    match (
+        contains_video,
+        contains_image,
+        contains_text,
+        is_interactive,
+    ) {
+        // images and videos and interactive
+        (false, true | false, true | false, true) => {
+            let paths = path_bufs.iter().map(|v| v.0.as_path()).collect();
+            catter::cat(paths, &mut out, &config).unwrap_or_exit();
+        }
+        // only text
+        (false, false, true, _) => {
             if path_bufs.len() == 1 {
-                catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
+                catter::cat(vec![&path_bufs[0].0], &mut out, &config).unwrap_or_exit();
             } else {
                 let path_bufs = concater::assign_names(&path_bufs);
                 let tmp = concater::concat_text(path_bufs);
-                catter::cat(tmp.path(), &mut out, &config).unwrap_or_exit();
+                catter::cat(vec![tmp.path()], &mut out, &config).unwrap_or_exit();
             }
         }
-        "video" => {
+        // only videos
+        (true, false, false, _) => {
             match config.inline_encoder {
                 rasteroid::InlineEncoder::Ascii | rasteroid::InlineEncoder::Sixel => {}
                 _ => {
@@ -398,14 +414,15 @@ fn main() {
                 }
             }
             if path_bufs.len() == 1 {
-                catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
+                catter::cat(vec![&path_bufs[0].0], &mut out, &config).unwrap_or_exit();
             } else {
                 #[allow(unused_variables)]
                 let (dir, path) = concater::concat_video(&path_bufs).unwrap_or_exit();
-                catter::cat(&path, &mut out, &config).unwrap_or_exit();
+                catter::cat(vec![&path], &mut out, &config).unwrap_or_exit();
             }
         }
-        "image" => {
+        // only images
+        (false, true, false, _) => {
             match config.inline_encoder {
                 rasteroid::InlineEncoder::Ascii => {}
                 _ => {
@@ -415,14 +432,17 @@ fn main() {
                 }
             }
             if path_bufs.len() == 1 {
-                catter::cat(&path_bufs[0].0, &mut out, &config).unwrap_or_exit();
+                catter::cat(vec![&path_bufs[0].0], &mut out, &config).unwrap_or_exit();
             } else {
                 let img = concater::concat_images(path_bufs, config.horizontal_image_stacking)
                     .unwrap_or_exit();
-                catter::cat(img.path(), &mut out, &config).unwrap_or_exit();
+                catter::cat(vec![img.path()], &mut out, &config).unwrap_or_exit();
             }
         }
-        _ => {}
+        _ => {
+            eprintln!("Error: Cannot have 2 different formats [text / images / videos]");
+            std::process::exit(1);
+        }
     }
     out.flush().unwrap();
 }
