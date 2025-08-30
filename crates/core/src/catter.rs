@@ -37,31 +37,31 @@ pub enum CatType {
     Interactive,
 }
 
-pub fn cat(
+pub enum LoadResult {
+    Image(DynamicImage),
+    Text(String),
+    Handled(CatType),
+}
+pub fn load(
     path: &Path,
     out: &mut impl Write,
     opts: &McatConfig,
-) -> Result<CatType, Box<dyn std::error::Error>> {
-    if !path.exists() {
-        return Err(format!("invalid path: {}", path.display()).into());
-    }
-
+) -> Result<(LoadResult, String, String), Box<dyn std::error::Error>> {
     let ext = path
         .extension()
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
-    let mut image_result: Option<DynamicImage> = None;
-    let mut string_result: Option<String> = None;
-    let mut from: &str = "unknown";
-    let to = opts.output.as_deref().unwrap_or("unknown");
+    let to = opts.output.as_deref().unwrap_or("unknown").to_owned();
 
     //video
     if is_video(&ext) {
         if to == "video" {
             let content = fs::read(path)?;
             out.write_all(&content)?;
-            return Ok(CatType::Video);
+
+            let res = LoadResult::Handled(CatType::Video);
+            return Ok((res, "video".to_owned(), to));
         }
         converter::inline_a_video(
             path.to_string_lossy(),
@@ -72,11 +72,14 @@ pub fn cat(
             opts.inline_options.center,
             opts.silent,
         )?;
-        return Ok(CatType::InlineVideo);
+
+        let res = LoadResult::Handled(CatType::InlineVideo);
+        return Ok((res, "video".to_owned(), to));
     }
+
     // pdf to images
     if matches!(ext.as_ref(), "pdf" | "tex" | "typ")
-        && matches!(to, "inline" | "image")
+        && matches!(to.as_ref(), "inline" | "image" | "interactive")
         && converter::get_pdf_command().is_ok()
     {
         let (path, _tmpfile, _tmpfolder) = match ext.as_ref() {
@@ -99,61 +102,81 @@ pub fn cat(
         };
         // goes back to normal parsing if fails.
         if let Ok(img_data) = converter::pdf_to_image(&path.to_string_lossy().to_owned(), 1) {
-            match to {
-                "inline" => {
-                    let dyn_img = image::load_from_memory(&img_data)?;
-                    print_image(out, dyn_img, opts)?;
-                    return Ok(CatType::InlineImage);
-                }
+            match to.as_ref() {
                 "image" => {
+                    let res = LoadResult::Handled(CatType::Image);
                     out.write_all(&img_data)?;
-                    return Ok(CatType::Image);
+                    return Ok((res, "image".to_owned(), to));
                 }
-                _ => unreachable!(),
+                _ => {
+                    let dyn_img = image::load_from_memory(&img_data)?;
+                    let res = LoadResult::Image(dyn_img);
+                    return Ok((res, "image".to_owned(), to));
+                }
             }
         }
     }
+
     //svg
-    (image_result, from) = if ext == "svg" {
+    if ext == "svg" {
         let file = File::open(path)?;
         let dyn_img = converter::svg_to_image(
             file,
             opts.inline_options.width.as_deref(),
             opts.inline_options.height.as_deref(),
         )?;
-        (Some(dyn_img), "image")
-    } else {
-        (image_result, from)
-    };
-    //image
-    (image_result, from) = if ImageFormat::from_extension(&ext).is_some() {
-        let buf = fs::read(path)?;
-        let dyn_img = image::load_from_memory(&buf)?;
-        (Some(dyn_img), "image")
-    } else {
-        (image_result, from)
-    };
-    // local file or dir
-    if from == "unknown" {
-        (string_result, from) = {
-            match ext.as_ref() {
-                "md" | "html" => {
-                    let r = fs::read_to_string(path)?;
-                    (Some(r), ext.as_ref())
-                }
-                _ => {
-                    let screen_size = term_misc::get_wininfo();
-                    let opts = ConvertOptions::new(path)
-                        .with_screen_size((screen_size.sc_width, screen_size.sc_height));
-                    let f = markdownify::convert(opts)?;
-                    (Some(f), "md")
-                }
-            }
-        };
+
+        let res = LoadResult::Image(dyn_img);
+        return Ok((res, "image".to_owned(), to));
     }
 
+    //image
+    if ImageFormat::from_extension(&ext).is_some() {
+        let buf = fs::read(path)?;
+        let dyn_img = image::load_from_memory(&buf)?;
+
+        let res = LoadResult::Image(dyn_img);
+        return Ok((res, "image".to_owned(), to));
+    }
+
+    // local file or dir
+    match ext.as_ref() {
+        "md" | "html" => {
+            let r = fs::read_to_string(path)?;
+
+            let res = LoadResult::Text(r);
+            return Ok((res, ext, to));
+        }
+        _ => {
+            let screen_size = term_misc::get_wininfo();
+            let opts = ConvertOptions::new(path)
+                .with_screen_size((screen_size.sc_width, screen_size.sc_height));
+            let f = markdownify::convert(opts)?;
+
+            let res = LoadResult::Text(f);
+            return Ok((res, "md".to_owned(), to));
+        }
+    }
+}
+
+pub fn cat(
+    path: &Path,
+    out: &mut impl Write,
+    opts: &McatConfig,
+) -> Result<CatType, Box<dyn std::error::Error>> {
+    if !path.exists() {
+        return Err(format!("invalid path: {}", path.display()).into());
+    }
+
+    let (result, from, to) = load(path, out, opts)?;
+    let (string_result, image_result) = match result {
+        LoadResult::Image(dynamic_image) => (None, Some(dynamic_image)),
+        LoadResult::Text(text) => (Some(text), None),
+        LoadResult::Handled(cat_type) => return Ok(cat_type),
+    };
+
     // converting
-    match (from, to) {
+    match (from.as_ref(), to.as_ref()) {
         ("md", "md") => {
             out.write_all(string_result.unwrap().as_bytes())?;
             Ok(CatType::Markdown)
