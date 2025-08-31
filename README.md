@@ -15,6 +15,10 @@ Parse, Convert and Preview files
 </div>
 
 ## 🚀 Installation
+
+<details>
+   <summary>From Source</summary>
+
 ```sh
 cargo install mcat
 ```
@@ -24,7 +28,20 @@ git clone https://github.com/Skardyy/mcat
 cd mcat
 cargo install --path ./crates/core
 ```
-or prebuilt from the [latest release](https://github.com/Skardyy/mcat/releases/latest)
+</details>
+
+<details>
+   <summary>Prebuilt</summary>
+
+follow the instructions at the [latest release](https://github.com/Skardyy/mcat/releases/latest)
+</details>
+<details>
+   <summary>Homebrew (MacOS/Linux)</summary>
+
+```sh
+brew install Skardyy/mcat/mcat
+```
+</details>
 
 ## 🤔 How it works
 
