@@ -42,6 +42,13 @@ follow the instructions at the [latest release](https://github.com/Skardyy/mcat/
 brew install Skardyy/mcat/mcat
 ```
 </details>
+<details>
+   <summary>AUR (Arch linux)</summary>
+
+```sh
+yay -S mcat-bin
+```
+</details>
 
 ## 🤔 How it works
 
