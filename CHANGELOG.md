@@ -3,8 +3,8 @@
 - 🎉 interactive_viewer now automatically treats pdf/latex/typst as albums so you can view multiple pages.
 - 📈 markdown viewer now handles multi line links better (link images too)
 - 📈 markdown viewer now creates clickable links
-- 🐛 fixed an logic issue that stopped pdf files from being used with -o interactive
-- 🐛 fixed an logic issue that stopped certain files from being used with -o image
+- 🐛 fixed an issue that stopped pdf files from being used with -o interactive
+- 🐛 fixed an issue that stopped certain files from being used with -o image
 
 ## V0.4.2
 - 🎉 now latex/typst files can also be converted into images / inline images
