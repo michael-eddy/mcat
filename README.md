@@ -49,6 +49,13 @@ brew install Skardyy/mcat/mcat
 yay -S mcat-bin
 ```
 </details>
+<details>
+   <summary>Winget (Windows)</summary>
+
+```sh
+winget install skardyy.mcat
+```
+</details>
 
 ## 🤔 How it works
 
