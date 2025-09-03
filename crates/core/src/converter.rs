@@ -29,7 +29,10 @@ use std::{
 };
 use tempfile::{NamedTempFile, TempDir};
 
-use crate::{catter, cdp::ChromeHeadless, config::LsixOptions, fetch_manager};
+use crate::{
+    catter, cdp::ChromeHeadless, config::LsixOptions, fetch_manager,
+    markdown_viewer::utils::string_len,
+};
 
 pub fn svg_to_image(
     mut reader: impl Read,
@@ -301,7 +304,7 @@ impl Frame for VideoFrames {
 fn truncate_filename(name: String, width: u16) -> String {
     let width = width as usize;
 
-    let le = name.len();
+    let le = string_len(&name);
     if le <= width {
         let rem_space = width - le;
         let left_spaces = rem_space / 2;
@@ -315,7 +318,7 @@ fn truncate_filename(name: String, width: u16) -> String {
     }
 
     // sep base and ext
-    let dot_pos = name.rfind('.');
+    let dot_pos = name.rfind('.'); // always a single byte so its fine
     let (base, ext) = match dot_pos {
         Some(pos) => {
             let (b, e) = name.split_at(pos);
@@ -324,23 +327,23 @@ fn truncate_filename(name: String, width: u16) -> String {
         None => (name, "".into()),
     };
 
-    let ext_len = ext.len();
-    let base_len = base.len();
+    let ext_len = string_len(&ext);
+    let base_len = string_len(&base);
 
     // if even only the ext can't fit, why..
     if width <= ext_len {
         return if width >= ext_len {
             ext.to_string()
         } else {
-            ext[..width].to_string()
+            let truncated_ext: String = ext.chars().take(width).collect();
+            truncated_ext
         };
     }
 
     let available_base_width = width - ext_len;
 
     let front_part = if available_base_width < base_len {
-        let b = &base[..available_base_width];
-        format!("{b}")
+        base.chars().take(available_base_width).collect::<String>()
     } else {
         base
     };
