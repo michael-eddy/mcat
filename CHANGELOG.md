@@ -1,3 +1,6 @@
+## Src
+- 🐛 fixed an issue in the ls command where unicode characters that are more then a single byte could cause a panick
+
 ## V0.4.4
 - 🎉 interactive_viewer now supports albums - passing multiple images with -o interactive can now be viewed as an album (n/p to move between images)
 - 🎉 interactive_viewer now automatically treats pdf/latex/typst as albums so you can view multiple pages.
