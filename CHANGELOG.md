@@ -1,17 +1,17 @@
 ## Src
-- 🎉 **markdown viewer** now supports `<figure>` and `<figcaption>` HTML elements
+- 📈 **markdown viewer** now supports `<figure>` and `<figcaption>` HTML elements
 - 🐛 fixed an issue in the `ls` command where unicode characters that are more then a single byte could cause a panick
 
 ## V0.4.4
 - 🎉 **interactive viewer** now supports albums - passing multiple images with `-o interactive` can now be viewed as an album (n/p to move between images)
-- 🎉 **interactive viewer** now automatically treats pdf/latex/typst as albums so you can view multiple pages.
+- 📈 **interactive viewer** now automatically treats pdf/latex/typst as albums so you can view multiple pages.
 - 📈 **markdown viewer** now handles multi line links better (link images too)
 - 📈 **markdown viewer** now creates clickable links
 - 🐛 fixed an issue that stopped pdf files from being used with `-o interactive`
 - 🐛 fixed an issue that stopped certain files from being used with `-o image`
 
 ## V0.4.2
-- 🎉 now latex/typst files can also be converted into images / inline images
+- 📈 now latex/typst files can also be converted into images / inline images
 - 📈 **markdown viewer** now handles local images too! (#24) by @Alb-O
 - 📈 **markdown viewer** now also handles footnotes
 
@@ -25,21 +25,21 @@
 - 🐛 fixed an issue in the **markdown viewer** when certain styles would reset others
 
 ## V0.3.8
-- 🎉 added autumn and spring themes
+- 📈 added autumn and spring themes
 - 📈 improved the **markdown viewer** (prettier, comments HTML, better line wrapping in code blocks)
 - 🐛 HTML will now be treated as markdown when no output is specified -- allows for syntax highlighted code blocks instead of just printing it back. 
 - 🐛 now removes the background color when converting HTML to image
 
 ## V0.3.6
-- 🎉 added ayu, ayu_mirage, synthwave, material, rose_pine, kanagawa, vscode, everforest and github themes!
+- 📈 added ayu, ayu_mirage, synthwave, material, rose_pine, kanagawa, vscode, everforest and github themes!
 - 📈 **markdown viewer** now uses the theme colors and not terminal colors
 - 📈 improved the **markdown viewer** - less clutter
 - 📈 improved the pdf to **markdown parser** -- now maintain layout and draws lines, in the cost of being more text then markdown.
 - 🐛 screenshots of HTML/documents no longer says the filename / arg is too long
 
 ## V0.3.4
-- 🎉 now allows selection from the interactive selector along with other inputs
-- 🎉 now converts PDF to images using pdftoppm/pdftocairo (if not installed fallback to markdown parsing)
+- 📈 now allows selection from the interactive selector along with other inputs
+- 📈 now converts PDF to images using pdftoppm/pdftocairo (if not installed fallback to markdown parsing)
 - 📈 optimized build time
 - 🐛 fixed double linebreaks problem in the markdown viewer
 - 🐛 fixed codeblocks inside indented blocks being wider then the screen (markdown viewer).
