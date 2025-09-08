@@ -59,6 +59,7 @@ impl ProcessingContext {
         ctx.add_img_rules();
         ctx.add_code_rules();
         ctx.add_block_rules();
+        ctx.add_empty_rules();
 
         ctx
     }
@@ -172,6 +173,23 @@ impl ProcessingContext {
 
             ctx.ensure_space();
         });
+    }
+
+    fn add_empty_rules(&mut self) {
+        for item in ["figure", "figcaption"] {
+            self.rules.insert(item.to_string(), |element, ctx| {
+                let content = ctx.collect(element);
+                let content = content.trim();
+
+                if content.is_empty() {
+                    return;
+                }
+
+                ctx.ensure_empty_line();
+                ctx.write(&content);
+                ctx.ensure_space();
+            });
+        }
     }
 
     fn add_formatting_rules(&mut self) {
