@@ -1,4 +1,5 @@
 ## Src
+- 🎉 markdown viewer now supports `<figure>` and `<figcaption>` HTML elements
 - 🐛 fixed an issue in the ls command where unicode characters that are more then a single byte could cause a panick
 
 ## V0.4.4
