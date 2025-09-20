@@ -9,12 +9,12 @@ Parse, Convert and Preview files
 
 ![Downloads](https://img.shields.io/crates/d/mcat?style=for-the-badge) ![Version](https://img.shields.io/crates/v/mcat?style=for-the-badge)  
 
-[Installation](#-installation) • [Examples](#%EF%B8%8F-example-usage) • [CHANGELOG](./CHANGELOG.md)
+[Installation](#installation) • [Examples](#example-usage) • [CHANGELOG](./CHANGELOG.md)
 
 ![mcat_demo](https://github.com/Skardyy/assets/blob/main/mcat_opt.gif)
 </div>
 
-## 🚀 Installation
+## Installation
 
 <details>
    <summary>From Source</summary>
@@ -57,7 +57,7 @@ winget install skardyy.mcat
 ```
 </details>
 
-## 🤔 How it works
+## How it works
 
 ![mcat-pipeline](https://github.com/user-attachments/assets/fbf4617d-453a-45e8-bbd5-5dfdac2b8086)
 
@@ -120,7 +120,7 @@ This starts at an HTML file and directly converts it into a PNG image.
 </details>
 
 
-## 🏋️ Example Usage
+## Example Usage
 ```sh
 #------------------------------------#
 #  View a documents in the terminal  #
@@ -161,7 +161,7 @@ mcat . | scb                           # Selects files, concat them, and copy to
 mcat index.html -o image > save.png    # Render HTML into images
 ```
 
-## 📦 Optional Dependencies
+## Optional Dependencies
 > Mcat will continue working without them
 <details>
 <summary><strong>Chromium (for rendering HTML to image)</strong></summary>
@@ -187,12 +187,12 @@ mcat index.html -o image > save.png    # Render HTML into images
 <summary><strong>FFmpeg (for videos)</strong></summary>
 
 ---
-1. If it's already on your machine 🫠.
+1. If it's already on your machine.
 2. Otherwise, you can install it with `mcat --fetch-ffmpeg`
 ---
 </details>
 
-## ⚙️ Configuring
+## Configuring
 <details>
 <summary><strong>Using Flags</strong></summary>
 
@@ -223,10 +223,10 @@ each variable mimicks its corresponding flag alternative.
 </details>
 
 
-## 🚧 Roadmap
+## Roadmap
 - [ ] mcat.nvim: a neovim plugin to use mcat inside neovim
 
-## 📎License
+## License
 MIT License
 
 ---
