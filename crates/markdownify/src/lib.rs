@@ -9,6 +9,8 @@ use std::{
     fs::{self, File},
     path::{Path, PathBuf},
 };
+use tempfile::Builder;
+use zip::ZipArchive;
 
 pub struct ConvertOptions<'a> {
     pub path: Cow<'a, Path>,
@@ -56,14 +58,23 @@ impl<'a> From<PathBuf> for ConvertOptions<'a> {
     }
 }
 
-use tempfile::Builder;
-use zip::ZipArchive;
-
-/// convert `any` document into markdown
-/// `path_or_opts` can be either just a path (&str, &Path, Pathbuf) or opts.
-/// opts allow you to add a header to the markdown, or give the pdf-to-markdown parser screensize
-/// so it can produce better looking results.
-/// # example:
+/// Convert any document into markdown.
+///
+/// `path_or_opts` can be either just a path (&str, &Path, PathBuf) or ConvertOptions.
+/// Options allow you to customize the conversion process:
+/// - Add a header to the markdown output
+/// - Specify screen size for PDF conversion (affects layout detection quality)
+///
+/// # Supported Formats
+/// - **Text/Markup**: `.csv`, `.md`, `.html` (direct conversion)
+/// - **Documents**: `.docx`, `.pdf`, `.pptx`, `.odt`, `.odp`
+/// - **Spreadsheets**: `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, `.xla`, `.xlam`, `.ods`
+/// - **Archives**: `.zip` (extracts and converts contents)
+/// - **Fallback**: Any other text file will be converted with basic formatting
+///
+/// # Examples
+///
+/// ## Basic usage with path only:
 /// ```
 /// use std::path::Path;
 /// use markdownify::convert;
@@ -75,14 +86,15 @@ use zip::ZipArchive;
 /// }
 /// ```
 ///
-/// # with name:
-///
+/// ## With options for name header and PDF screen size:
 /// ```
-/// use std::path::Path;
-/// use markdownify::convert;
+/// use markdownify::{convert, ConvertOptions};
 ///
-/// let path = Path::new("path/to/file.docx");
-/// match convert(path) {
+/// let opts = ConvertOptions::new("path/to/file.pdf")
+///     .with_name_header("My Document")
+///     .with_screen_size((100, 20)); // Better layout detection for PDFs (in cells - width,height)
+///
+/// match convert(opts) {
 ///     Ok(md) => println!("{}", md),
 ///     Err(e) => eprintln!("Error: {}", e)
 /// }

@@ -37,16 +37,21 @@ use std::path::Path;
 use markdownify::convert;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Convert a file to markdown
+    // Convert a file to markdown using just a path
     let path = Path::new("document.docx");
-    let markdown = convert(&path, None)?;
+    let markdown = convert(path)?;
     println!("{}", markdown);
-    
-    // With an optional name header
-    let name = String::from("My Spreadsheet");
-    let path = Path::new("spreadsheet.xlsx");
-    let markdown = convert(&path, Some(&name))?;
-    println!("{}", markdown);
+
+    // With a name header
+    let opts = ConvertOptions::new("document.docx")
+        .with_name_header("My Document");
+    let markdown = convert(opts)?;
+
+    // For PDFs with custom screen size
+    let opts = ConvertOptions::new("document.pdf")
+        .with_name_header("My PDF")
+        .with_screen_size((100, 20)); // width, height in cells
+    let markdown = convert(opts)?;
     
     Ok(())
 }
