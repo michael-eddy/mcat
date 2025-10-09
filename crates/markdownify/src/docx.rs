@@ -34,7 +34,7 @@ impl Styles {
 fn get_attr(e: &quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
     for attr in e.attributes().with_checks(false).flatten() {
         if attr.key.as_ref() == key {
-            return Some(attr.unescape_value().ok()?.into_owned());
+            return Some(String::from_utf8_lossy(&attr.value).to_string());
         }
     }
     None
@@ -133,7 +133,7 @@ pub fn docx_convert(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
                 _ => {}
             },
             Ok(Event::Text(e)) => {
-                let mut text = e.unescape()?.into_owned();
+                let mut text = String::from_utf8_lossy(&e).to_string();
                 if styles.bold {
                     text = format!("**{}** ", text.trim());
                     styles.bold = false;
