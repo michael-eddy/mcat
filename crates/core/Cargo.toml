@@ -26,36 +26,36 @@ eula = false
 [dependencies]
 rasteroid = { version = "0.1.8", path = "../rasteroid" }
 markdownify = { version = "0.2.1", path = "../markdownify" }
-zip = "5.1.1"
+zip = "6.0.0"
 dirs = "6.0.0"
 which = "8.0.0"
-clap = "4.5.36"
-rayon = "1.10.0"
+clap = "4.5.49"
+rayon = "1.11.0"
 resvg = "0.45.1"
-regex = "1.11.1"
+regex = "1.12.2"
 inquire = "0.9.1"
-ignore = "0.4.23"
+ignore = "0.4.24"
 fontdb = "0.23.0"
-comrak = "0.43.0"
-syntect = "5.2.0"
+comrak = "0.44.0"
+syntect = "5.3.0"
 base64 = "0.22.1"
 futures = "0.3.31"
 scraper = "0.24.0"
 textwrap = "0.16.2"
-tempfile = "3.19.1"
+tempfile = "3.23.0"
 indicatif = "0.18.0"
 itertools = "0.14.0"
 crossterm = "0.29.0"
 shell-words = "1.1.0"
-serde_json = "1.0.140"
-unicode-width = "0.2.1"
-clap_complete = "4.5.50"
-ffmpeg-sidecar = "2.0.5"
+serde_json = "1.0.145"
+unicode-width = "0.2.2"
+clap_complete = "4.5.59"
+ffmpeg-sidecar = "2.2.0"
 tokio-tungstenite = "0.28.0"
 strip-ansi-escapes = "0.2.1"
-tokio = { version = "1.44.2", default-features = false, features = ["macros"] }
-reqwest = { version = "0.12.15", default-features = false, features = ["rustls-tls", "stream"] }
-image = { version = "0.25.6", default-features = false, features = ["bmp", "dds", "exr", "ff", "gif", "hdr", "ico", "jpeg", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
+tokio = { version = "1.48.0", default-features = false, features = ["macros"] }
+reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls", "stream"] }
+image = { version = "0.25.8", default-features = false, features = ["bmp", "dds", "exr", "ff", "gif", "hdr", "ico", "jpeg", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55.0"
